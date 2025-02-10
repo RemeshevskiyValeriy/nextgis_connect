@@ -51,8 +51,6 @@ class DetachedLayer(QObject):
     __updated_geometries: Dict[QgsFeatureId, str]
     __deleted_features: Dict[QgsFeatureId, QgsFeature]
 
-    __is_layer_changed: bool = False
-
     editing_started = pyqtSignal(name="editingStarted")
     editing_finished = pyqtSignal(name="editingFinished")
     layer_changed = pyqtSignal(name="layerChanged")
@@ -70,6 +68,7 @@ class DetachedLayer(QObject):
 
         self.__container = container
         self.__qgs_layer = layer
+        self.__is_layer_changed: bool = False
         self.__errors: List[ContainerError] = []
 
         self.__reset_backup()
@@ -647,14 +646,13 @@ class DetachedLayer(QObject):
             result[fid] = feature_record
 
         return result
-    
+
     def __on_commit_changes(self) -> None:
         if self.__is_layer_changed:
             self.layer_changed.emit()
+            self.__is_layer_changed = False
 
         if self.__errors:
             for ng_error in self.__errors:
                 self.error_occurred.emit(ng_error)
             self.__errors.clear()
-
-        self.__is_layer_changed = False
