@@ -1,3 +1,4 @@
+import re
 import uuid
 from dataclasses import dataclass
 from typing import Any, Dict, Optional
@@ -9,6 +10,8 @@ from qgis.PyQt.QtNetwork import QNetworkRequest
 
 @dataclass(frozen=True)
 class NgwConnection:
+    NEXTGIS_DOMAIN = ".nextgis.com"
+
     id: str
     name: str
     url: str
@@ -25,7 +28,7 @@ class NgwConnection:
 
     @property
     def domain_uuid(self) -> str:
-        domain = urlparse(self.url).netloc
+        domain = urlparse(self.normalize_url(self.url)).netloc
         return str(uuid.uuid3(uuid.NAMESPACE_DNS, domain))
 
     def update_network_request(self, request: QNetworkRequest) -> bool:
@@ -77,3 +80,22 @@ class NgwConnection:
         )
 
         return True
+
+    @classmethod
+    def normalize_url(cls, url: str) -> str:
+        parse_result = urlparse(url)
+        if parse_result.scheme == "":
+            parse_result = urlparse("https://" + url)
+
+        scheme = parse_result.scheme
+        base_url = parse_result.netloc
+
+        # Force https regardless of what user has selected, but only for cloud
+        # connections.
+        if base_url.endswith(cls.NEXTGIS_DOMAIN) and scheme != "https":
+            scheme = "https"
+
+        if not scheme or not base_url:
+            return url
+
+        return f"{scheme}://{base_url}"
