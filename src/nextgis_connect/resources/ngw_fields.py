@@ -216,3 +216,6 @@ class NgwFields(Sequence):
         self._qgs_fields = QgsFields()
         for field in self._fields:
             self._qgs_fields.append(field.to_qgs_field())
+
+    def __repr__(self) -> str:
+        return self._fields.__repr__()

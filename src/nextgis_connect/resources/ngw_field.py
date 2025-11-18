@@ -108,3 +108,7 @@ class NgwField:
             is_used_for_search=json.get("text_search", True),
             lookup_table=get_lookup_table(json),
         )
+
+    def __repr__(self) -> str:
+        class_name = self.__class__.__name__
+        return f"<{class_name}: {self.keyname} ({self.ngw_id})>"
