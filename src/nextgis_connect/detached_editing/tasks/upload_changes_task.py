@@ -60,12 +60,12 @@ class UploadChangesTask(DetachedEditingTask):
     def __upload_changes(self) -> None:
         ngw_connection = QgsNgwConnection(self._metadata.connection_id)
 
+        # Check structure etc
+        self._get_layer(ngw_connection)
+
         if self._metadata.is_versioning_enabled:
             self.__upload_versioned_changes(ngw_connection)
         else:
-            # Check structure etc
-            self._get_layer(ngw_connection)
-
             # Uploading
             self.__upload_deleted(ngw_connection)
             self.__upload_added(ngw_connection)

@@ -124,7 +124,7 @@ class DetachedEditingTask(NgConnectTask):
             error.add_note(f"Remote: {ngw_layer.geom_name}")
             raise error
 
-        if not self.__is_fields_compatible(ngw_layer.fields):
+        if not self._is_fields_compatible(ngw_layer.fields):
             message = "Fields changed in NGW"
             code = ErrorCode.StructureChanged
             error = SynchronizationError(message, code=code)
@@ -132,7 +132,7 @@ class DetachedEditingTask(NgConnectTask):
             error.add_note(f"Remote: {ngw_layer.fields}")
             raise error
 
-        if self.__is_container_fields_changed():
+        if self._is_container_fields_changed():
             message = "Fields changed in QGIS"
             code = ErrorCode.StructureChanged
             error = SynchronizationError(message, code=code)
@@ -179,12 +179,12 @@ class DetachedEditingTask(NgConnectTask):
                 error.add_note(f"Remote count: {remote_features_count}")
                 raise error
 
-    def __is_fields_compatible(self, rhs: NgwFields) -> bool:
+    def _is_fields_compatible(self, rhs: NgwFields) -> bool:
         return self._metadata.fields.is_compatible(
             rhs, skip_fields=self._metadata.fid_field
         )
 
-    def __is_container_fields_changed(self) -> bool:
+    def _is_container_fields_changed(self) -> bool:
         container_fields_name = set()
         with closing(
             make_connection(self._container_path)

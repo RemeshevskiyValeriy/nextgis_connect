@@ -211,6 +211,7 @@ class NgConnectWarning(NgConnectException):
 
 class NgwError(NgConnectError):
     _try_reconnect: bool
+    _ngw_exception_class: Optional[str]
 
     def __init__(
         self,
@@ -219,6 +220,7 @@ class NgwError(NgConnectError):
         user_message: Optional[str] = None,
         detail: Optional[str] = None,
         try_reconnect: bool = False,
+        ngw_exception_class: Optional[str] = None,
         code: ErrorCode = ErrorCode.NgwError,
         try_again: Optional[Callable[[], Any]] = None,
     ) -> None:
@@ -231,10 +233,18 @@ class NgwError(NgConnectError):
         )
 
         self._try_reconnect = try_reconnect
+        self._ngw_exception_class = ngw_exception_class
+
+        if ngw_exception_class is not None:
+            self.add_note(f"NGW exception: {ngw_exception_class}")
 
     @property
     def try_reconnect(self) -> bool:
         return self._try_reconnect
+
+    @property
+    def ngw_exception_class(self) -> Optional[str]:
+        return self._ngw_exception_class
 
     @staticmethod
     def from_json(json: Dict[str, Any]) -> "NgwError":
@@ -259,11 +269,11 @@ class NgwError(NgConnectError):
             user_message += "."
 
         detail = json.get("detail")
-        ngw_exception_name = json.get("exception")
+        ngw_exception_class = json.get("exception")
         if (
             detail is None
-            and ngw_exception_name is not None
-            and ngw_exception_name.endswith(
+            and ngw_exception_class is not None
+            and ngw_exception_class.endswith(
                 ("ResourceDisabled", "ValidationError")
             )
         ):
@@ -274,13 +284,11 @@ class NgwError(NgConnectError):
             user_message=user_message,
             detail=detail,
             try_reconnect=try_reconnect,
+            ngw_exception_class=ngw_exception_class,
             code=code,
         )
 
         error.add_note(f"Http status code: {status_code}")
-
-        if ngw_exception_name is not None:
-            error.add_note(f"NGW exception: {json.get('exception')}")
         if "guru_meditation" in json:
             error.add_note(f"Guru meditation: {json.get('guru_meditation')}")
 

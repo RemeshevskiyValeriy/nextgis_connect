@@ -102,7 +102,7 @@ class NgwField:
             ngw_id=json["id"],
             datatype=json["datatype"],
             keyname=json["keyname"],
-            display_name=json["display_name"],
+            display_name=json.get("display_name", json["id"]),
             is_label=json.get("label_field", False),
             is_visible=json.get("grid_visibility", True),
             is_used_for_search=json.get("text_search", True),

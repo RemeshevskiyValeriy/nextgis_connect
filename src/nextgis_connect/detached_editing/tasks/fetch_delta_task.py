@@ -1,7 +1,7 @@
 import urllib.parse
 from datetime import datetime
 from pathlib import Path
-from typing import List
+from typing import Any, Dict, List
 
 from nextgis_connect.detached_editing.action_serializer import ActionSerializer
 from nextgis_connect.detached_editing.actions import (
@@ -11,9 +11,14 @@ from nextgis_connect.detached_editing.actions import (
 from nextgis_connect.detached_editing.tasks.detached_editing_task import (
     DetachedEditingTask,
 )
-from nextgis_connect.exceptions import SynchronizationError
+from nextgis_connect.exceptions import (
+    ErrorCode,
+    NgwError,
+    SynchronizationError,
+)
 from nextgis_connect.logging import logger
 from nextgis_connect.ngw_api.qgis.qgis_ngw_connection import QgsNgwConnection
+from nextgis_connect.resources.ngw_fields import NgwFields
 
 
 class FetchDeltaTask(DetachedEditingTask):
@@ -61,21 +66,34 @@ class FetchDeltaTask(DetachedEditingTask):
         try:
             ngw_connection = QgsNgwConnection(connection_id)
 
-            # Check structure etc
-            self._get_layer(ngw_connection)
-
             check_params = urllib.parse.urlencode(
                 {
                     "epoch": self._metadata.epoch,
                     "initial": self._metadata.version,
                 }
             )
-            check_result = ngw_connection.get(
-                f"/api/resource/{resource_id}/feature/changes/check?{check_params}"
-            )
+            check_url = f"/api/resource/{resource_id}/feature/changes/check?{check_params}"
+
+            try:
+                check_result = ngw_connection.get(check_url)
+            except NgwError as error:
+                if (
+                    error.ngw_exception_class.split(".")[-1]
+                    != "FVersioningNotEnabled"
+                ):
+                    raise
+
+                error = SynchronizationError(
+                    "Versioning is not enabled",
+                    code=ErrorCode.VersioningDisabled,
+                )
+                raise error
+
             if check_result is None:
                 self.__delta = []
                 return True
+
+            self._check_compatibility(check_result)
 
             self.__target = check_result["target"]
             self.__timestamp = datetime.fromisoformat(check_result["tstamp"])
@@ -109,3 +127,43 @@ class FetchDeltaTask(DetachedEditingTask):
             return False
 
         return True
+
+    def _check_compatibility(self, answer: Dict[str, Any]) -> None:
+        if self._metadata.epoch != answer["epoch"]:
+            message = "Epoch changed"
+            code = ErrorCode.EpochChanged
+            error = SynchronizationError(message, code=code)
+            error.add_note(f"Local: {self._metadata.epoch}")
+            error.add_note(f"Remote: {answer['epoch']}")
+            raise error
+
+        if self._metadata.geometry_name != answer["geometry_type"]:
+            message = "Geometry is not compatible"
+            code = ErrorCode.StructureChanged
+            error = SynchronizationError(message, code=code)
+            error.add_note(f"Local: {self._metadata.geometry_name}")
+            error.add_note(f"Remote: {answer['geometry_type']}")
+            raise error
+
+        if self._metadata.srs_id != answer["srs"]["id"]:
+            message = "SRS is not compatible"
+            code = ErrorCode.StructureChanged
+            error = SynchronizationError(message, code=code)
+            error.add_note(f"Local: {self._metadata.geometry_name}")
+            error.add_note(f"Remote: {answer['srs']['id']}")
+            raise error
+
+        if self._is_container_fields_changed():
+            message = "Fields changed in QGIS"
+            code = ErrorCode.StructureChanged
+            error = SynchronizationError(message, code=code)
+            raise error
+
+        ngw_layer_fields = NgwFields.from_json(answer["fields"])
+        if not self._is_fields_compatible(ngw_layer_fields):
+            message = "Fields changed in NGW"
+            code = ErrorCode.StructureChanged
+            error = SynchronizationError(message, code=code)
+            error.add_note(f"Local: {self._metadata.fields}")
+            error.add_note(f"Remote: {ngw_layer_fields}")
+            raise error
