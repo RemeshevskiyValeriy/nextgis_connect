@@ -27,6 +27,7 @@ import os
 import tempfile
 import urllib.parse
 from dataclasses import dataclass, replace
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import List, Optional, cast
 
@@ -74,13 +75,17 @@ from qgis.PyQt.QtWidgets import (
     QActionGroup,
     QDialog,
     QFileDialog,
+    QFrame,
+    QHBoxLayout,
     QInputDialog,
+    QLabel,
     QLineEdit,
     QMenu,
     QMessageBox,
     QSizePolicy,
     QToolBar,
     QToolButton,
+    QVBoxLayout,
 )
 from qgis.PyQt.QtXml import QDomDocument
 
@@ -501,6 +506,8 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
         self.resources_tree_view.setSizePolicy(size_policy)
 
         self.content.layout().addWidget(self.resources_tree_view)
+
+        self.__add_banner()
 
         self.jobs_count = 0
         self.try_check_https = False
@@ -2577,6 +2584,101 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
         self.resources_tree_view.selectionModel().select(
             selection, QItemSelectionModel.SelectionFlag.SelectCurrent
         )
+
+    def __add_banner(self) -> None:
+        black_friday_start = datetime(
+            year=2025, month=12, day=1, hour=6, minute=1, tzinfo=timezone.utc
+        ).timestamp()
+        black_friday_finish = datetime(
+            year=2025, month=12, day=6, hour=5, minute=59, tzinfo=timezone.utc
+        ).timestamp()
+        black_friday_tag = "black-friday25"
+        nextgis_domain = utils.nextgis_domain()
+        lang_page = "en" if nextgis_domain.endswith("com") else "ru"
+        promo_base_url = f"{nextgis_domain}/black-friday-2025/{lang_page}/"
+        promo_campaign = black_friday_tag
+
+        promo_text = self.tr("<b>50% off</b> all subscriptions and data")
+
+        now = datetime.now().timestamp()
+
+        settings = NgConnectSettings()
+
+        is_black_friday = black_friday_start <= now <= black_friday_finish
+        if not is_black_friday or settings.is_promo_dismissed(
+            black_friday_tag
+        ):
+            return
+
+        utm_template = "&".join(
+            [
+                "utm_source=qgis_plugin",
+                "utm_medium=banner",
+                f"utm_campaign={promo_campaign}",
+                f"utm_term={NgConnectInterface.PACKAGE_NAME}",
+                f"utm_content={utils.locale()}",
+            ]
+        )
+        promo_url = f"{promo_base_url}?{utm_template}"
+
+        banner_layout = QVBoxLayout()
+        banner_layout.setContentsMargins(0, 4, 0, 4)
+
+        banner = QFrame(self.content)
+        banner.setObjectName("NgConnectBanner")
+        banner.setFrameShape(QFrame.Shape.StyledPanel)
+        banner.setFrameShadow(QFrame.Shadow.Raised)
+
+        banner.setLayout(QHBoxLayout())
+        banner.layout().setContentsMargins(6, 6, 6, 6)
+
+        banner_label = QLabel(banner)
+        banner_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        icon_path = Path(ICONS_PATH) / "fire.png"
+        close_icon = utils.icon_to_base64(
+            utils.material_icon("close", size=16)
+        )
+
+        html = f"""
+            <html>
+            <head>
+            </head>
+            <body>
+                <table width="100%">
+                    <tr>
+                        <td style="text-align: right">
+                            <img src="{icon_path}">
+                        </td>
+                        <td width="1%" style="text-align: center;">
+                            &nbsp;<a href="#open">{promo_text}</a>
+                        </td>
+                        <td style="text-align: right;" valign="middle">
+                            <a href="#close"><img src="{close_icon}"></a>
+                        </td>
+                    </tr>
+                </table>
+            </body>
+            </html>
+        """
+        banner_label.setText(html)
+
+        banner.layout().addWidget(banner_label)
+        banner_layout.addWidget(banner)
+
+        self.content.layout().addLayout(banner_layout)
+
+        def open_link(url: str) -> None:
+            if url == "#close":
+                banner_layout.deleteLater()
+                banner.deleteLater()
+                settings.dismiss_promo(promo_campaign)
+                logger.debug(f"Dismissed promo {promo_campaign}")
+                return
+
+            logger.debug(f"Open promo in browser: {promo_url}")
+            QDesktopServices.openUrl(QUrl(promo_url))
+
+        banner_label.linkActivated.connect(open_link)
 
 
 class NGWPanelToolBar(QToolBar):

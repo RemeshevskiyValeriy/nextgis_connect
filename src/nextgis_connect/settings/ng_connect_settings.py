@@ -20,6 +20,7 @@
  ***************************************************************************/
 """
 
+import json
 from datetime import timedelta
 from typing import ClassVar, Optional
 
@@ -279,6 +280,31 @@ class NgConnectSettings:
         self.__settings.setValue(
             self.__plugin_group + "/other/did_last_launch_fail", value
         )
+
+    def dismiss_promo(self, promo_id: str) -> None:
+        dismissed_promos = self.__settings.value(
+            f"{self.__plugin_group}/other/dismissedPromos",
+            defaultValue="[]",
+            type=str,
+        )
+        dismissed_promos = json.loads(dismissed_promos)
+
+        dismissed_promos.append(promo_id)
+        dismissed_promos = set(dismissed_promos)
+
+        self.__settings.setValue(
+            f"{self.__plugin_group}/other/dismissedPromos",
+            json.dumps(list(dismissed_promos)),
+        )
+
+    def is_promo_dismissed(self, promo_id: str) -> bool:
+        dismissed_promos = self.__settings.value(
+            f"{self.__plugin_group}/other/dismissedPromos",
+            defaultValue="[]",
+            type=str,
+        )
+        dismissed_promos = json.loads(dismissed_promos)
+        return promo_id in dismissed_promos
 
     @property
     def __plugin_group(self) -> str:
