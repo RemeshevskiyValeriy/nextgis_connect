@@ -48,6 +48,15 @@ class NgConnectInterface(QObject, metaclass=_NgConnectInterfaceMetaClass):
         return self.metadata.get("general", "version")
 
     @property
+    def path(self) -> "Path":
+        """Return the plugin path.
+
+        :returns: Path to the plugin directory.
+        :rtype: Path
+        """
+        return Path(__file__).parent
+
+    @property
     @abstractmethod
     def toolbar(self) -> "QToolBar": ...
 
