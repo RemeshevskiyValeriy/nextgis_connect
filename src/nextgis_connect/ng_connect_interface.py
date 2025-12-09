@@ -11,7 +11,7 @@ if TYPE_CHECKING:
     from qgis.PyQt.QtCore import QAbstractItemModel, QItemSelectionModel
     from qgis.PyQt.QtWidgets import QToolBar
 
-    from nextgis_connect.detached_editing.detached_edititng import (
+    from nextgis_connect.detached_editing.detached_editing import (
         DetachedEditing,
     )
 

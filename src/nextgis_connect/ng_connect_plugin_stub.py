@@ -24,9 +24,10 @@ from nextgis_connect.settings.ng_connect_settings import NgConnectSettings
 from nextgis_connect.utils import nextgis_domain, utm_tags
 
 if TYPE_CHECKING:
-    from nextgis_connect.detached_editing.detached_edititng import (
+    from nextgis_connect.detached_editing.detached_editing import (
         DetachedEditing,
     )
+
     assert isinstance(iface, QgisInterface)
 
 
