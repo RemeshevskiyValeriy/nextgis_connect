@@ -52,7 +52,7 @@ from nextgis_connect.exceptions import (
     NgConnectError,
     NgConnectWarning,
 )
-from nextgis_connect.logging import logger, unload_logger
+from nextgis_connect.logging import logger, open_plugin_logs, unload_logger
 from nextgis_connect.ng_connect_dock import NgConnectDock
 from nextgis_connect.ng_connect_interface import NgConnectInterface
 from nextgis_connect.ngw_api import qgis as qgis_ngw_api
@@ -233,7 +233,7 @@ class NgConnectPlugin(NgConnectInterface):
             widget.layout().addWidget(button)
         else:
             button = QPushButton(self.tr("Open logs"))
-            button.pressed.connect(self.iface.openMessageLog)
+            button.pressed.connect(open_plugin_logs)
             widget.layout().addWidget(button)
 
         if error.code == ErrorCode.QuotaExceeded:
