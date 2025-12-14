@@ -3,7 +3,7 @@ import uuid
 from enum import IntEnum, auto
 from functools import lru_cache
 from http import HTTPStatus
-from typing import Any, Callable, Dict, Optional
+from typing import Any, Callable, Dict, List, Optional, Tuple, Type
 
 from qgis.core import QgsApplication, QgsEditError
 
@@ -103,14 +103,182 @@ class ErrorCode(IntEnum):
         return self.PluginError
 
 
-class NgConnectException(Exception):
-    __error_id: str
-    __log_message: str
-    __user_message: str
-    __detail: Optional[str]
-    __code: ErrorCode
-    __try_again: Optional[Callable[[], Any]]
+class NgConnectExceptionInfoMixin:
+    """Mixin providing common fields and logic for NextGIS Connect errors and warnings."""
 
+    _error_id: str
+    _code: ErrorCode
+    _log_message: str
+    _user_message: str
+    _detail: Optional[str]
+    _try_again: Optional[Callable[[], Any]]
+    _actions: List[Tuple[str, Callable[[], Any]]]
+    _need_logs: bool
+
+    def __init__(
+        self,
+        base_class: Type[Exception] = Exception,
+        log_message: Optional[str] = None,
+        *,
+        user_message: Optional[str] = None,
+        detail: Optional[str] = None,
+        code: ErrorCode = ErrorCode.PluginError,
+        try_again: Optional[Callable[[], Any]] = None,
+    ) -> None:
+        self._error_id = str(uuid.uuid4())
+        self._code = code
+
+        self._log_message = (
+            log_message
+            if log_message is not None
+            else _default_log_message(self.code)
+        ).strip()
+
+        base_class.__init__(self, f"<b>{self._log_message}</b>")  # pyright: ignore[reportArgumentType]
+
+        if self.code != ErrorCode.PluginError:
+            self.add_note(f"Internal code: {self.code.name}")
+
+        self._user_message = (
+            user_message
+            if user_message is not None
+            else default_user_message(self.code)
+        )
+        if self._user_message is not None:
+            self._user_message = self._user_message.strip()
+            self.add_note("User message: " + self._user_message)
+
+        self._detail = (
+            detail if detail is not None else default_detail(self.code)
+        )
+        if self._detail is not None:
+            self._detail = self._detail.strip()
+            self.add_note("Detail: " + self._detail)
+
+        self._try_again = try_again
+
+        self._actions = []
+        self._need_logs = True
+
+    @property
+    def error_id(self) -> str:
+        """
+        Get the unique error identifier.
+
+        :returns: Unique error ID as a string.
+        :rtype: str
+        """
+        return self._error_id
+
+    @property
+    def code(self) -> ErrorCode:
+        """
+        Get the error code.
+
+        :returns: Error code as an instance of ErrorCode.
+        """
+        return self._code
+
+    @property
+    def log_message(self) -> str:
+        """
+        Get the log message for debugging.
+
+        :returns: Log message.
+        :rtype: str
+        """
+        return self._log_message
+
+    @property
+    def user_message(self) -> str:
+        """
+        Get the message intended for the user.
+
+        :returns: User message.
+        :rtype: str
+        """
+        return self._user_message
+
+    @property
+    def detail(self) -> Optional[str]:
+        """
+        Get additional details about the error.
+
+        :returns: Error details or None.
+        :rtype: Optional[str]
+        """
+        return self._detail
+
+    @property
+    def try_again(self) -> Optional[Callable[[], Any]]:
+        """
+        Get the callable to retry the failed operation.
+
+        :returns: Callable or None.
+        :rtype: Optional[Callable[[], Any]]
+        """
+        return self._try_again
+
+    @try_again.setter
+    def try_again(self, try_again: Optional[Callable[[], Any]]) -> None:
+        """
+        Set the callable to retry the failed operation.
+
+        :param try_again: Callable to retry or None.
+        :type try_again: Optional[Callable[[], Any]]
+        """
+        self._try_again = try_again
+
+    @property
+    def actions(self) -> List[Tuple[str, Callable[[], Any]]]:
+        """
+        Get the list of available actions for this exception.
+
+        :returns: List of (action_name, action_callable) tuples.
+        :rtype: List[Tuple[str, Callable[[], Any]]]
+        """
+        return self._actions
+
+    def add_action(self, name: str, callback: Callable[[], Any]) -> None:
+        """
+        Add an action to the exception.
+
+        :param name: Name of the action.
+        :type name: str
+        :param callback: Callable to execute for the action.
+        :type callback: Callable[[], Any]
+        """
+        self._actions.append((name, callback))
+
+    @property
+    def need_logs(self) -> bool:
+        """
+        Indicate whether logs are needed for this exception.
+
+        :returns: True if logs are needed, False otherwise.
+        :rtype: bool
+        """
+        return self._need_logs
+
+    if sys.version_info < (3, 11):
+
+        def add_note(self, note: str) -> None:
+            """
+            Add a note to the exception message (for Python < 3.11).
+
+            :param note: Note string to add.
+            :type note: str
+            :raises TypeError: If note is not a string.
+            """
+            if not isinstance(note, str):
+                message = "Note must be a string"
+                raise TypeError(message)
+
+            message: str = self.args[0]
+            self.args = (f"{message}\n{note}",)
+
+
+class NgConnectException(NgConnectExceptionInfoMixin, Exception):
     def __init__(
         self,
         log_message: Optional[str] = None,
@@ -120,74 +288,14 @@ class NgConnectException(Exception):
         code: ErrorCode = ErrorCode.PluginError,
         try_again: Optional[Callable[[], Any]] = None,
     ) -> None:
-        self.__error_id = str(uuid.uuid4())
-        self.__code = code
-        self.__log_message = (
-            log_message
-            if log_message is not None
-            else _default_log_message(self.code)
-        ).strip()
-
-        super().__init__(f"<b>{self.__log_message}</b>")
-
-        if self.code != ErrorCode.PluginError:
-            self.add_note(f"Internal code: {self.code.name}")
-
-        self.__user_message = (
-            user_message
-            if user_message is not None
-            else default_user_message(self.code)
+        super().__init__(
+            base_class=Exception,
+            log_message=log_message,
+            user_message=user_message,
+            detail=detail,
+            code=code,
+            try_again=try_again,
         )
-        if self.__user_message is not None:
-            self.__user_message = self.__user_message.strip()
-            self.add_note("User message: " + self.__user_message)
-
-        self.__detail = (
-            detail if detail is not None else default_detail(self.code)
-        )
-        if self.__detail is not None:
-            self.__detail = self.__detail.strip()
-            self.add_note("Detail: " + self.__detail)
-
-        self.__try_again = try_again
-
-    @property
-    def error_id(self) -> str:
-        return self.__error_id
-
-    @property
-    def log_message(self) -> str:
-        return self.__log_message
-
-    @property
-    def user_message(self) -> str:
-        return self.__user_message
-
-    @property
-    def detail(self) -> Optional[str]:
-        return self.__detail
-
-    @property
-    def code(self) -> ErrorCode:
-        return self.__code
-
-    @property
-    def try_again(self) -> Optional[Callable[[], Any]]:
-        return self.__try_again
-
-    @try_again.setter
-    def try_again(self, try_again: Optional[Callable[[], Any]]) -> None:
-        self.__try_again = try_again
-
-    if sys.version_info < (3, 11):
-
-        def add_note(self, note: str) -> None:
-            if not isinstance(note, str):
-                message = "Note must be a string"
-                raise TypeError(message)
-
-            message: str = self.args[0]
-            self.args = (f"{message}\n{note}",)
 
 
 class NgConnectError(NgConnectException):
@@ -213,7 +321,7 @@ class DataPreparationError(NgConnectError):
         )
 
 
-class NgConnectWarning(NgConnectException):
+class NgConnectWarning(NgConnectExceptionInfoMixin, UserWarning):
     def __init__(
         self,
         log_message: Optional[str] = None,
@@ -224,7 +332,8 @@ class NgConnectWarning(NgConnectException):
         try_again: Optional[Callable[[], Any]] = None,
     ) -> None:
         super().__init__(
-            log_message,
+            base_class=UserWarning,
+            log_message=log_message,
             user_message=user_message,
             detail=detail,
             code=code,
@@ -245,14 +354,12 @@ class NgwError(NgConnectError):
         try_reconnect: bool = False,
         ngw_exception_class: Optional[str] = None,
         code: ErrorCode = ErrorCode.NgwError,
-        try_again: Optional[Callable[[], Any]] = None,
     ) -> None:
         super().__init__(
             log_message,
             user_message=user_message,
             detail=detail,
             code=code,
-            try_again=try_again,
         )
 
         self._try_reconnect = try_reconnect
@@ -326,14 +433,12 @@ class NgwConnectionError(NgConnectError):
         user_message: Optional[str] = None,
         detail: Optional[str] = None,
         code: ErrorCode = ErrorCode.NgwConnectionError,
-        try_again: Optional[Callable[[], Any]] = None,
     ) -> None:
         super().__init__(
             log_message,
             user_message=user_message,
             detail=detail,
             code=code,
-            try_again=try_again,
         )
 
 
@@ -345,14 +450,12 @@ class DetachedEditingError(NgConnectError):
         user_message: Optional[str] = None,
         detail: Optional[str] = None,
         code: ErrorCode = ErrorCode.DetachedEditingError,
-        try_again: Optional[Callable[[], Any]] = None,
     ) -> None:
         super().__init__(
             log_message,
             user_message=user_message,
             detail=detail,
             code=code,
-            try_again=try_again,
         )
 
 
@@ -364,14 +467,12 @@ class ContainerError(DetachedEditingError):
         user_message: Optional[str] = None,
         detail: Optional[str] = None,
         code: ErrorCode = ErrorCode.ContainerError,
-        try_again: Optional[Callable[[], Any]] = None,
     ) -> None:
         super().__init__(
             log_message,
             user_message=user_message,
             detail=detail,
             code=code,
-            try_again=try_again,
         )
 
 
@@ -383,14 +484,12 @@ class LayerEditError(DetachedEditingError):
         user_message: Optional[str] = None,
         detail: Optional[str] = None,
         code: ErrorCode = ErrorCode.LayerEditError,
-        try_again: Optional[Callable[[], Any]] = None,
     ) -> None:
         super().__init__(
             log_message,
             user_message=user_message,
             detail=detail,
             code=code,
-            try_again=try_again,
         )
 
     @staticmethod
@@ -449,14 +548,12 @@ class SynchronizationError(DetachedEditingError):
         user_message: Optional[str] = None,
         detail: Optional[str] = None,
         code: ErrorCode = ErrorCode.SynchronizationError,
-        try_again: Optional[Callable[[], Any]] = None,
     ) -> None:
         super().__init__(
             log_message,
             user_message=user_message,
             detail=detail,
             code=code,
-            try_again=try_again,
         )
 
 
@@ -468,14 +565,12 @@ class SerializationError(DetachedEditingError):
         user_message: Optional[str] = None,
         detail: Optional[str] = None,
         code: ErrorCode = ErrorCode.SerializationError,
-        try_again: Optional[Callable[[], Any]] = None,
     ) -> None:
         super().__init__(
             log_message,
             user_message=user_message,
             detail=detail,
             code=code,
-            try_again=try_again,
         )
 
 
