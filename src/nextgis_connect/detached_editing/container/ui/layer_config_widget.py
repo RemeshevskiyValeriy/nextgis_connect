@@ -13,6 +13,7 @@ from qgis.PyQt.QtCore import Qt
 from qgis.PyQt.QtGui import QIcon
 from qgis.PyQt.QtWidgets import QHBoxLayout, QLabel, QVBoxLayout, QWidget
 
+from nextgis_connect.detached_editing import utils
 from nextgis_connect.exceptions import NgConnectError
 from nextgis_connect.logging import logger
 from nextgis_connect.ngw_connection.application.connections_manager import (
@@ -22,8 +23,6 @@ from nextgis_connect.ngw_connection.presentation.connections_widget import (
     NgwConnectionsWidget,
 )
 from nextgis_connect.utils import wrap_sql_value
-
-from . import utils
 
 
 class DetachedLayerConfigPage(QgsMapLayerConfigWidget):
@@ -43,9 +42,7 @@ class DetachedLayerConfigPage(QgsMapLayerConfigWidget):
         directory = Path(__file__).parent
         widget: Optional[QWidget] = None
         try:
-            widget = uic.loadUi(
-                str(directory / "detached_layer_config_widget_base.ui")
-            )  # type: ignore
+            widget = uic.loadUi(str(directory / "layer_config_widget_base.ui"))  # type: ignore
         except FileNotFoundError as error:
             message = self.tr("An error occurred while settings UI loading")
             logger.exception(message)

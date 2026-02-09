@@ -16,12 +16,22 @@ from qgis.PyQt.QtCore import QObject, QTimer, pyqtSlot
 from qgis.utils import iface  # type: ignore
 
 from nextgis_connect.compat import QGIS_3_34
+from nextgis_connect.detached_editing import utils
+from nextgis_connect.detached_editing.container.container import (
+    DetachedContainer,
+)
+from nextgis_connect.detached_editing.container.container_factory import (
+    DetachedLayerFactory,
+)
+from nextgis_connect.detached_editing.container.path_preprocessor import (
+    DetachedEditingPathPreprocessor,
+)
+from nextgis_connect.detached_editing.container.ui.layer_config_widget import (
+    DetachedLayerConfigWidgetFactory,
+)
 from nextgis_connect.detached_editing.detached_layer import DetachedLayer
 from nextgis_connect.detached_editing.identification.identification_manager import (
     IdentificationManager,
-)
-from nextgis_connect.detached_editing.path_preprocessor import (
-    DetachedEditingPathPreprocessor,
 )
 from nextgis_connect.logging import logger
 from nextgis_connect.ngw_api.core.ngw_resource_factory import (
@@ -35,11 +45,6 @@ from nextgis_connect.ngw_connection.application.connections_manager import (
     NgwConnectionsManager,
 )
 from nextgis_connect.settings import NgConnectSettings
-
-from . import utils
-from .detached_container import DetachedContainer
-from .detached_layer_config_widget import DetachedLayerConfigWidgetFactory
-from .detached_layer_factory import DetachedLayerFactory
 
 iface: QgisInterface
 
