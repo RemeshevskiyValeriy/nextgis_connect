@@ -1,4 +1,5 @@
 import atexit
+import gc
 import json
 import os
 import sys
@@ -304,6 +305,10 @@ def stop_qgis() -> None:
 
     if APPLICATION_INFO is None:
         return
+
+    for _ in range(3):
+        gc.collect()
+        QgsApplication.processEvents()
 
     APPLICATION_INFO.application.exitQgis()
     del APPLICATION_INFO.application
