@@ -3279,6 +3279,8 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
         connection = NgwConnectionsManager().current_connection
         if connection is not None:
             title = f"{connection.name} – {title}"
+            url = urllib.parse.urlparse(connection.url).netloc
+            title += f" — {url}"
 
         self.setWindowTitle(title)
 
