@@ -148,6 +148,9 @@ from nextgis_connect.legacy.settings import NgConnectSettings
 from nextgis_connect.legacy.settings.ng_connect_cache_manager import (
     NgConnectCacheManager,
 )
+from nextgis_connect.legacy.shell.presentation.dock.resource_delete_confirmation_dialog import (
+    ResourceDeleteConfirmationDialog,
+)
 from nextgis_connect.legacy.tree_widget import (
     QNGWResourceItem,
     QNGWResourceTreeModel,
@@ -446,7 +449,7 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
 
         self.actionDeleteResource = QAction(
             QgsApplication.getThemeIcon("mActionDeleteSelected.svg"),
-            self.tr("Delete resource"),
+            self.tr("Delete selected"),
             self,
         )
         self.actionDeleteResource.triggered.connect(
@@ -562,6 +565,7 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
         self.blocked_jobs = {
             "NGWGroupCreater": self.tr("Creating resource..."),
             "NGWResourceDelete": self.tr("Deleting resource..."),
+            "NGWResourceBatchDelete": self.tr("Deleting resources..."),
             "QGISResourcesUploader": self.tr("Uploading layer..."),
             "QGISProjectUploader": self.tr("Uploading project..."),
             "NGWCreateWfsService": self.tr("Creating WFS service..."),
@@ -1002,11 +1006,10 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
         self.creation_button.setEnabled(is_one_ngw_selected)
         self.actionCreateNgwVectorLayer.setEnabled(is_one_ngw_selected)
 
-        self.actionDeleteResource.setEnabled(
-            not is_multiple_ngw_selection
-            and not has_no_ngw_selection
-            and selected_ngw_indexes[0].parent().isValid()
+        is_not_root = not has_no_ngw_selection and all(
+            index.parent().isValid() for index in selected_ngw_indexes
         )
+        self.actionDeleteResource.setEnabled(is_not_root)
 
         self.actionOpenInNGW.setEnabled(is_one_ngw_selected)
         is_vector_layer_resource = is_one_ngw_selected and isinstance(
@@ -1076,6 +1079,9 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
         exception: Exception,
         level: Qgis.MessageLevel,
     ):
+        if job_name == "NGWResourceDeletePreviewLoader":
+            return
+
         # always unblock in case of any error so to allow to fix it
         self.unblock_gui()
 
@@ -3025,26 +3031,43 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
         )
 
     def delete_curent_ngw_resource(self):
-        res = QMessageBox.question(
-            self,
-            self.tr("Delete resource"),
-            self.tr("Are you sure you want to remove this resource?"),
-            QMessageBox.StandardButton.Yes and QMessageBox.StandardButton.No,
-            QMessageBox.StandardButton.Yes,
-        )
+        selection_model = self.resources_tree_view.selectionModel()
+        selected_indexes = [
+            self.proxy_model.mapToSource(index)
+            for index in selection_model.selectedIndexes()
+        ]
+        selected_indexes = [
+            index for index in selected_indexes if index.isValid()
+        ]
+        if len(selected_indexes) == 0:
+            return
 
-        if res == QMessageBox.StandardButton.Yes:
-            selected_index = self.proxy_model.mapToSource(
-                self.resources_tree_view.selectionModel().currentIndex()
+        confirmation_dialog = ResourceDeleteConfirmationDialog(
+            self.resource_model,
+            selected_indexes,
+            self,
+        )
+        if confirmation_dialog.exec() != QDialog.DialogCode.Accepted:
+            return
+
+        if len(selected_indexes) == 1:
+            delete_resource_response = self.resource_model.deleteResource(
+                selected_indexes[0]
             )
-            self.delete_resource_response = self.resource_model.deleteResource(
-                selected_index
+        else:
+            delete_resource_response = self.resource_model.deleteResources(
+                selected_indexes
             )
-            self.delete_resource_response.done.connect(
-                lambda index: self.resources_tree_view.setCurrentIndex(
-                    self.proxy_model.mapFromSource(index)
-                )
+
+        if delete_resource_response is None:
+            return
+
+        self.delete_resource_response = delete_resource_response
+        self.delete_resource_response.done.connect(
+            lambda index: self.resources_tree_view.setCurrentIndex(
+                self.proxy_model.mapFromSource(index)
             )
+        )
 
     def _downloadRasterSource(
         self, ngw_lyr: NGWRasterLayer, raster_file: Optional[QFile] = None

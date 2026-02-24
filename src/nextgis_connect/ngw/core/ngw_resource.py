@@ -19,11 +19,15 @@
 """
 
 import urllib.parse
+from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Sequence, Set
 
 from qgis.core import QgsFeedback
 
+from nextgis_connect.features.search.domain.resource_blueprint import (
+    ResourceBlueprintLabelParser,
+)
 from nextgis_connect.ngw.resources.utils import generate_unique_name
 from nextgis_connect.platform.logging import logger
 
@@ -40,6 +44,7 @@ def API_RESOURCE_URL(res_id: int) -> str:
 
 
 API_COLLECTION_URL = "/api/resource/"
+API_RESOURCE_BLUEPRINT_URL = "/api/component/resource/blueprint"
 
 
 def RESOURCE_URL(res_id: int) -> str:
@@ -56,9 +61,9 @@ class Wrapper:
 
     if TYPE_CHECKING:
 
-        def __setattr__(self, __name: str, __value: Any) -> None: ...
+        def __setattr__(self, __name: str, __value: Any, /) -> None: ...
 
-        def __getattr__(self, __name: str) -> Any: ...
+        def __getattr__(self, __name: str, /) -> Any: ...
 
 
 def dict_to_object(d):
@@ -67,6 +72,88 @@ def dict_to_object(d):
 
 def list_dict_to_list_object(list_dict):
     return [Wrapper(**el) for el in list_dict]
+
+
+@dataclass(frozen=True)
+class NGWResourceDeleteSummary:
+    count: int
+    resources: Dict[str, int]
+
+    @classmethod
+    def empty(cls) -> "NGWResourceDeleteSummary":
+        return cls(count=0, resources={})
+
+    @classmethod
+    def from_json(cls, data: Any) -> "NGWResourceDeleteSummary":
+        if not isinstance(data, dict):
+            return cls.empty()
+
+        resources: Dict[str, int] = {}
+        raw_resources = data.get("resources", {})
+        if isinstance(raw_resources, dict):
+            for resource_class, resource_count in raw_resources.items():
+                if not isinstance(resource_class, str):
+                    continue
+
+                count = cls._int_value(resource_count)
+                if count <= 0:
+                    continue
+
+                resources[resource_class] = count
+
+        count = cls._int_value(data.get("count"))
+        if count <= 0 and len(resources) > 0:
+            count = sum(resources.values())
+
+        return cls(count=count, resources=resources)
+
+    @staticmethod
+    def _int_value(value: Any) -> int:
+        if isinstance(value, bool):
+            return 0
+
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return 0
+
+
+@dataclass(frozen=True)
+class NGWResourceDeletePreview:
+    affected: NGWResourceDeleteSummary
+    unaffected: NGWResourceDeleteSummary
+    resource_labels: Dict[str, str]
+
+    @classmethod
+    def empty(cls) -> "NGWResourceDeletePreview":
+        return cls(
+            affected=NGWResourceDeleteSummary.empty(),
+            unaffected=NGWResourceDeleteSummary.empty(),
+            resource_labels={},
+        )
+
+    @classmethod
+    def from_json(cls, data: Any) -> "NGWResourceDeletePreview":
+        if not isinstance(data, dict):
+            return cls.empty()
+
+        return cls(
+            affected=NGWResourceDeleteSummary.from_json(data.get("affected")),
+            unaffected=NGWResourceDeleteSummary.from_json(
+                data.get("unaffected")
+            ),
+            resource_labels={},
+        )
+
+    def with_resource_labels(
+        self,
+        resource_labels: Dict[str, str],
+    ) -> "NGWResourceDeletePreview":
+        return NGWResourceDeletePreview(
+            affected=self.affected,
+            unaffected=self.unaffected,
+            resource_labels=dict(resource_labels),
+        )
 
 
 class NGWResource:
@@ -113,6 +200,119 @@ class NGWResource:
         ngw_con = ngw_resource.res_factory.connection
         url = API_RESOURCE_URL(ngw_resource.resource_id)
         ngw_con.delete(url)
+
+    @classmethod
+    def delete_resources(
+        cls, ngw_resources: Sequence["NGWResource"]
+    ) -> List["NGWResource"]:
+        resources_to_delete = cls._extract_deletion_roots(ngw_resources)
+        if not resources_to_delete:
+            return []
+
+        resource_ids = [
+            ngw_resource.resource_id for ngw_resource in resources_to_delete
+        ]
+        resources_query = ",".join(
+            str(resource_id) for resource_id in resource_ids
+        )
+        ngw_con = resources_to_delete[0].res_factory.connection
+        if ngw_con is None:
+            return []
+
+        ngw_con.post(
+            f"{API_COLLECTION_URL}delete?resources={resources_query}"
+            "&partial=true",
+            params={"resources": resources_query, "partial": "true"},
+        )
+
+        return resources_to_delete
+
+    @classmethod
+    def simulate_delete_resources(
+        cls,
+        ngw_resources: Sequence["NGWResource"],
+        *,
+        feedback: Optional[QgsFeedback] = None,
+    ) -> NGWResourceDeletePreview:
+        resources_to_delete = cls._extract_deletion_roots(ngw_resources)
+        if not resources_to_delete:
+            return NGWResourceDeletePreview.empty()
+
+        resource_ids = [
+            ngw_resource.resource_id for ngw_resource in resources_to_delete
+        ]
+        resources_query = ",".join(
+            str(resource_id) for resource_id in resource_ids
+        )
+        ngw_con = resources_to_delete[0].res_factory.connection
+        if ngw_con is None:
+            return NGWResourceDeletePreview.empty()
+
+        response = ngw_con.get(
+            f"{API_COLLECTION_URL}delete?resources={resources_query}",
+            feedback=feedback,
+        )
+
+        preview = NGWResourceDeletePreview.from_json(response)
+        try:
+            resource_labels = cls.receive_resource_blueprint_labels(
+                ngw_con,
+                feedback=feedback,
+            )
+        except Exception:
+            logger.exception("Can't fetch resource blueprint labels")
+            resource_labels = {}
+
+        return preview.with_resource_labels(resource_labels)
+
+    @classmethod
+    def receive_resource_blueprint_labels(
+        cls,
+        ngw_con,
+        *,
+        feedback: Optional[QgsFeedback] = None,
+    ) -> Dict[str, str]:
+        response = ngw_con.get(API_RESOURCE_BLUEPRINT_URL, feedback=feedback)
+        return ResourceBlueprintLabelParser().parse(response)
+
+    @classmethod
+    def _extract_deletion_roots(
+        cls, ngw_resources: Sequence["NGWResource"]
+    ) -> List["NGWResource"]:
+        resources_by_id: Dict[int, NGWResource] = {}
+        for ngw_resource in ngw_resources:
+            if ngw_resource.resource_id == 0:
+                continue
+
+            resources_by_id.setdefault(ngw_resource.resource_id, ngw_resource)
+
+        resource_ids = set(resources_by_id)
+        return [
+            ngw_resource
+            for ngw_resource in resources_by_id.values()
+            if not cls._has_selected_parent(ngw_resource, resource_ids)
+        ]
+
+    @classmethod
+    def _has_selected_parent(
+        cls, ngw_resource: "NGWResource", resource_ids: Set[int]
+    ) -> bool:
+        parent = getattr(ngw_resource.common, "parent", None)
+        while parent:
+            parent_id = cls._parent_value(parent, "id")
+            if parent_id != 0 and parent_id in resource_ids:
+                return True
+
+            parent = cls._parent_value(parent, "parent")
+
+        return False
+
+    @staticmethod
+    def _parent_value(parent: Any, name: str) -> Any:
+        if isinstance(parent, dict):
+            return parent.get(name)
+
+        return getattr(parent, name, None)
 
     # INSTANCE
     def __init__(self, resource_factory, resource_json):

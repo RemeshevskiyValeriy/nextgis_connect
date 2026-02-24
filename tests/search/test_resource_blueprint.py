@@ -1,4 +1,5 @@
 from nextgis_connect.features.search.domain.resource_blueprint import (
+    ResourceBlueprintLabelParser,
     ResourceBlueprintTypeParser,
 )
 
@@ -68,3 +69,44 @@ def test_parser_ignores_resource_field_names() -> None:
     )
 
     assert resource_types == []
+
+
+def test_label_parser_reads_resource_cls_enum_labels() -> None:
+    parser = ResourceBlueprintLabelParser()
+
+    resource_labels = parser.parse(
+        {
+            "resource": {
+                "cls": {
+                    "enum": [
+                        ["vector_layer", "Vector layer"],
+                        {
+                            "identity": "raster_layer",
+                            "label": "Raster layer",
+                        },
+                    ]
+                }
+            }
+        }
+    )
+
+    assert resource_labels == {
+        "raster_layer": "Raster layer",
+        "vector_layer": "Vector layer",
+    }
+
+
+def test_label_parser_reads_type_like_mapping_labels() -> None:
+    parser = ResourceBlueprintLabelParser()
+
+    resource_labels = parser.parse(
+        {
+            "resource_group": {"label": "Resource group"},
+            "vector_layer": {"display_name": "Vector layer"},
+        }
+    )
+
+    assert resource_labels == {
+        "resource_group": "Resource group",
+        "vector_layer": "Vector layer",
+    }

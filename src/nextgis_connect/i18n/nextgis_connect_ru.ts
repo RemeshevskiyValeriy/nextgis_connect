@@ -968,6 +968,11 @@ Please be aware that your current connections will be converted to the new forma
         <translation>Удалить ресурс</translation>
     </message>
     <message>
+        <location filename="../ng_connect_dock.py" line="449"/>
+        <source>Delete selected</source>
+        <translation>Удалить выбранное</translation>
+    </message>
+    <message>
         <location filename="../ng_connect_dock.py" line="731"/>
         <source>Open Web map in browser</source>
         <translation>Открыть Веб-карту в браузере</translation>
@@ -1036,6 +1041,16 @@ Please be aware that your current connections will be converted to the new forma
         <location filename="../ng_connect_dock.py" line="1766"/>
         <source>Are you sure you want to remove this resource?</source>
         <translation>Вы уверены, что хотите удалить этот ресурс?</translation>
+    </message>
+    <message>
+        <location filename="../ng_connect_dock.py" line="3039"/>
+        <source>Delete selected resources</source>
+        <translation>Удаление выбранных ресурсов</translation>
+    </message>
+    <message>
+        <location filename="../ng_connect_dock.py" line="3040"/>
+        <source>Are you sure you want to remove selected resources?</source>
+        <translation>Вы уверены, что хотите удалить выбранные ресурсы?</translation>
     </message>
     <message>
         <location filename="../ng_connect_dock.py" line="1810"/>
@@ -1176,6 +1191,11 @@ Please be aware that your current connections will be converted to the new forma
         <location filename="../ng_connect_dock.py" line="457"/>
         <source>Deleting resource...</source>
         <translation>Удаление ресурса…</translation>
+    </message>
+    <message>
+        <location filename="../ng_connect_dock.py" line="566"/>
+        <source>Deleting resources...</source>
+        <translation>Удаление ресурсов…</translation>
     </message>
     <message>
         <location filename="../ng_connect_dock.py" line="458"/>
@@ -1873,6 +1893,69 @@ To fix this, change geometry type of your layer(s) and recreate WFS service.</so
         <location filename="../tree_widget/view.py" line="338"/>
         <source>No connections to nextgis.com. Please &lt;a href=&apos;{}&apos;&gt;create a connection&lt;/a&gt;. You can get your free Web GIS at &lt;a href=&quot;https://my.nextgis.com/?{}&quot;&gt;nextgis.com&lt;/a&gt;!</source>
         <translation>Нет подключений к nextgis.com. Пожалуйста, &lt;a href=&apos;{}&apos;&gt;создайте подключение&lt;/a&gt;. Вы можете создать свою Веб ГИС бесплатно на &lt;a href=&quot;https://my.nextgis.com/?{}&quot;&gt;nextgis.com&lt;/a&gt;!</translation>
+    </message>
+</context>
+<context>
+    <name>ResourceDeleteConfirmationDialog</name>
+    <message>
+        <location filename="../legacy/shell/presentation/dock/resource_delete_confirmation_dialog.py" line="83"/>
+        <source>Confirmation required</source>
+        <translation>Необходимо подтверждение</translation>
+    </message>
+    <message>
+        <location filename="../legacy/shell/presentation/dock/resource_delete_confirmation_dialog.py" line="132"/>
+        <source>Cancel</source>
+        <translation>Отмена</translation>
+    </message>
+    <message>
+        <location filename="../legacy/shell/presentation/dock/resource_delete_confirmation_dialog.py" line="149"/>
+        <source>Calculating resources that will be deleted...</source>
+        <translation>Подсчёт ресурсов, которые будут удалены...</translation>
+    </message>
+    <message>
+        <location filename="../legacy/shell/presentation/dock/resource_delete_confirmation_dialog.py" line="151"/>
+        <location filename="../legacy/shell/presentation/dock/resource_delete_confirmation_dialog.py" line="204"/>
+        <source>Delete</source>
+        <translation>Удалить</translation>
+    </message>
+    <message>
+        <location filename="../legacy/shell/presentation/dock/resource_delete_confirmation_dialog.py" line="158"/>
+        <location filename="../legacy/shell/presentation/dock/resource_delete_confirmation_dialog.py" line="194"/>
+        <source>Failed to load delete summary</source>
+        <translation>Не удалось загрузить сведения об удалении</translation>
+    </message>
+    <message numerus="yes">
+        <location filename="../legacy/shell/presentation/dock/resource_delete_confirmation_dialog.py" line="176"/>
+        <source>Please confirm deleting the selected resource and all child resources. &lt;b&gt;%n resource(s)&lt;/b&gt; will be deleted forever.</source>
+        <translation>
+            <numerusform>Пожалуйста, подтвердите удаление выбранных ресурсов и всех их дочерних ресурсов. &lt;b&gt;%n ресурс&lt;/b&gt; будет удалён навсегда.</numerusform>
+            <numerusform>Пожалуйста, подтвердите удаление выбранных ресурсов и всех их дочерних ресурсов. &lt;b&gt;%n ресурса&lt;/b&gt; будут удалены навсегда.</numerusform>
+            <numerusform>Пожалуйста, подтвердите удаление выбранных ресурсов и всех их дочерних ресурсов. &lt;b&gt;%n ресурсов&lt;/b&gt; будут удалены навсегда.</numerusform>
+        </translation>
+    </message>
+    <message>
+        <location filename="../legacy/shell/presentation/dock/resource_delete_confirmation_dialog.py" line="185"/>
+        <location filename="../legacy/shell/presentation/dock/resource_delete_confirmation_dialog.py" line="217"/>
+        <source>Nothing to delete</source>
+        <translation>Нечего удалять</translation>
+    </message>
+    <message numerus="yes">
+        <location filename="../legacy/shell/presentation/dock/resource_delete_confirmation_dialog.py" line="270"/>
+        <source>Some resources cannot be deleted and will be skipped: %n resource(s)</source>
+        <translation>
+            <numerusform>Некоторые ресурсы не могут быть удалены и будут пропущены: %n ресурс</numerusform>
+            <numerusform>Некоторые ресурсы не могут быть удалены и будут пропущены: %n ресурса</numerusform>
+            <numerusform>Некоторые ресурсы не могут быть удалены и будут пропущены: %n ресурсов</numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <location filename="../legacy/shell/presentation/dock/resource_delete_confirmation_dialog.py" line="483"/>
+        <source>%n resource(s)</source>
+        <translation>
+            <numerusform>%n ресурс</numerusform>
+            <numerusform>%n ресурса</numerusform>
+            <numerusform>%n ресурсов</numerusform>
+        </translation>
     </message>
 </context>
 <context>

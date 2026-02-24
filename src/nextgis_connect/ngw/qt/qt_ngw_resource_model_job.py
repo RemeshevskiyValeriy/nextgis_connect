@@ -30,7 +30,10 @@ from nextgis_connect.ngw.core.ngw_error import NGWError
 from nextgis_connect.ngw.core.ngw_group_resource import NGWGroupResource
 from nextgis_connect.ngw.core.ngw_qgis_style import NGWQGISStyle
 from nextgis_connect.ngw.core.ngw_raster_layer import NGWRasterLayer
-from nextgis_connect.ngw.core.ngw_resource import NGWResource
+from nextgis_connect.ngw.core.ngw_resource import (
+    NGWResource,
+    NGWResourceDeletePreview,
+)
 from nextgis_connect.ngw.core.ngw_resource_creator import ResourceCreator
 from nextgis_connect.ngw.core.ngw_resource_factory import (
     NGWResourceFactory,
@@ -66,6 +69,7 @@ class NGWResourceModelJobResult:
     dangling_resources: List[NGWResource]
     found_resources: Optional[List[int]]
     not_permitted_resources: List[int]
+    resource_delete_preview: Optional[NGWResourceDeletePreview]
     uploaded_layer_resources: List[UploadedLayerResource]
     main_resource_id: int
 
@@ -76,6 +80,7 @@ class NGWResourceModelJobResult:
         self.dangling_resources = []
         self.found_resources = None
         self.not_permitted_resources = []
+        self.resource_delete_preview = None
         self.uploaded_layer_resources = []
 
         self.main_resource_id = -1
@@ -331,6 +336,32 @@ class NGWResourceDelete(NGWResourceModelJob):
         NGWResource.delete_resource(self.ngw_resource)
 
         self.putDeletedResourceToResult(self.ngw_resource)
+
+
+class NGWResourceBatchDelete(NGWResourceModelJob):
+    def __init__(self, ngw_resources: List[NGWResource]) -> None:
+        super().__init__()
+        self.ngw_resources = ngw_resources
+
+    def _do(self) -> None:
+        deleted_resources = NGWResource.delete_resources(self.ngw_resources)
+        for ngw_resource in deleted_resources:
+            self.putDeletedResourceToResult(ngw_resource)
+
+
+class NGWResourceDeletePreviewLoader(NGWResourceModelJob):
+    def __init__(self, ngw_resources: List[NGWResource]) -> None:
+        super().__init__()
+        self._feedback = QgsFeedback()
+        self.ngw_resources = ngw_resources
+
+    def _do(self) -> None:
+        self.result.resource_delete_preview = (
+            NGWResource.simulate_delete_resources(
+                self.ngw_resources,
+                feedback=self._feedback,
+            )
+        )
 
 
 class NGWCreateVectorLayer(NGWResourceModelJob):

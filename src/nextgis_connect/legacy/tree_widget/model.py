@@ -69,7 +69,9 @@ from nextgis_connect.ngw.qt.qt_ngw_resource_model_job import (
     NGWGroupCreater,
     NGWMissingResourceUpdater,
     NGWRenameResource,
+    NGWResourceBatchDelete,
     NGWResourceDelete,
+    NGWResourceDeletePreviewLoader,
     NGWResourceModelJob,
     NGWResourceModelJobResult,
     NGWResourceUpdater,
@@ -102,6 +104,7 @@ __all__ = ["QNGWResourceTreeModel"]
 
 
 class NGWResourceModelResponse(QObject):
+    delete_preview_loaded = pyqtSignal(object)
     done = pyqtSignal(QModelIndex)
     failed = pyqtSignal(object)
     finished = pyqtSignal()
@@ -1068,6 +1071,15 @@ class QNGWResourceTreeModelBase(QAbstractItemModel):
             )
 
         if (
+            job_result.resource_delete_preview is not None
+            and job.model_response is not None
+        ):
+            job.model_response.delete_preview_loaded.emit(
+                job_result.resource_delete_preview
+            )
+            return
+
+        if (
             job_result.is_empty()
             and job.model_response is not None
             and len(job.model_response.warnings) > 0
@@ -1168,7 +1180,14 @@ class QNGWResourceTreeModelBase(QAbstractItemModel):
             if job.model_response is not None:
                 job.model_response.done.emit(new_index)
 
+        deleted_resource_ids = {
+            ngw_resource.resource_id
+            for ngw_resource in job_result.deleted_resources
+        }
         for ngw_resource in job_result.deleted_resources:
+            if ngw_resource.parent_id in deleted_resource_ids:
+                continue
+
             resource_id = self.index_from_id(
                 ngw_resource.parent_id,
             )
@@ -1274,11 +1293,72 @@ class QNGWResourceTreeModel(QNGWResourceTreeModelBase):
         )
 
     @modelRequest
+    def loadDeletePreview(self, indexes: List[QModelIndex]):
+        resources = [
+            index.data(QNGWResourceItem.NGWResourceRole)
+            for index in self._extract_deletion_root_indexes(indexes)
+        ]
+
+        return self._startJob(NGWResourceDeletePreviewLoader(resources))
+
+    @modelRequest
     def deleteResource(self, index):
         item = index.internalPointer()
         ngw_resource = item.data(QNGWResourceItem.NGWResourceRole)
 
         return self._startJob(NGWResourceDelete(ngw_resource))
+
+    @modelRequest
+    def deleteResources(self, indexes: List[QModelIndex]):
+        resources = [
+            index.data(QNGWResourceItem.NGWResourceRole)
+            for index in self._extract_deletion_root_indexes(indexes)
+        ]
+
+        return self._startJob(NGWResourceBatchDelete(resources))
+
+    def _extract_deletion_root_indexes(
+        self, indexes: List[QModelIndex]
+    ) -> List[QModelIndex]:
+        resource_ids = {
+            index.data(QNGWResourceItem.NGWResourceIdRole)
+            for index in indexes
+            if index.isValid() and index.parent().isValid()
+        }
+        root_indexes = []
+        used_resource_ids = set()
+
+        for index in indexes:
+            if not index.isValid():
+                continue
+
+            if not index.parent().isValid():
+                continue
+
+            resource_id = index.data(QNGWResourceItem.NGWResourceIdRole)
+            if resource_id in used_resource_ids:
+                continue
+
+            if self._has_selected_parent(index, resource_ids):
+                continue
+
+            root_indexes.append(index)
+            used_resource_ids.add(resource_id)
+
+        return root_indexes
+
+    def _has_selected_parent(
+        self, index: QModelIndex, resource_ids: Set[int]
+    ) -> bool:
+        parent = index.parent()
+        while parent.isValid():
+            parent_id = parent.data(QNGWResourceItem.NGWResourceIdRole)
+            if parent_id != 0 and parent_id in resource_ids:
+                return True
+
+            parent = parent.parent()
+
+        return False
 
     @modelRequest
     def createWfsOrOgcfForVector(
