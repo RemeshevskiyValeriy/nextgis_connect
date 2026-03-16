@@ -38,7 +38,7 @@ from nextgis_connect.detached_editing.conflicts.ui.resolving_dialog import (
     ResolvingDialog,
 )
 from nextgis_connect.detached_editing.container.container_factory import (
-    DetachedLayerFactory,
+    DetachedContainerFactory,
 )
 from nextgis_connect.detached_editing.container.ui.layer_indicator import (
     DetachedLayerIndicator,
@@ -486,7 +486,7 @@ class DetachedContainer(QObject):
         os.close(temp_file_fd)
         Path(temp_file_path).unlink(missing_ok=True)
 
-        detached_factory = DetachedLayerFactory()
+        detached_factory = DetachedContainerFactory()
         try:
             detached_factory.create_initial_container(
                 ngw_layer, Path(temp_file_path)
