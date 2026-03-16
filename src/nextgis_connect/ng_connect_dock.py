@@ -3282,7 +3282,7 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
         banner_label.linkActivated.connect(open_link)
 
     def __init_title(self) -> None:
-        title = NgConnectInterface.PLUGIN_NAME
+        title = PLUGIN_NAME
         connection = NgwConnectionsManager().current_connection
         if connection is not None:
             title = f"{connection.name} – {title}"
