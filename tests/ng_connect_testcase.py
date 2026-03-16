@@ -45,6 +45,7 @@ class TestData(str, Enum):
 class TestConnection(Enum):
     SandboxGuest = auto()
     SandboxWithLogin = auto()
+    DemoGuest = auto()
     # UserWithEmail = auto()
     # UserWithOAuth = auto()
     # UserWithNgStd = auto()
@@ -199,7 +200,7 @@ class NgConnectTestCase(QgisTestCase):
         guest_connection_id = str(uuid.uuid4())
         guest_connection = NgwConnection(
             guest_connection_id,
-            "TEST_GUEST_CONNECTION",
+            "TEST_SANDBOX_GUEST_CONNECTION",
             "https://sandbox.nextgis.com/",
             None,
         )
@@ -216,14 +217,27 @@ class NgConnectTestCase(QgisTestCase):
         basic_connection_id = str(uuid.uuid4())
         basic_connection = NgwConnection(
             basic_connection_id,
-            "TEST_LOGIN_CONNECTION",
-            "https://login-sandbox.nextgis.com/",
+            "TEST_SANDBOX_LOGIN_CONNECTION",
+            "https://sandbox.nextgis.com/",
             auth_config.id(),
         )
         connections_manager.upsert(basic_connection)
-        connections_manager.save()
         cls._connections_id[TestConnection.SandboxWithLogin] = (
             basic_connection_id
+        )
+
+        # Create demo guest connection
+        demo_guest_connection_id = str(uuid.uuid4())
+        demo_guest_connection = NgwConnection(
+            demo_guest_connection_id,
+            "TEST_DEMO_GUEST_CONNECTION",
+            "https://demo.nextgis.com/",
+            None,
+        )
+        connections_manager.upsert(demo_guest_connection)
+        connections_manager.save()
+        cls._connections_id[TestConnection.DemoGuest] = (
+            demo_guest_connection_id
         )
 
 
