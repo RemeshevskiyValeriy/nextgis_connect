@@ -177,7 +177,12 @@ from nextgis_connect.tree_widget.overlay import (
     OverlayButtonState,
 )
 from nextgis_connect.tree_widget.proxy_model import NgConnectProxyModel
-from nextgis_connect.ui.icon import icon_to_base64, material_icon
+from nextgis_connect.ui.icon import (
+    icon_to_base64,
+    material_icon,
+    plugin_icon,
+    qgis_icon,
+)
 
 HAS_NGSTD = importlib.util.find_spec("ngstd") is not None
 if HAS_NGSTD:
@@ -228,14 +233,35 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
         self.__search_menu = None
 
         self.actionOpenInNGW = QAction(self.tr("Open in Web GIS"), self)
+        self.actionOpenInNGW.setIcon(QIcon(plugin_icon("ngw_logo.svg")))
         self.actionOpenInNGW.triggered.connect(self.open_ngw_resource_page)
 
         self.actionOpenInNGWFromLayer = QAction(
             self.tr("Open in Web GIS"), self
         )
+        self.actionOpenInNGWFromLayer.setIcon(
+            QIcon(plugin_icon("ngw_logo.svg"))
+        )
         self.actionOpenInNGWFromLayer.triggered.connect(
             self.open_ngw_resource_page_from_layer
         )
+
+        self.actionOpenLayerHistory = QAction(
+            self.tr("Open layer history"), self
+        )
+        self.actionOpenLayerHistory.setIcon(qgis_icon("mIconHistory.svg"))
+        self.actionOpenLayerHistory.triggered.connect(self.open_layer_history)
+
+        self.actionOpenLayerHistoryFromLayer = QAction(
+            self.tr("Open layer history"), self
+        )
+        self.actionOpenLayerHistoryFromLayer.setIcon(
+            qgis_icon("mIconHistory.svg")
+        )
+        self.actionOpenLayerHistoryFromLayer.triggered.connect(
+            self.open_layer_history_from_layer
+        )
+
         self.layer_menu_separator = QAction()
         self.layer_menu_separator.setSeparator(True)
 
@@ -377,7 +403,7 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
 
         self.actionOpenInBrowser = QAction(
             QIcon(os.path.join(ICONS_PATH, "mActionOpenMap.svg")),
-            self.tr("Display in browser"),
+            self.tr("View in browser"),
             self,
         )
         self.actionOpenInBrowser.triggered.connect(self.__open_in_web)
@@ -787,7 +813,7 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
         self.actionOpenInBrowser.setText(
             self.tr("Open Web map in browser")
             if is_one_ngw_selected and isinstance(ngw_resources[0], NGWWebMap)
-            else self.tr("Display in browser")
+            else self.tr("View in browser")
         )
         self.actionOpenInBrowser.setEnabled(
             not is_multiple_ngw_selection
@@ -805,6 +831,15 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
         )
 
         self.actionOpenInNGW.setEnabled(is_one_ngw_selected)
+        is_vector_layer_resource = is_one_ngw_selected and isinstance(
+            ngw_resources[0], NGWVectorLayer
+        )
+        is_versioned_resource = (
+            is_vector_layer_resource and ngw_resources[0].is_versioning_enabled  # pyright: ignore[reportAttributeAccessIssue]
+        )
+        self.actionOpenLayerHistory.setVisible(is_vector_layer_resource)
+        self.actionOpenLayerHistory.setEnabled(is_versioned_resource)
+
         self.actionRename.setEnabled(is_one_ngw_selected)
         self.actionEditMetadata.setEnabled(is_one_ngw_selected)
 
@@ -822,6 +857,23 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
         )
         self.actionOpenInNGWFromLayer.setVisible(open_in_ngw_visible)
         self.layer_menu_separator.setVisible(open_in_ngw_visible)
+
+        self.actionOpenLayerHistoryFromLayer.setVisible(False)
+
+        if open_in_ngw_visible:
+            assert layer is not None
+
+            plugin = NgConnectInterface.instance()
+            detached_layer = plugin.detached_editing.layer(layer)
+
+            if detached_layer is not None:
+                self.actionOpenLayerHistoryFromLayer.setVisible(True)
+                is_versioning_enabled = (
+                    detached_layer.metadata.is_versioning_enabled
+                )
+                self.actionOpenLayerHistoryFromLayer.setEnabled(
+                    is_versioning_enabled
+                )
 
     @pyqtSlot(str, str, Exception)
     def __model_warning_process(
@@ -1778,6 +1830,7 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
         creating_actions: List[QAction] = [self.actionEditMetadata]
         services_actions: List[QAction] = [
             self.actionOpenInNGW,
+            self.actionOpenLayerHistory,
             self.actionRename,
             self.actionDeleteResource,
         ]
@@ -1934,6 +1987,46 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
 
         url = QUrl(connection.url)
         url.setPath(f"/resource/{resource_id}")
+
+        QDesktopServices.openUrl(url)
+
+    def open_layer_history(self):
+        selected_index = self.proxy_model.mapToSource(
+            self.resources_tree_view.selectionModel().currentIndex()
+        )
+
+        if not selected_index.isValid():
+            return
+
+        ngw_resource = selected_index.data(QNGWResourceItem.NGWResourceRole)
+        url = ngw_resource.get_absolute_url() + "/history"
+        QDesktopServices.openUrl(QUrl(url))
+
+    def open_layer_history_from_layer(self):
+        layer_tree_view = self.iface.layerTreeView()
+        assert layer_tree_view is not None
+        qgis_nodes = layer_tree_view.selectedNodes()
+        is_one_qgis_selected = len(qgis_nodes) == 1
+        is_layer = is_one_qgis_selected and isinstance(
+            qgis_nodes[0], QgsLayerTreeLayer
+        )
+
+        layer = (
+            cast(QgsLayerTreeLayer, qgis_nodes[0]).layer()
+            if is_layer
+            else None
+        )
+        assert layer is not None
+
+        connection_id = layer.customProperty("ngw_connection_id")
+        resource_id = layer.customProperty("ngw_resource_id")
+
+        connection_manager = NgwConnectionsManager()
+        connection = connection_manager.connection(connection_id)
+        assert connection is not None
+
+        url = QUrl(connection.url)
+        url.setPath(f"/resource/{resource_id}/history")
 
         QDesktopServices.openUrl(url)
 
