@@ -16,6 +16,7 @@ class ErrorCode(IntEnum):
     PluginError = 0
     BigUpdateError = 1
 
+    DataPreparationError = 10
     NgStdError = 50
 
     NgwError = 100
@@ -188,6 +189,24 @@ class NgConnectException(Exception):
 
 class NgConnectError(NgConnectException):
     pass
+
+class DataPreparationError(NgConnectError):
+    def __init__(
+        self,
+        log_message: Optional[str] = None,
+        *,
+        user_message: Optional[str] = None,
+        detail: Optional[str] = None,
+        code: ErrorCode = ErrorCode.DataPreparationError,
+        try_again: Optional[Callable[[], Any]] = None,
+    ) -> None:
+        super().__init__(
+            log_message,
+            user_message=user_message,
+            detail=detail,
+            code=code,
+            try_again=try_again,
+        )
 
 
 class NgConnectWarning(NgConnectException):
@@ -461,6 +480,7 @@ def _default_log_message(code: ErrorCode) -> str:
     messages = {
         ErrorCode.PluginError: "Internal plugin error",
         ErrorCode.BigUpdateError: "Big update error",
+        ErrorCode.DataPreparationError: "Data preparation error",
         ErrorCode.NgStdError: "NgStd library error",
         ErrorCode.NgwError: "NGW communication error",
         ErrorCode.NgwConnectionError: "Connection error",
@@ -512,6 +532,9 @@ def default_user_message(code: ErrorCode) -> str:
         ),
         ErrorCode.UnsupportedRasterType: QgsApplication.translate(
             "Errors", "COG is disabled."
+        ),
+        ErrorCode.DataPreparationError: QgsApplication.translate(
+            "Errors", "An error occurred while preparing the data for upload."
         ),
         ErrorCode.NgwError: QgsApplication.translate(
             "Errors", "Error occurred while communicating with Web GIS."
