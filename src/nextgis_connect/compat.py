@@ -1,5 +1,7 @@
-from typing import TYPE_CHECKING, Any, Dict, List, Set
+from enum import IntEnum
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Set
 
+from osgeo import gdal
 from qgis.core import (
     Qgis,
     QgsFeature,
@@ -113,3 +115,100 @@ except Exception:
     import pkg_resources
 
     parse_version = pkg_resources.parse_version  # type: ignore
+
+
+
+class DataType(IntEnum):
+    UnknownDataType = Qgis.DataType.UnknownDataType
+    Byte = Qgis.DataType.Byte
+    Int8 = Qgis.DataType.Int8
+    UInt16 = Qgis.DataType.UInt16
+    Int16 = Qgis.DataType.Int16
+    UInt32 = Qgis.DataType.UInt32
+    Int32 = Qgis.DataType.Int32
+    Float32 = Qgis.DataType.Float32
+    Float64 = Qgis.DataType.Float64
+    CInt16 = Qgis.DataType.CInt16
+    CInt32 = Qgis.DataType.CInt32
+    CFloat32 = Qgis.DataType.CFloat32
+    CFloat64 = Qgis.DataType.CFloat64
+    ARGB32 = Qgis.DataType.ARGB32
+    ARGB32_Premultiplied = Qgis.DataType.ARGB32_Premultiplied
+
+    def to_gdal(self) -> int:
+        """Return the corresponding GDAL data type.
+
+        Based on QgsGdalUtils::gdalDataTypeFromQgisDataType
+        """
+        mapping = {
+            DataType.UnknownDataType: int(gdal.GDT_Unknown),
+            DataType.Byte: int(gdal.GDT_Byte),
+            DataType.UInt16: int(gdal.GDT_UInt16),
+            DataType.Int16: int(gdal.GDT_Int16),
+            DataType.UInt32: int(gdal.GDT_UInt32),
+            DataType.Int32: int(gdal.GDT_Int32),
+            DataType.Float32: int(gdal.GDT_Float32),
+            DataType.Float64: int(gdal.GDT_Float64),
+            DataType.CInt16: int(gdal.GDT_CInt16),
+            DataType.CInt32: int(gdal.GDT_CInt32),
+            DataType.CFloat32: int(gdal.GDT_CFloat32),
+            DataType.CFloat64: int(gdal.GDT_CFloat64),
+            DataType.ARGB32: int(gdal.GDT_Unknown),
+            DataType.ARGB32_Premultiplied: int(gdal.GDT_Unknown),
+        }
+
+        int8 = self._optional_gdal_type("GDT_Int8")
+        if int8 is not None:
+            mapping[DataType.Int8] = int8
+        else:
+            mapping[DataType.Int8] = int(gdal.GDT_Unknown)
+
+        return mapping.get(self, int(gdal.GDT_Unknown))
+
+    @classmethod
+    def from_gdal(cls, gdal_data_type: int) -> "DataType":
+        """Return the corresponding QGIS data type.
+
+        Based on QgsGdalProviderBase::dataTypeFromGdal
+        """
+        mapping: Dict[int, DataType] = {
+            int(gdal.GDT_Unknown): cls.UnknownDataType,
+            int(gdal.GDT_Byte): cls.Byte,
+            int(gdal.GDT_UInt16): cls.UInt16,
+            int(gdal.GDT_Int16): cls.Int16,
+            int(gdal.GDT_UInt32): cls.UInt32,
+            int(gdal.GDT_Int32): cls.Int32,
+            int(gdal.GDT_Float32): cls.Float32,
+            int(gdal.GDT_Float64): cls.Float64,
+            int(gdal.GDT_CInt16): cls.CInt16,
+            int(gdal.GDT_CInt32): cls.CInt32,
+            int(gdal.GDT_CFloat32): cls.CFloat32,
+            int(gdal.GDT_CFloat64): cls.CFloat64,
+        }
+
+        optional_mapping = {
+            "GDT_Int8": cls.Int8,
+            "GDT_Float16": cls.Float32,
+            "GDT_CFloat16": cls.CFloat32,
+            "GDT_Int64": cls.Float64,
+            "GDT_UInt64": cls.Float64,
+            "GDT_TypeCount": cls.UnknownDataType,
+        }
+
+        for gdal_name, data_type in optional_mapping.items():
+            value = cls._optional_gdal_type(gdal_name)
+            if value is None:
+                continue
+
+            mapping[value] = data_type
+
+        return mapping.get(int(gdal_data_type), cls.UnknownDataType)
+
+    @staticmethod
+    def _optional_gdal_type(name: str) -> Optional[int]:
+        value = getattr(gdal, name, None)
+
+        if value is None:
+            return None
+
+        return int(value)
