@@ -15,6 +15,7 @@ from qgis.PyQt.QtCore import QObject, QTimer, pyqtSlot
 from qgis.utils import iface  # type: ignore
 
 from nextgis_connect.compat import QGIS_3_34
+from nextgis_connect.detached_editing.detached_layer import DetachedLayer
 from nextgis_connect.detached_editing.path_preprocessor import (
     DetachedEditingPathPreprocessor,
 )
@@ -136,6 +137,32 @@ class DetachedEditing(QObject):
     @pyqtSlot(name="disableSynchronization")
     def disable_synchronization(self) -> None:
         self.__is_synchronization_enabled = False
+
+    def containers(self) -> List[DetachedContainer]:
+        """Return list of all detached containers."""
+        return list(self.__containers.values())
+
+    def container(self, layer: QgsVectorLayer) -> Optional[DetachedContainer]:
+        """Return detached container for QGIS layer.
+
+        :param layer: Vector layer.
+        :return: Detached container or ``None`` if layer is not detached.
+        """
+        return self.__containers_by_layer_id.get(layer.id())
+
+    def layer(self, layer: QgsMapLayer) -> Optional[DetachedLayer]:
+        """Return detached layer for QGIS layer.
+
+        :param layer: Vector layer.
+        :return: Detached layer or ``None`` if layer is not detached.
+        """
+        if not isinstance(layer, QgsVectorLayer):
+            return None
+
+        container = self.__containers_by_layer_id.get(layer.id())
+        if container is None:
+            return None
+        return container.layer(layer)
 
     def __setup_layers(self) -> None:
         project = QgsProject.instance()

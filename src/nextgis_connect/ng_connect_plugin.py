@@ -157,6 +157,11 @@ class NgConnectPlugin(NgConnectInterface):
         assert self.__task_manager is not None
         return self.__task_manager
 
+    @property
+    def detached_editing(self) -> DetachedEditing:
+        assert self.__detached_editing is not None
+        return self.__detached_editing
+
     def synchronize_layers(self) -> None:
         assert self.__detached_editing is not None
         QMetaObject.invokeMethod(

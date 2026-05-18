@@ -29,6 +29,7 @@ from nextgis_connect.detached_editing.serialization import (
     simplify_value,
 )
 from nextgis_connect.detached_editing.utils import (
+    DetachedContainerMetaData,
     detached_layer_uri,
     make_connection,
 )
@@ -92,6 +93,14 @@ class DetachedLayer(QObject):
 
         if layer.isEditable():
             self.__start_listen_changes()
+
+    @property
+    def container(self) -> "DetachedContainer":
+        return self.__container
+
+    @property
+    def metadata(self) -> DetachedContainerMetaData:
+        return self.__container.metadata
 
     @property
     def qgs_layer(self) -> QgsVectorLayer:

@@ -1,6 +1,6 @@
 import sys
 from pathlib import Path
-from typing import Union
+from typing import TYPE_CHECKING, Union
 
 from osgeo import gdal
 from qgis.core import Qgis, QgsApplication, QgsTaskManager
@@ -23,7 +23,11 @@ from nextgis_connect.ng_connect_interface import NgConnectInterface
 from nextgis_connect.settings.ng_connect_settings import NgConnectSettings
 from nextgis_connect.utils import nextgis_domain, utm_tags
 
-assert isinstance(iface, QgisInterface)
+if TYPE_CHECKING:
+    from nextgis_connect.detached_editing.detached_edititng import (
+        DetachedEditing,
+    )
+    assert isinstance(iface, QgisInterface)
 
 
 class NgConnectPluginStub(NgConnectInterface):
@@ -145,6 +149,10 @@ class NgConnectPluginStub(NgConnectInterface):
         raise NotImplementedError
 
     def synchronize_layers(self) -> None:
+        raise NotImplementedError
+
+    @property
+    def detached_editing(self) -> "DetachedEditing":
         raise NotImplementedError
 
     def enable_synchronization(self) -> None:

@@ -265,6 +265,14 @@ class DetachedContainer(QObject):
         for layer_id in layer_ids:
             self.delete_layer(layer_id)
 
+    def layer(self, layer: QgsVectorLayer) -> Optional[DetachedLayer]:
+        """Return detached layer for QGIS layer.
+
+        :param layer: Vector layer.
+        :return: Detached layer or ``None`` if layer is not detached.
+        """
+        return self.__detached_layers.get(layer.id())
+
     def add_indicator(self, node: QgsLayerTreeLayer) -> None:
         assert isinstance(iface, QgisInterface)
         view = iface.layerTreeView()
