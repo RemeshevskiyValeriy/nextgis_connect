@@ -277,8 +277,8 @@ class AuthConfigEditDialog(QDialog, WIDGET):
         self.__clear_basic_config()
 
         self.__config_map = config_map
-        self.username_lineedit.setText(config_map["username"])
-        self.password_lineedit.setText(config_map["password"])
+        self.username_lineedit.setText(config_map.get("username", ""))
+        self.password_lineedit.setText(config_map.get("password", ""))
         self.realm_lineedit.setText(config_map.get("realm", ""))
 
         self.__validate_basic_config()
