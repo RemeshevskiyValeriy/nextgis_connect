@@ -198,6 +198,7 @@ def is_ngw_container(
 def reset_container_properties(layer: QgsMapLayer) -> None:
     layer.removeCustomProperty("ngw_is_detached_layer")
     layer.removeCustomProperty("ngw_connection_id")
+    layer.removeCustomProperty("ngw_instance_id")
     layer.removeCustomProperty("ngw_resource_id")
 
 

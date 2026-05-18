@@ -401,6 +401,17 @@ class NgwResourcesAdder(QObject):
 
         self.__insertion_stack.pop()
 
+    def __set_ngw_layer_properties(
+        self, layer: QgsMapLayer, connection_id: str, resource_id: int
+    ) -> None:
+        connections_manager = NgwConnectionsManager()
+        connection = connections_manager.connection(connection_id)
+        assert connection is not None
+
+        layer.setCustomProperty("ngw_connection_id", connection_id)
+        layer.setCustomProperty("ngw_instance_id", connection.domain_uuid)
+        layer.setCustomProperty("ngw_resource_id", resource_id)
+
     def __add_layer(self, index: QModelIndex) -> Optional[QgsLayerTreeLayer]:
         ngw_resource = index.data(QNGWResourceItem.NGWResourceRole)
         layer_resource = (
@@ -437,10 +448,11 @@ class NgwResourcesAdder(QObject):
             self.__add_edit_widgets(layer_resource, layer)
             self.__set_display_field(layer_resource, layer)
 
-        layer.setCustomProperty(
-            "ngw_connection_id", layer_resource.connection_id
+        self.__set_ngw_layer_properties(
+            layer,
+            layer_resource.connection_id,
+            layer_resource.resource_id,
         )
-        layer.setCustomProperty("ngw_resource_id", layer_resource.resource_id)
 
         layer_node = insertion_point.group.insertLayer(
             insertion_point.position, layer
@@ -494,10 +506,11 @@ class NgwResourcesAdder(QObject):
             self.__add_edit_widgets(layer_resource, layer)
             self.__set_display_field(layer_resource, layer)
 
-        layer.setCustomProperty(
-            "ngw_connection_id", ngw_resource.connection_id
+        self.__set_ngw_layer_properties(
+            layer,
+            ngw_resource.connection_id,
+            ngw_resource.resource_id,
         )
-        layer.setCustomProperty("ngw_resource_id", ngw_resource.resource_id)
 
         layer_node = insertion_point.group.insertLayer(
             insertion_point.position, layer
@@ -584,11 +597,15 @@ class NgwResourcesAdder(QObject):
         if is_style(style_resource):
             self.__replace_default_style(style_resource, layer)  # type: ignore
             layer_resource_id = webmap_layer.style_parent_id
+            assert layer_resource_id is not None
         else:
             layer_resource_id = webmap_layer.layer_style_id
 
-        layer.setCustomProperty("ngw_connection_id", webmap.connection_id)
-        layer.setCustomProperty("ngw_resource_id", layer_resource_id)
+        self.__set_ngw_layer_properties(
+            layer,
+            webmap.connection_id,
+            layer_resource_id,
+        )
 
         layer_node = insertion_point.group.insertLayer(
             insertion_point.position, layer
@@ -620,11 +637,10 @@ class NgwResourcesAdder(QObject):
             basemap_layer = self.__layers[id(basemap)]
             basemap_layer.setName(basemap.display_name)
 
-            basemap_layer.setCustomProperty(
-                "ngw_connection_id", webmap.connection_id
-            )
-            basemap_layer.setCustomProperty(
-                "ngw_resource_id", basemap.resource_id
+            self.__set_ngw_layer_properties(
+                basemap_layer,
+                webmap.connection_id,
+                basemap.resource_id,
             )
 
             if basemap.opacity is not None:

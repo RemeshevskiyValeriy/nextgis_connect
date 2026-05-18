@@ -120,6 +120,7 @@ class DetachedLayer(QObject):
         properties = {
             "ngw_is_detached_layer": True,
             "ngw_connection_id": self.__container.metadata.connection_id,
+            "ngw_instance_id": self.__container.metadata.instance_id,
             "ngw_resource_id": self.__container.metadata.resource_id,
         }
 
