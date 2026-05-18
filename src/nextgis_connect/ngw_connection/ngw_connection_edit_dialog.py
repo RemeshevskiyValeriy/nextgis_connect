@@ -41,7 +41,7 @@ from nextgis_connect.logging import logger
 from nextgis_connect.ngw_connection.auth_config_edit_dialog import (
     AuthConfigEditDialog,
 )
-from nextgis_connect.utils import nextgis_domain
+from nextgis_connect.utils import draw_icon, nextgis_domain
 
 from .ngw_connection import NgwConnection
 from .ngw_connections_manager import NgwConnectionsManager
@@ -152,6 +152,12 @@ class NgwConnectionEditDialog(QDialog, WIDGET):
         save_button.clicked.connect(self.__save_clicked)
         self.buttonBox.rejected.connect(self.reject)
 
+        draw_icon(
+            self.auth_storage_info,
+            QgsApplication.getThemeIcon("mActionPropertiesWidget.svg"),
+            size=16
+        )
+
         self.authWidget.selectedConfigIdChanged.connect(
             self.__patch_auth_config_selector
         )
@@ -175,6 +181,8 @@ class NgwConnectionEditDialog(QDialog, WIDGET):
             edit_config_button.clicked.connect(self.__on_edit_config_clicked)
 
         self.__validate()
+
+        QTimer.singleShot(0, self.__delayed_resize)
 
     def connection_id(self):
         return self.__connection_id
@@ -213,6 +221,9 @@ class NgwConnectionEditDialog(QDialog, WIDGET):
             self.authWidget.setConfigId(connection.auth_config_id)
 
     def __save_clicked(self):
+        if self.__is_duplicate_connection_url():
+            return
+
         self.__is_save_clicked = True
         self.__send_test_request()
 
@@ -230,6 +241,16 @@ class NgwConnectionEditDialog(QDialog, WIDGET):
         self.__update_name(lower_text)
 
         self.__validate()
+
+    @pyqtSlot()
+    def __delayed_resize(self) -> None:
+        layout = self.layout()
+        if layout is not None:
+            layout.activate()
+
+        self.resize(
+            QSize(self.size().width(), self.minimumSizeHint().height())
+        )
 
     def __update_url_completer(self, value: str):
         if any(char in value for char in [":", "\\", "/"]):
@@ -477,6 +498,33 @@ class NgwConnectionEditDialog(QDialog, WIDGET):
         connection = NgwConnection(connection_id, name, url, auth_config_id)
         NgwConnectionsManager().save(connection)
 
+    def __is_duplicate_connection_url(self) -> bool:
+        if self.__is_edit:
+            return False
+
+        connections_manager = NgwConnectionsManager()
+        existing_connection = connections_manager.find_connection_by_url(
+            self.__make_valid_url(self.urlLineEdit.text())
+        )
+        if existing_connection is None:
+            return False
+
+        connection_name = existing_connection.name or existing_connection.url
+        message = self.tr(
+            "A connection to this Web GIS already exists: <b>{}</b>. If"
+            " you need to sign in as another user, edit the existing"
+            " connection and create new authentication settings."
+        ).format(connection_name)
+        self.messageBar.clearWidgets()
+        self.messageBar.pushMessage(
+            self.tr("Connection already exists"),
+            message,
+            Qgis.MessageLevel.Warning,
+        )
+        self._expand_message_bar()
+
+        return True
+
     def __lock_gui(self):
         self.urlLineEdit.setEnabled(False)
         self.nameLineEdit.setEnabled(False)
@@ -503,22 +551,7 @@ class NgwConnectionEditDialog(QDialog, WIDGET):
         self.progressBar.hide()
 
     def __make_valid_url(self, url: str) -> str:
-        parse_result = urlparse(url)
-        if parse_result.scheme == "":
-            parse_result = urlparse("https://" + url)
-
-        scheme = parse_result.scheme
-        base_url = parse_result.netloc
-
-        # Force https regardless of what user has selected, but only for cloud
-        # connections.
-        if base_url.endswith(self.NEXTGIS_DOMAIN) and scheme != "https":
-            scheme = "https"
-
-        if not scheme or not base_url:
-            return url
-
-        return f"{scheme}://{base_url}"
+        return NgwConnection.normalize_url(url)
 
     @pyqtSlot()
     def __on_add_config_clicked(self) -> None:
@@ -580,7 +613,9 @@ class NgwConnectionEditDialog(QDialog, WIDGET):
 
         config = QgsApplication.authManager().configAuthMethod(config_id)
         is_loaded, config = (
-            QgsApplication.authManager().loadAuthenticationConfig(config_id, QgsAuthMethodConfig(), full=True)
+            QgsApplication.authManager().loadAuthenticationConfig(
+                config_id, QgsAuthMethodConfig(), full=True
+            )
         )
         if not is_loaded:
             return None
