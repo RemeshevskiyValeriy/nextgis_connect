@@ -165,9 +165,13 @@ class AuthConfigEditDialog(QDialog, WIDGET):
         )
 
         # Additional settings
-        cast(QgsCollapsibleGroupBox, self.additional_groupbox).setCollapsed(
-            True
+        additional_groupbox = cast(
+            QgsCollapsibleGroupBox, self.additional_groupbox
         )
+        additional_groupbox.collapsedStateChanged.connect(
+            self.__schedule_resize
+        )
+        additional_groupbox.setCollapsed(True)
 
         # Button box
         self.name_lineedit.textChanged.connect(self.__validate_auth)
@@ -184,7 +188,7 @@ class AuthConfigEditDialog(QDialog, WIDGET):
         self.username_lineedit.setFocus()
 
         # Resize
-        QTimer.singleShot(0, self.__delayed_resize)
+        self.__schedule_resize()
 
     def __can_load_config(self) -> bool:
         if QgsApplication.authManager().isDisabled():
@@ -218,9 +222,17 @@ class AuthConfigEditDialog(QDialog, WIDGET):
 
     @pyqtSlot()
     def __delayed_resize(self) -> None:
+        layout = self.layout()
+        if layout is not None:
+            layout.activate()
+
         self.resize(
             QSize(self.size().width(), self.minimumSizeHint().height())
         )
+
+    @pyqtSlot(bool)
+    def __schedule_resize(self, _: bool = False) -> None:
+        QTimer.singleShot(0, self.__delayed_resize)
 
     def __load_config(self) -> None:
         is_empty = len(self.__config_id) == 0
