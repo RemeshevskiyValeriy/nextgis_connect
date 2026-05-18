@@ -39,6 +39,7 @@ from qgis.PyQt.QtCore import (
 )
 from qgis.PyQt.QtNetwork import QNetworkRequest
 
+from nextgis_connect.compat import parse_version
 from nextgis_connect.exceptions import (
     ErrorCode,
     NgConnectError,
@@ -81,13 +82,21 @@ def is_lunkwill_reply(reply: QNetworkReply) -> bool:
     return header.startswith(lunkwill_type)
 
 
+class NgwFeature(Enum):
+    BOOLEAN_TYPE = ("nextgisweb", parse_version("5.5.0.dev1"))
+
+
 class QgsNgwConnection(QObject):
     """NextGIS Web API connection"""
+
+    _cached_ngw_components_by_connection_id: ClassVar[
+        Dict[str, Dict[str, Any]]
+    ] = {}
 
     __connection_id: str
     __log_network: bool
 
-    __ngw_components: Optional[Dict]
+    __ngw_components: Optional[Dict[str, Any]]
 
     def __init__(
         self, connection_id: str, parent: Optional[QObject] = None
@@ -112,6 +121,43 @@ class QgsNgwConnection(QObject):
     @property
     def connection_id(self) -> str:
         return self.__connection_id
+
+    @classmethod
+    def clear_cached_ngw_components(
+        cls, connection_id: Optional[str] = None
+    ) -> None:
+        if connection_id is None:
+            cls._cached_ngw_components_by_connection_id.clear()
+            return
+
+        cls._cached_ngw_components_by_connection_id.pop(connection_id, None)
+
+    def invalidate_cached_ngw_components(self) -> None:
+        self.__ngw_components = None
+        self.clear_cached_ngw_components(self.connection_id)
+
+    def has_support_for_feature(self, feature: NgwFeature) -> bool:
+        ngw_components = self.get_ngw_components()
+        component_version = ngw_components.get(feature.value[0])
+        if not component_version:
+            raise NgwConnectionError(
+                f"Component {feature.value[0]} version is not available in NGW versions response"
+            )
+
+        logger.debug(
+            f"NGW component {feature.value[0]} version is {component_version}"
+        )
+
+        ngw_version = parse_version(component_version)
+        required_version = feature.value[1]
+        result = ngw_version >= required_version
+        if not result:
+            logger.debug(
+                f"Feature {feature.name} requires version {required_version} "
+                f"of component {feature.value[0]} but actual version is {ngw_version}"
+            )
+
+        return result
 
     def get(
         self, sub_url: str, params=None, *, is_lunkwill: bool = False, **kwargs
@@ -584,18 +630,31 @@ class QgsNgwConnection(QObject):
             self.uploadProgressCallback(total, sent)
 
     def get_ngw_components(self):
-        if self.__ngw_components is None:
-            logger.debug("↓ Get versions")
-            result = self.get(GET_VERSION_URL)
-            if not isinstance(result, dict):
-                raise NgwConnectionError("Unexpected versions result")
+        if self.__ngw_components is not None:
+            return self.__ngw_components
 
-            self.__ngw_components = result
-            domain = urllib.parse.urlparse(self.server_url).hostname
-            version = self.__ngw_components.get("nextgisweb")
-            logger.debug(
-                f"<b>↔ Connected</b> to {domain} (NGW version: {version})"
-            )
+        cached_components = self._cached_ngw_components_by_connection_id.get(
+            self.connection_id
+        )
+        if cached_components is not None:
+            self.__ngw_components = cached_components
+            return self.__ngw_components
+
+        logger.debug("↓ Get versions")
+        result = self.get(GET_VERSION_URL)
+        if not isinstance(result, dict):
+            raise NgwConnectionError("Unexpected versions result")
+
+        self.__ngw_components = result
+        self._cached_ngw_components_by_connection_id[self.connection_id] = (
+            self.__ngw_components
+        )
+
+        domain = urllib.parse.urlparse(self.server_url).hostname
+        version = self.__ngw_components.get("nextgisweb")
+        logger.debug(
+            f"<b>↔ Connected</b> to {domain} (NGW version: {version})"
+        )
 
         return self.__ngw_components
 
