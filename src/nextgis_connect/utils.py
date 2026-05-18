@@ -1,5 +1,6 @@
 import platform
 from enum import Enum, auto
+from functools import lru_cache
 from itertools import islice
 from pathlib import Path
 from typing import Any, Optional, Tuple, Union, cast
@@ -177,6 +178,7 @@ def add_project_export_action(project_export_action: QAction) -> None:
                 import_export_menu.addAction(project_export_action)
 
 
+@lru_cache(maxsize=1)
 def locale() -> str:
     override_locale = QgsSettings().value(
         "locale/overrideFlag", defaultValue=False, type=bool
@@ -190,8 +192,14 @@ def locale() -> str:
     return locale if locale.lower() != "c" else "en"
 
 
+@lru_cache(maxsize=1)
+def is_russian_speaking() -> bool:
+    return locale() in ["be", "kk", "ky", "ru", "uk"]
+
+
+@lru_cache(maxsize=1)
 def nextgis_domain(subdomain: Optional[str] = None) -> str:
-    speaks_russian = locale() in ["be", "kk", "ky", "ru", "uk"]
+    speaks_russian = is_russian_speaking()
     if subdomain is None:
         subdomain = ""
     elif not subdomain.endswith("."):

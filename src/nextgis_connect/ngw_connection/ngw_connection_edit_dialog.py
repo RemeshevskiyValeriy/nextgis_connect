@@ -268,7 +268,15 @@ class NgwConnectionEditDialog(QDialog, WIDGET):
 
             suffix = self.NEXTGIS_DOMAIN[len(text_after_point) :]
 
-        self.__url_completer_model.setStringList([value + suffix])
+        suggestions = []
+        if len(value) >= 2 and "demo".startswith(value):
+            suggestions.append(nextgis_domain("demo")[8:])
+        if len(value) >= 2 and "sandbox".startswith(value):
+            suggestions.append(nextgis_domain("sandbox")[8:])
+
+        suggestions.append(value + suffix)
+
+        self.__url_completer_model.setStringList(suggestions)
 
     def __update_name(self, url: str):
         url = self.__make_valid_url(url)
