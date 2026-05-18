@@ -155,7 +155,7 @@ class NgwConnectionEditDialog(QDialog, WIDGET):
         draw_icon(
             self.auth_storage_info,
             QgsApplication.getThemeIcon("mActionPropertiesWidget.svg"),
-            size=16
+            size=16,
         )
 
         self.authWidget.selectedConfigIdChanged.connect(
@@ -275,7 +275,13 @@ class NgwConnectionEditDialog(QDialog, WIDGET):
 
         parse_result = urlparse(url)
         connection_name = parse_result.netloc
-        connection_name = connection_name.split(".")[0]
+
+        is_nextgis_host = connection_name.endswith(self.NEXTGIS_DOMAIN)
+        connection_name = (
+            connection_name.split(".")[0]
+            if is_nextgis_host
+            else connection_name
+        )
 
         if not self.__is_edit and not self.__name_was_manually_changed:
             self.nameLineEdit.textChanged.disconnect(self.__on_name_changed)
