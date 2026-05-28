@@ -1645,11 +1645,13 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
         if (
             len(qgs_layer_tree_nodes) == 0
         ):  # could be if user had deleted layer but have not selected one after that
-            qgs_layer_tree_nodes = [self.iface.layerTreeView().currentNode()]
-            if (
-                len(qgs_layer_tree_nodes) == 0
-            ):  # just in case if checkImportActionsAvailability() works incorrectly
+            current_node = self.iface.layerTreeView().currentNode()
+            if current_node is None:
+                self.show_error(self.tr("No layer selected"))
                 return
+            qgs_layer_tree_nodes = [current_node]
+
+        qgs_layer_tree_nodes = [node.clone() for node in qgs_layer_tree_nodes]
 
         self.import_layer_response = self.resource_model.uploadResourcesList(
             qgs_layer_tree_nodes, ngw_current_index, self.iface
