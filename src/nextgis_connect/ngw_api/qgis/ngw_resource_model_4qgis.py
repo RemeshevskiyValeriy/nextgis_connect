@@ -464,7 +464,7 @@ class QGISResourceJob(NGWResourceModelJob):
             )
             return None
 
-        filepath, old_fid_name, tgt_qgs_layer = self.prepareImportVectorFile(
+        filepath, old_fid_name, _ = self.prepareImportVectorFile(
             qgs_vector_layer
         )
         if filepath is None:
