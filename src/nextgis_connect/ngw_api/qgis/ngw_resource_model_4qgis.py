@@ -35,6 +35,7 @@ from qgis.core import (
     QgsCoordinateTransform,
     QgsFeature,
     QgsFeatureRequest,
+    QgsFeedback,
     QgsField,
     QgsFields,
     QgsGeometry,
@@ -1896,6 +1897,7 @@ class ResourcesDownloader(QGISResourceJob):
         super().__init__()
         self.__connection_id = connection_id
         self.__resources_id = resources_id
+        self._feedback = QgsFeedback()
 
     def _do(self):
         ngw_connection = QgsNgwConnection(self.__connection_id)
@@ -1903,7 +1905,10 @@ class ResourcesDownloader(QGISResourceJob):
         for resource_id in self.__resources_id:
             try:
                 self.result.dangling_resources.append(
-                    resources_factory.get_resource(resource_id)
+                    resources_factory.get_resource(
+                        resource_id,
+                        feedback=self._feedback,
+                    )
                 )
             except NgwError as error:
                 if error.code not in (

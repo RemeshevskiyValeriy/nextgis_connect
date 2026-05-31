@@ -18,10 +18,11 @@
  ***************************************************************************/
 """
 
-from typing import Dict, Type
+from typing import Dict, Optional, Type
+
+from qgis.core import QgsFeedback
 
 from nextgis_connect.logging import logger
-from nextgis_connect.ngw_api.core.ngw_gallery import NGWGallery
 from nextgis_connect.ngw_api.core.ngw_tms_resources import (
     NGWTmsConnection,
     NGWTmsLayer,
@@ -72,7 +73,6 @@ class NGWResourceFactory:
             NGWQGISRasterStyle.type_id: NGWQGISRasterStyle,
             NGWRasterLayer.type_id: NGWRasterLayer,
             NGWWebMap.type_id: NGWWebMap,
-            NGWGallery.type_id: NGWGallery,
             NGWRasterStyle.type_id: NGWRasterStyle,
             NGWWmsConnection.type_id: NGWWmsConnection,
             NGWWmsLayer.type_id: NGWWmsLayer,
@@ -103,9 +103,18 @@ class NGWResourceFactory:
     def connection(self) -> QgsNgwConnection:
         return self.__conn
 
-    def get_resource(self, resource_id: int) -> NGWResource:
+    def get_resource(
+        self,
+        resource_id: int,
+        *,
+        feedback: Optional[QgsFeedback] = None,
+    ) -> NGWResource:
         logger.debug(f"↓ Fetch resource with id={resource_id}")
-        res_json = NGWResource.receive_resource_obj(self.__conn, resource_id)
+        res_json = NGWResource.receive_resource_obj(
+            self.__conn,
+            resource_id,
+            feedback=feedback,
+        )
         return self.get_resource_by_json(res_json)
 
     def get_resource_by_json(self, res_json) -> NGWResource:
@@ -118,8 +127,12 @@ class NGWResourceFactory:
             resource_type = self.__res_types_register[self.__default_type]
         return resource_type(self, res_json)
 
-    def get_root_resource(self) -> NGWResource:
-        return self.get_resource(0)
+    def get_root_resource(
+        self,
+        *,
+        feedback: Optional[QgsFeedback] = None,
+    ) -> NGWResource:
+        return self.get_resource(0, feedback=feedback)
 
     def get_ngw_verson(self):
-        return self.__conn.get(API_NGW_VERSION)
+        return self.__conn.get_ngw_components()
