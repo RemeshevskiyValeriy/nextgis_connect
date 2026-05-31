@@ -1918,9 +1918,7 @@ class NGWUpdateRasterLayer(QGISResourceJob):
             total_size: int, readed_size: int, value: Optional[int] = None
         ) -> None:
             percent = (
-                int(readed_size * 100 / total_size)
-                if value is None
-                else value
+                int(readed_size * 100 / total_size) if value is None else value
             )
             self._layer_status(
                 self.qgis_layer.name(),
@@ -1937,9 +1935,7 @@ class NGWUpdateRasterLayer(QGISResourceJob):
 
         is_ok, file_path = self.prepareImportRasterFile(self.qgis_layer)
         if not is_ok:
-            raise JobError(
-                f'Can\'t prepare layer "{self.qgis_layer.name()}"'
-            )
+            raise JobError(f'Can\'t prepare layer "{self.qgis_layer.name()}"')
 
         connection = self.ngw_layer.res_factory.connection
         raster_file_desc = connection.tus_upload_file(
