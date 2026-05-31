@@ -49,6 +49,7 @@ class ErrorCode(IntEnum):
     LayerEditError = auto()
 
     NetworkError = auto()
+    SslHandshakeError = auto()
 
     SynchronizationError = 1200
     NotVersionedContentChanged = auto()
@@ -189,6 +190,7 @@ class NgConnectException(Exception):
 
 class NgConnectError(NgConnectException):
     pass
+
 
 class DataPreparationError(NgConnectError):
     def __init__(

@@ -396,18 +396,25 @@ class QgsNgwConnection(QObject):
             raise error
 
         # Network-related errors indicating connection issues, timeouts, or system/network-level failures.
-        elif reply.error() in {
-            QNetworkReply.NetworkError.ConnectionRefusedError,
-            QNetworkReply.NetworkError.RemoteHostClosedError,
-            QNetworkReply.NetworkError.HostNotFoundError,
-            QNetworkReply.NetworkError.TimeoutError,
-            QNetworkReply.NetworkError.SslHandshakeFailedError,
-            QNetworkReply.NetworkError.TemporaryNetworkFailureError,
-            QNetworkReply.NetworkError.NetworkSessionFailedError,
-            QNetworkReply.NetworkError.BackgroundRequestNotAllowedError,
-        }:
+        elif (
+            reply.error() == QNetworkReply.NetworkError.SslHandshakeFailedError
+        ):
             qt_error_info = QtNetworkError.from_qt(reply.error()).value
-            error = NgwError("Connection error")
+            error = NgwError(
+                "SSL/TLS handshake failed",
+                user_message=self.tr(
+                    "The SSL/TLS handshake failed and the encrypted channel could not be established."
+                ),
+                detail=qt_error_info.description,
+                code=ErrorCode.SslHandshakeError,
+            )
+            error.add_note(f"URL: {request.url().toString()}")
+            qt_error_info.add_exception_notes(error)
+            raise error
+
+        elif reply.error() != QNetworkReply.NetworkError.NoError:
+            qt_error_info = QtNetworkError.from_qt(reply.error()).value
+            error = NgwError("Connection error", code=ErrorCode.NetworkError)
             error.add_note(f"URL: {request.url().toString()}")
             qt_error_info.add_exception_notes(error)
             raise error
