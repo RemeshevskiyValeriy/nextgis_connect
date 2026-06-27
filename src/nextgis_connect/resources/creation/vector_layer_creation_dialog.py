@@ -56,15 +56,6 @@ class VectorLayerCreationDialog(QDialog, VectorLayerCreationDialogBase):
         WkbType.MultiPolygon,
     ]
 
-    SUPPORTED_FIELD_TYPES: ClassVar[List[FieldType]] = [
-        FieldType.Int,
-        FieldType.LongLong,
-        FieldType.Double,
-        FieldType.QString,
-        FieldType.QDate,
-        FieldType.QDateTime,
-    ]
-
     validity_changed = pyqtSignal(bool)
 
     __resources_model: QAbstractItemModel
@@ -80,6 +71,7 @@ class VectorLayerCreationDialog(QDialog, VectorLayerCreationDialogBase):
         self.__resources_model = resources_model
         self.__parent_resource_index = parent_resource_index
         self.__result_resource = None
+        self.__has_boolean_support = False
         self.__setup_ui()
 
     def accept(self) -> None:
@@ -120,6 +112,17 @@ class VectorLayerCreationDialog(QDialog, VectorLayerCreationDialogBase):
     @property
     def add_to_project(self) -> bool:
         return self.add_to_project_checkbox.isChecked()
+
+    def enable_boolean_field_type(self):
+        if self.__has_boolean_support:
+            return
+
+        self.__has_boolean_support = True
+        self.field_type_combobox.addItem(
+            NgwDataType.BOOLEAN.icon,
+            NgwDataType.BOOLEAN.name,
+            NgwDataType.BOOLEAN.qt_value,
+        )
 
     def keyPressEvent(self, a0: Optional[QKeyEvent]) -> None:
         assert a0 is not None
@@ -226,6 +229,12 @@ class VectorLayerCreationDialog(QDialog, VectorLayerCreationDialogBase):
 
         # Init field types
         for ngw_type in NgwDataType:
+            if (
+                ngw_type == NgwDataType.BOOLEAN
+                and not self.__has_boolean_support
+            ):
+                continue
+
             self.field_type_combobox.addItem(
                 ngw_type.icon, ngw_type.name, ngw_type.qt_value
             )

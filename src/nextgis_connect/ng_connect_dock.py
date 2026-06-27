@@ -131,7 +131,10 @@ from nextgis_connect.ngw_api.core import (
 from nextgis_connect.ngw_api.qgis.ngw_resource_model_4qgis import (
     QGISResourceJob,
 )
-from nextgis_connect.ngw_api.qgis.qgis_ngw_connection import QgsNgwConnection
+from nextgis_connect.ngw_api.qgis.qgis_ngw_connection import (
+    NgwFeature,
+    QgsNgwConnection,
+)
 from nextgis_connect.ngw_api.qt.qt_ngw_resource_model_job_error import (
     JobError,
     JobNGWError,
@@ -485,8 +488,10 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
             self.proxy_model.set_resources_id
         )
         self.resource_model.found_resources_changed.connect(
-            lambda resources: self.resources_tree_view.not_found_overlay.setVisible(
-                -1 in resources
+            lambda resources: (
+                self.resources_tree_view.not_found_overlay.setVisible(
+                    -1 in resources
+                )
             )
         )
 
@@ -1529,10 +1534,14 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
                 QNGWResourceItem.NGWResourceRole
             )
 
+        connection = parent_resource.connection
+
         self.__fetch_children_if_needed(parent_resource_index)
         dialog = VectorLayerCreationDialog(
             self.resource_model, parent_resource_index, self
         )
+        if connection.has_support_for_feature(NgwFeature.BOOLEAN_TYPE):
+            dialog.enable_boolean_field_type()
         result = dialog.exec()
         if result != VectorLayerCreationDialog.DialogCode.Accepted:
             return

@@ -38,6 +38,7 @@ from qgis.PyQt.QtCore import (
 from qgis.PyQt.QtGui import QColor, QDesktopServices, QIcon, QKeyEvent
 from qgis.PyQt.QtWidgets import (
     QAbstractSpinBox,
+    QCheckBox,
     QDialog,
     QDialogButtonBox,
     QGridLayout,
@@ -698,6 +699,11 @@ class ResolvingDialog(QDialog, WIDGET):
             widget.valueChanged.connect(
                 lambda value: self.__on_field_changed(field, value)
             )
+        elif field.datatype == NgwDataType.BOOLEAN:
+            widget = QCheckBox(parent)
+            widget.toggled.connect(
+                lambda value: self.__on_field_changed(field, value)
+            )
         else:  # STRING
             widget = QgsFilterLineEdit(parent)
             widget.setShowClearButton(True)
@@ -758,9 +764,12 @@ class ResolvingDialog(QDialog, WIDGET):
                 edit_widget.clear()
                 edit_widget.displayNull()
 
+        elif field.datatype == NgwDataType.BOOLEAN:
+            edit_widget.setChecked(bool(value))
+
         else:  # STRING
             if not is_null:
-                edit_widget.setValue(value)
+                edit_widget.setValue(str(value))
             else:
                 edit_widget.clearValue()
 
@@ -1151,4 +1160,7 @@ class ResolvingDialog(QDialog, WIDGET):
     def __set_read_only(
         self, edit_widget: QWidget, is_read_only: bool
     ) -> None:
-        edit_widget.setReadOnly(is_read_only)
+        if not isinstance(edit_widget, QCheckBox):
+            edit_widget.setReadOnly(is_read_only)
+        else:
+            edit_widget.setEnabled(not is_read_only)

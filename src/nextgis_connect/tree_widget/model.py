@@ -649,6 +649,7 @@ class QNGWResourceTreeModelBase(QAbstractItemModel):
 
         self._ngw_connection = ngw_connection
         if ngw_connection is not None:
+            self._ngw_connection.invalidate_cached_ngw_components()
             self._ngw_connection.setParent(self)
 
         self.ngw_version = None
