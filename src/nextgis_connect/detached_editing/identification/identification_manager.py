@@ -11,6 +11,7 @@ from qgis.core import (
     QgsIdentifyContext,
     QgsMapLayer,
     QgsPointXY,
+    QgsProject,
     QgsVectorLayer,
 )
 from qgis.gui import (
@@ -122,6 +123,13 @@ class IdentificationManager(QObject):
             self._identify_tool, self._action
         )
         iface.registerMapToolHandler(self._tool_handler)
+        iface.layerTreeView().selectionModel().selectionChanged.connect(
+            self._update_action_enabled
+        )
+        QgsProject.instance().layersRemoved.connect(
+            self._update_action_enabled
+        )
+        self._update_action_enabled()
 
     def unload(self) -> None:
         """Unload identification manager and reset the map tool."""
@@ -130,6 +138,18 @@ class IdentificationManager(QObject):
             self._results_dialog = None  # type: ignore
 
         iface.unregisterMapToolHandler(self._tool_handler)
+        try:
+            iface.layerTreeView().selectionModel().selectionChanged.disconnect(
+                self._update_action_enabled
+            )
+        except TypeError:
+            pass
+        try:
+            QgsProject.instance().layersRemoved.disconnect(
+                self._update_action_enabled
+            )
+        except TypeError:
+            pass
 
         if self._tool_handler is not None:
             self._identify_tool.deleteLater()
@@ -305,3 +325,17 @@ class IdentificationManager(QObject):
     def __add_icon_to_toolbar(self) -> None:
         plugin = NgConnectInterface.instance()
         plugin.toolbar.addAction(self._action)
+
+    def _update_action_enabled(self, *_args) -> None:
+        if self._action is None:
+            return
+
+        layer_tree_view = iface.layerTreeView()
+        layers = list(layer_tree_view.selectedLayersRecursive())
+        current_layer = layer_tree_view.currentLayer()
+        if current_layer is not None and current_layer not in layers:
+            layers.append(current_layer)
+
+        self._action.setEnabled(
+            any(is_ngw_container(layer) for layer in layers)
+        )
