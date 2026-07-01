@@ -1,6 +1,6 @@
 from typing import Optional
 
-from qgis.PyQt.QtCore import pyqtSignal
+from qgis.PyQt.QtCore import QSize, pyqtSignal
 from qgis.PyQt.QtWidgets import (
     QBoxLayout,
     QLabel,
@@ -80,6 +80,13 @@ class LoadingOverlayWidget(OverlaySurfaceWidget):
 
         self._cancel_action = OverlayButtonState()
         self._progress_direction = QBoxLayout.Direction.LeftToRight
+        self._card_top_anchor: Optional[int] = None
+        self._card_top_anchor_size: Optional[QSize] = None
+
+    def reset_card_growth(self) -> None:
+        self._card_top_anchor = None
+        self._card_top_anchor_size = None
+        super().reset_card_growth()
 
     def set_state(self, state: OverlayState) -> None:
         """Apply a new state to the loading overlay."""
@@ -155,6 +162,25 @@ class LoadingOverlayWidget(OverlaySurfaceWidget):
             )
 
         return minimum_width
+
+    def _card_top_for_height(self, size: QSize, card_height: int) -> int:
+        centered_top = super()._card_top_for_height(size, card_height)
+        if self._card_top_anchor is None or self._card_top_anchor_size != size:
+            self._card_top_anchor = centered_top
+            self._card_top_anchor_size = QSize(size)
+            return centered_top
+
+        max_top = max(
+            self._MINIMUM_OUTER_MARGIN,
+            size.height() - self._MINIMUM_OUTER_MARGIN - card_height,
+        )
+        anchored_top = self._clamp(
+            self._card_top_anchor,
+            self._MINIMUM_OUTER_MARGIN,
+            max_top,
+        )
+        self._card_top_anchor = anchored_top
+        return anchored_top
 
     def _prepare_content_for_minimum_layout(self) -> None:
         self._progress_direction = QBoxLayout.Direction.TopToBottom

@@ -689,10 +689,7 @@ class OverlaySurfaceWidget(QWidget):
                     size.width(),
                     candidate.card_width,
                 ),
-                self._centered_position(
-                    size.height(),
-                    required_height,
-                ),
+                self._card_top_for_height(size, required_height),
                 candidate.card_width,
                 required_height,
             )
@@ -739,6 +736,9 @@ class OverlaySurfaceWidget(QWidget):
             self._MINIMUM_OUTER_MARGIN,
             self._NORMAL_OUTER_MARGIN,
         )
+
+    def _card_top_for_height(self, size: QSize, card_height: int) -> int:
+        return self._centered_position(size.height(), card_height)
 
     def _width_metrics_for_target(
         self,
