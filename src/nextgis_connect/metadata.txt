@@ -39,7 +39,7 @@ about[ru]=NextGIS Connect превращает QGIS в многопользов�
 	NextGIS Web на GitHub: https://github.com/nextgis/nextgisweb
 
 	Связаться с нами: https://nextgis.ru/contact
-version=3.99.0
+version=3.99.1
 author=NextGIS
 email=info@nextgis.com
 
