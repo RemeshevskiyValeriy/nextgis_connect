@@ -39,6 +39,7 @@ from qgis.core import (
     QgsFileUtils,
     QgsLayerTreeLayer,
     QgsLayerTreeRegistryBridge,
+    QgsMapLayer,
     QgsNetworkAccessManager,
     QgsProject,
     QgsRasterLayer,
@@ -97,6 +98,15 @@ from nextgis_connect.action_style_import_or_update import (
 )
 from nextgis_connect.compat import QGIS_3_32, parse_version
 from nextgis_connect.core.constants import PACKAGE_NAME, PLUGIN_NAME
+from nextgis_connect.detached_editing.container.container_factory import (
+    DetachedContainerFactory,
+)
+from nextgis_connect.detached_editing.utils import (
+    detached_layer_uri,
+)
+from nextgis_connect.detached_editing.utils import (
+    is_ngw_container as is_detached_ngw_container,
+)
 from nextgis_connect.dialog_choose_style import NGWLayerStyleChooserDialog
 from nextgis_connect.dialog_metadata import MetadataDialog
 from nextgis_connect.exceptions import (
@@ -138,6 +148,9 @@ from nextgis_connect.ngw_api.qgis.qgis_ngw_connection import (
     NgwFeature,
     QgsNgwConnection,
 )
+from nextgis_connect.ngw_api.qt.qt_ngw_resource_model_job import (
+    UploadedLayerResource,
+)
 from nextgis_connect.ngw_api.qt.qt_ngw_resource_model_job_error import (
     JobError,
     JobNGWError,
@@ -165,6 +178,9 @@ from nextgis_connect.search.search_panel import SearchPanel
 from nextgis_connect.search.search_settings import SearchSettings
 from nextgis_connect.search.utils import SearchType
 from nextgis_connect.settings import NgConnectSettings
+from nextgis_connect.settings.ng_connect_cache_manager import (
+    NgConnectCacheManager,
+)
 from nextgis_connect.shared.buttons.shining import ShiningButton
 from nextgis_connect.tree_widget import (
     QNGWResourceItem,
@@ -2271,8 +2287,11 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
                 self.proxy_model.mapFromSource(index)
             )
         )
-        self.qgis_proj_import_response.done.connect(self.open_create_web_map)
         self.qgis_proj_import_response.done.connect(self.processWarnings)
+        self.qgis_proj_import_response.done.connect(
+            self.__replace_uploaded_layers_if_requested
+        )
+        self.qgis_proj_import_response.done.connect(self.open_create_web_map)
 
     def upload_selected_resources(self):
         ngw_current_index = self.proxy_model.mapToSource(
@@ -2298,6 +2317,270 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
         )
         self.import_layer_response.select.connect(self.__select_list)
         self.import_layer_response.done.connect(self.processWarnings)
+        self.import_layer_response.done.connect(
+            self.__replace_uploaded_layers_if_requested
+        )
+
+    @pyqtSlot(QModelIndex)
+    def __replace_uploaded_layers_if_requested(self, _index: QModelIndex):
+        response = cast(NGWResourceModelResponse, self.sender())
+        uploaded_layers = self.__replaceable_uploaded_layers(
+            response.uploaded_layers
+        )
+        if len(uploaded_layers) == 0:
+            return
+
+        if not self.__confirm_uploaded_layers_replacement(uploaded_layers):
+            return
+
+        replaced_layers = []
+        skipped_layers = []
+        for uploaded_layer in uploaded_layers:
+            qgs_layer = uploaded_layer.qgs_map_layer
+            try:
+                self.__replace_uploaded_layer_source(uploaded_layer)
+            except Exception as error:
+                logger.exception(
+                    'Could not replace source for layer "%s"',
+                    qgs_layer.name(),
+                )
+                if isinstance(error, NgConnectError):
+                    message = error.user_message
+                else:
+                    message = self.tr("Source was not replaced")
+                skipped_layers.append(f"{qgs_layer.name()}: {message}")
+            else:
+                replaced_layers.append(qgs_layer.name())
+
+        if len(replaced_layers) > 0:
+            self.__msg_in_qgis_mes_bar(
+                self.tr(
+                    "Local layer sources were replaced with Web GIS layers"
+                ),
+                duration=3,
+            )
+
+        if len(skipped_layers) > 0:
+            self.show_info(
+                self.tr("Some uploaded layers were not replaced:\n{}").format(
+                    "\n".join(skipped_layers)
+                ),
+                self.tr("Replace local layers"),
+            )
+
+    def __replaceable_uploaded_layers(
+        self, uploaded_layers: List[UploadedLayerResource]
+    ) -> List[UploadedLayerResource]:
+        project = QgsProject.instance()
+        replaceable_layers = []
+        for uploaded_layer in uploaded_layers:
+            qgs_layer = uploaded_layer.qgs_map_layer
+            ngw_resource = uploaded_layer.ngw_resource
+            is_project_layer = project.mapLayer(qgs_layer.id()) is qgs_layer
+            is_vector_layer = isinstance(
+                qgs_layer, QgsVectorLayer
+            ) and isinstance(ngw_resource, NGWVectorLayer)
+            is_raster_layer = isinstance(
+                qgs_layer, QgsRasterLayer
+            ) and isinstance(ngw_resource, NGWRasterLayer)
+
+            if not is_project_layer or (
+                not is_vector_layer and not is_raster_layer
+            ):
+                continue
+
+            replaceable_layers.append(uploaded_layer)
+
+        return replaceable_layers
+
+    def __confirm_uploaded_layers_replacement(
+        self, uploaded_layers: List[UploadedLayerResource]
+    ) -> bool:
+        layer_names = [
+            uploaded_layer.qgs_map_layer.name()
+            for uploaded_layer in uploaded_layers[:5]
+        ]
+        if len(uploaded_layers) > len(layer_names):
+            layer_names.append(
+                self.tr("... and {} more").format(
+                    len(uploaded_layers) - len(layer_names)
+                )
+            )
+
+        message = self.tr(
+            "Replace local layer sources with the uploaded Web GIS layers?"
+        )
+        if len(layer_names) > 0:
+            message += "\n\n" + "\n".join(layer_names)
+
+        box = QMessageBox(self)
+        box.setIcon(QMessageBox.Icon.Question)
+        box.setWindowTitle(self.tr("Replace local layers"))
+        box.setText(message)
+        box.setTextFormat(Qt.TextFormat.PlainText)
+        box.setStandardButtons(
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+        )
+        box.setDefaultButton(QMessageBox.StandardButton.No)
+
+        return box.exec() == QMessageBox.StandardButton.Yes
+
+    def __replace_uploaded_layer_source(
+        self, uploaded_layer: UploadedLayerResource
+    ) -> None:
+        qgs_layer = uploaded_layer.qgs_map_layer
+        ngw_resource = uploaded_layer.ngw_resource
+
+        if isinstance(qgs_layer, QgsVectorLayer) and isinstance(
+            ngw_resource, NGWVectorLayer
+        ):
+            self.__replace_uploaded_vector_layer_source(
+                qgs_layer, ngw_resource
+            )
+            return
+
+        if isinstance(qgs_layer, QgsRasterLayer) and isinstance(
+            ngw_resource, NGWRasterLayer
+        ):
+            self.__replace_uploaded_raster_layer_source(
+                qgs_layer, ngw_resource
+            )
+            return
+
+        raise NgConnectError(
+            "Layer and resource types are incompatible",
+            user_message=self.tr("Layer and resource types are incompatible"),
+            code=ErrorCode.InvalidResource,
+        )
+
+    def __replace_uploaded_vector_layer_source(
+        self, qgs_layer: QgsVectorLayer, ngw_layer: NGWVectorLayer
+    ) -> None:
+        if qgs_layer.isEditable():
+            raise NgConnectError(
+                f'Layer "{qgs_layer.name()}" is in edit mode',
+                user_message=self.tr(
+                    "Layer is in edit mode. Save or discard edits first."
+                ),
+                code=ErrorCode.LayerEditError,
+            )
+
+        container_path = self.__detached_container_path(ngw_layer)
+        if container_path.exists():
+            if not is_detached_ngw_container(container_path):
+                raise NgConnectError(
+                    f"Detached container is invalid: {container_path}",
+                    user_message=self.tr(
+                        "Detached layer container is invalid"
+                    ),
+                    code=ErrorCode.ContainerIsInvalid,
+                )
+        else:
+            DetachedContainerFactory().create_initial_container(
+                ngw_layer, container_path
+            )
+
+        source = detached_layer_uri(container_path)
+        old_source, old_name, old_provider = self.__layer_source_info(
+            qgs_layer
+        )
+        detached_editing = NgConnectInterface.instance().detached_editing
+        was_detached = detached_editing.container(qgs_layer) is not None
+        detached_editing.unregister_layer(qgs_layer)
+
+        try:
+            self.__set_layer_source(
+                qgs_layer, source, ngw_layer.display_name, "ogr"
+            )
+            is_attached = detached_editing.setup_existing_layer(qgs_layer)
+            if not is_attached:
+                raise NgConnectError(
+                    "Could not attach layer to detached editing",
+                    user_message=self.tr(
+                        "Layer was not attached to detached editing"
+                    ),
+                    code=ErrorCode.DetachedEditingError,
+                )
+        except Exception:
+            self.__set_layer_source(
+                qgs_layer, old_source, old_name, old_provider
+            )
+            if was_detached or is_detached_ngw_container(qgs_layer):
+                detached_editing.setup_existing_layer(qgs_layer)
+            raise
+
+    def __replace_uploaded_raster_layer_source(
+        self, qgs_layer: QgsRasterLayer, ngw_layer: NGWRasterLayer
+    ) -> None:
+        if not ngw_layer.is_cog:
+            raise NgwError(code=ErrorCode.UnsupportedRasterType)
+
+        connection = self.__ngw_connection(ngw_layer)
+        if connection.method not in ("", "Basic"):
+            raise NgConnectError(
+                f"Raster layer {ngw_layer.resource_id} uses OAuth connection",
+                user_message=self.tr(
+                    "Currently adding raster layers is not available for OAuth "
+                    "connections. Please use Basic authentication."
+                ),
+                code=ErrorCode.AddingError,
+            )
+
+        source, name, provider = ngw_layer.layer_params
+        self.__set_layer_source(qgs_layer, source, name, provider)
+        self.__set_ngw_layer_properties(qgs_layer, ngw_layer)
+
+    def __detached_container_path(self, ngw_layer: NGWVectorLayer) -> Path:
+        connection = self.__ngw_connection(ngw_layer)
+        return NgConnectCacheManager().detached_container_path(
+            connection.domain_uuid, ngw_layer.resource_id
+        )
+
+    def __ngw_connection(self, ngw_resource: NGWResource) -> NgwConnection:
+        connection = NgwConnectionsManager().connection(
+            ngw_resource.connection_id
+        )
+        if connection is None:
+            raise NgConnectError(
+                f"Connection {ngw_resource.connection_id} is not accessible",
+                user_message=self.tr("Web GIS connection is not accessible"),
+                code=ErrorCode.InvalidConnection,
+            )
+        return connection
+
+    def __set_ngw_layer_properties(
+        self, qgs_layer: QgsMapLayer, ngw_resource: NGWResource
+    ) -> None:
+        connection = self.__ngw_connection(ngw_resource)
+        qgs_layer.setCustomProperty(
+            "ngw_connection_id", ngw_resource.connection_id
+        )
+        qgs_layer.setCustomProperty("ngw_instance_id", connection.domain_uuid)
+        qgs_layer.setCustomProperty(
+            "ngw_resource_id", ngw_resource.resource_id
+        )
+
+    def __layer_source_info(self, qgs_layer: QgsMapLayer):
+        return (qgs_layer.source(), qgs_layer.name(), qgs_layer.providerType())
+
+    def __set_layer_source(
+        self, qgs_layer: QgsMapLayer, source: str, name: str, provider: str
+    ) -> None:
+        old_source, old_name, old_provider = self.__layer_source_info(
+            qgs_layer
+        )
+        qgs_layer.setDataSource(source, name, provider)
+        qgs_layer.setName(name)
+        if qgs_layer.isValid():
+            return
+
+        qgs_layer.setDataSource(old_source, old_name, old_provider)
+        qgs_layer.setName(old_name)
+        raise NgConnectError(
+            "QGIS layer is invalid after source replacement",
+            user_message=self.tr("Layer source was not replaced"),
+            code=ErrorCode.AddingError,
+        )
 
     def overwrite_ngw_layer(self):
         index = self.proxy_model.mapToSource(
