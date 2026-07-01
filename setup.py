@@ -122,6 +122,8 @@ class QgisPluginBuilder:
         ENUMS = {
             "Qt::AlignmentFlag",
             "Qt::Orientation",
+            "Qt::TextFormat",
+            "QSizePolicy::Policy",
             "QDialogButtonBox::StandardButton",
         }
         ui_patterns = self.ui_settings.get("ui-files", [])

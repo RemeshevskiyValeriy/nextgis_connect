@@ -1,5 +1,6 @@
 import configparser
 from abc import ABCMeta, abstractmethod
+from pathlib import Path
 from typing import TYPE_CHECKING, Union
 
 from qgis import utils
@@ -24,6 +25,7 @@ class NgConnectInterface(QObject, metaclass=_NgConnectInterfaceMetaClass):
     TRANSLATION_CONTEXT = "NgConnectPlugin"
 
     settings_changed = pyqtSignal()
+    connection_updated = pyqtSignal(str, object)
 
     @classmethod
     def instance(cls) -> "NgConnectInterface":
@@ -36,6 +38,10 @@ class NgConnectInterface(QObject, metaclass=_NgConnectInterfaceMetaClass):
         metadata = utils.plugins_metadata_parser.get(self.PACKAGE_NAME)
         assert metadata is not None, "Using a plugin before it was created"
         return metadata
+
+    @property
+    def path(self) -> Path:
+        return Path(__file__).parent
 
     @property
     def version(self) -> str:

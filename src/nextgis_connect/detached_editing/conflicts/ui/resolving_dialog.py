@@ -76,7 +76,7 @@ from nextgis_connect.detached_editing.utils import (
     DetachedContainerMetaData,
     detached_layer_uri,
 )
-from nextgis_connect.ngw_connection.ngw_connections_manager import (
+from nextgis_connect.ngw_connection.application.connections_manager import (
     NgwConnectionsManager,
 )
 from nextgis_connect.resources.ngw_data_type import NgwDataType

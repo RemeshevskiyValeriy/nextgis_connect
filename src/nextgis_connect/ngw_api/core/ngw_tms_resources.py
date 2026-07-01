@@ -4,7 +4,7 @@ from qgis.core import QgsProviderRegistry
 
 from nextgis_connect.exceptions import ErrorCode, NgwError
 from nextgis_connect.ngw_api.core.ngw_resource import NGWResource
-from nextgis_connect.ngw_connection.ngw_connections_manager import (
+from nextgis_connect.ngw_connection.application.connections_manager import (
     NgwConnectionsManager,
 )
 
@@ -22,7 +22,10 @@ class NGWTmsConnection(NGWResource):
         layer_info = self._json[self.type_id]
 
         if layer_info.get("url_template") is None:
-            raise NgwError("Missing URL template parameter", code=ErrorCode.PermissionsError)
+            raise NgwError(
+                "Missing URL template parameter",
+                code=ErrorCode.PermissionsError,
+            )
 
         params = {
             "type": layer_info.get("scheme"),

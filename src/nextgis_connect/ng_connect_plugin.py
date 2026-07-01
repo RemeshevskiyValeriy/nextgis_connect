@@ -56,7 +56,7 @@ from nextgis_connect.logging import logger, unload_logger
 from nextgis_connect.ng_connect_dock import NgConnectDock
 from nextgis_connect.ng_connect_interface import NgConnectInterface
 from nextgis_connect.ngw_api import qgis as qgis_ngw_api
-from nextgis_connect.ngw_connection.ngw_connections_manager import (
+from nextgis_connect.ngw_connection.application.connections_manager import (
     NgwConnectionsManager,
 )
 from nextgis_connect.settings.ng_connect_settings import NgConnectSettings
@@ -253,6 +253,15 @@ class NgConnectPlugin(NgConnectInterface):
             )
             widget.layout().addWidget(button)
 
+        elif error.code == ErrorCode.NgStdError:
+            button = QPushButton(self.tr("Open NextGIS settings"))
+            button.pressed.connect(
+                lambda: self.iface.showOptionsDialog(
+                    self.iface.mainWindow(), "NextGIS"
+                )
+            )
+            widget.layout().addWidget(button)
+
         if error.code.is_plugin_error:
             button = QPushButton(self.tr("Let us know"))
             button.pressed.connect(contact_us)
@@ -344,6 +353,10 @@ class NgConnectPlugin(NgConnectInterface):
 
     def __init_detached_editing(self) -> None:
         self.__detached_editing = DetachedEditing()
+        self.connection_updated.connect(
+            self.__detached_editing.on_connection_updated,
+            type=Qt.ConnectionType.QueuedConnection,  # pyright: ignore[reportCallIssue]
+        )
         logger.debug("Detached editing initialized")
 
     def __unload_detached_editing(self) -> None:

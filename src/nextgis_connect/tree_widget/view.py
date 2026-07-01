@@ -1,46 +1,36 @@
-from typing import TYPE_CHECKING, Optional, cast
+from typing import TYPE_CHECKING, Dict, Optional, cast
 
-from qgis.gui import QgsDockWidget, QgsNewNameDialog
+from qgis.gui import QgsNewNameDialog
 from qgis.PyQt.QtCore import (
     QAbstractItemModel,
+    QEvent,
     QModelIndex,
     QSortFilterProxyModel,
     Qt,
-    QUrl,
+    QTimer,
     pyqtSignal,
 )
-from qgis.PyQt.QtGui import (
-    QBrush,
-    QDesktopServices,
-    QKeyEvent,
-    QPainter,
-    QPalette,
-    QPen,
-)
+from qgis.PyQt.QtGui import QKeyEvent
 from qgis.PyQt.QtWidgets import (
     QDialog,
-    QHBoxLayout,
     QHeaderView,
-    QLabel,
-    QProgressBar,
-    QPushButton,
     QSizePolicy,
-    QSpacerItem,
     QTreeView,
-    QVBoxLayout,
     QWidget,
 )
 from qgis.utils import iface
 
-from nextgis_connect.ngw_connection.ngw_connection_edit_dialog import (
-    NgwConnectionEditDialog,
-)
-from nextgis_connect.ngw_connection.ngw_connections_manager import (
-    NgwConnectionsManager,
-)
 from nextgis_connect.tree_widget.item import QNGWResourceItem
 from nextgis_connect.tree_widget.model import QNGWResourceTreeModel
-from nextgis_connect.utils import SupportStatus, utm_tags
+from nextgis_connect.tree_widget.overlay import (
+    OverlayAction,
+    OverlayButtonState,
+    OverlayHostWidget,
+    OverlayKind,
+    PluginOverlayController,
+    PluginOverlayStateModel,
+)
+from nextgis_connect.utils import SupportStatus
 
 if TYPE_CHECKING:
     from qgis.gui import QgisInterface
@@ -50,273 +40,10 @@ if TYPE_CHECKING:
 __all__ = ["QNGWResourceTreeView"]
 
 
-class QOverlay(QWidget):
-    def __init__(
-        self, parent: Optional[QWidget], *, draw_background: bool = True
-    ):
-        super().__init__(parent)
-
-        self.draw_background = draw_background
-
-        if draw_background:
-            palette = QPalette(self.palette())
-            self._overlay_color = palette.color(QPalette.ColorRole.Window)
-            self._overlay_color.setAlpha(200)
-            palette.setColor(
-                QPalette.ColorRole.Window, Qt.GlobalColor.transparent
-            )
-            self.setPalette(palette)
-
-    def paintEvent(self, a0):
-        if not self.draw_background:
-            return
-
-        painter = QPainter()
-        painter.begin(self)
-        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-        painter.fillRect(a0.rect(), QBrush(self._overlay_color))
-        painter.setPen(QPen(Qt.PenStyle.NoPen))
-
-
-class QMessageOverlay(QOverlay):
-    def __init__(
-        self,
-        parent: Optional[QWidget],
-        text: str,
-        *,
-        draw_background: bool = True,
-    ):
-        super().__init__(parent, draw_background=draw_background)
-        layout = QHBoxLayout(self)
-        self.setLayout(layout)
-
-        self.text = QLabel(text, self)
-        self.text.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.text.setOpenExternalLinks(True)
-        self.text.setWordWrap(True)
-        self.text.setTextInteractionFlags(
-            Qt.TextInteractionFlags()
-            | Qt.TextInteractionFlag.TextSelectableByMouse
-            | Qt.TextInteractionFlag.TextBrowserInteraction
-        )
-        layout.addWidget(self.text)
-        self.text.setOpenExternalLinks(False)
-        self.text.linkActivated.connect(self._open_link)
-
-    def set_text(self, text: str) -> None:
-        self.text.setText(text)
-
-    def _open_link(self, url: str) -> None:
-        if url == "#settings":
-            iface.showOptionsDialog(iface.mainWindow(), "NextGIS Connect")
-            return
-
-        elif url == "#create_connection":
-            dialog = NgwConnectionEditDialog(self)
-            result = dialog.exec()
-            if result != NgwConnectionEditDialog.DialogCode.Accepted:
-                return
-
-            dock = iface.mainWindow().findChild(QgsDockWidget, "NGConnectDock")
-            dock.reinit_tree(force=True)  # pyright: ignore[reportAttributeAccessIssue]
-            return
-
-        QDesktopServices.openUrl(QUrl(url))
-
-
-class MigrationOverlay(QOverlay):
-    def __init__(self, parent: Optional[QWidget]):
-        super().__init__(parent)
-        layout = QVBoxLayout(self)
-        self.setLayout(layout)
-
-        spacer_before = QSpacerItem(
-            20, 40, QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Expanding
-        )
-        spacer_after = QSpacerItem(
-            20, 40, QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Expanding
-        )
-
-        self.text = QLabel(
-            self.tr(
-                "We are transitioning to the QGIS Authentication System to "
-                "enhance security and streamline your experience. This change "
-                "requires the conversion of existing connections.\n\nPlease be"
-                " aware that your current connections will be converted to the"
-                " new format automatically. This is a one-time process and "
-                "should not affect your workflow.\n"
-            ),
-            self,
-        )
-        self.text.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.text.setOpenExternalLinks(True)
-        self.text.setWordWrap(True)
-
-        full_migrate_button = QPushButton(self)
-        button_size_policy = full_migrate_button.sizePolicy()
-        button_size_policy.setVerticalPolicy(QSizePolicy.Policy.Preferred)
-        full_migrate_button.setSizePolicy(button_size_policy)
-
-        migrate_label = QLabel(
-            self.tr("Convert connections and authentication data"),
-            full_migrate_button,
-        )
-        migrate_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        migrate_label.setWordWrap(True)
-
-        button_layout = QVBoxLayout(full_migrate_button)
-        button_layout.addWidget(migrate_label)
-        button_layout.setContentsMargins(6, 6, 6, 6)
-
-        full_migrate_button.clicked.connect(self.__full_migrate)
-
-        layout.addSpacerItem(spacer_before)
-        layout.addWidget(self.text)
-        layout.addWidget(full_migrate_button)
-        layout.addSpacerItem(spacer_after)
-
-    def __full_migrate(self):
-        NgwConnectionsManager().convert_old_connections(convert_auth=True)
-        self.__reinit()
-
-    def __reinit(self):
-        dock = iface.mainWindow().findChild(QWidget, "NGConnectDock")
-        dock.reinit_tree(force=True)
-
-
-class NoNgstdAuthOverlay(QOverlay):
-    def __init__(self, parent: Optional[QWidget]):
-        super().__init__(parent)
-        layout = QVBoxLayout(self)
-        self.setLayout(layout)
-
-        spacer_before = QSpacerItem(
-            20, 40, QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Expanding
-        )
-        spacer_after = QSpacerItem(
-            20, 40, QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Expanding
-        )
-
-        self.text = QLabel(
-            self.tr(
-                "Sign in with your NextGIS account to get access to your Web GIS\n"
-            ),
-            self,
-        )
-        self.text.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.text.setOpenExternalLinks(True)
-        self.text.setWordWrap(True)
-
-        full_migrate_button = QPushButton(
-            self.tr("Open NextGIS QGIS settings")
-        )
-        full_migrate_button.clicked.connect(self.__open_nextgis_settings)
-
-        layout.addSpacerItem(spacer_before)
-        layout.addWidget(self.text)
-        layout.addWidget(full_migrate_button)
-        layout.addSpacerItem(spacer_after)
-
-    def __open_nextgis_settings(self):
-        iface.showOptionsDialog(iface.mainWindow(), "NextGIS")
-
-
-class QProcessOverlay(QOverlay):
-    def __init__(self, parent: Optional[QWidget]):
-        super().__init__(parent)
-
-        layout = QVBoxLayout(self)
-        layout.setSpacing(6)
-        self.setLayout(layout)
-
-        spacer_before = QSpacerItem(
-            20, 0, QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Expanding
-        )
-        layout.addItem(spacer_before)
-
-        self.progress = QProgressBar(self)
-        self.progress.setMinimum(0)
-        self.progress.setMaximum(0)
-        self.progress.setValue(0)
-        self.progress.setTextVisible(False)
-        layout.addWidget(self.progress)
-
-        self.text = QLabel(self)
-        self.text.setAlignment(
-            Qt.AlignmentFlag(
-                Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
-            )
-        )
-        self.text.setOpenExternalLinks(True)
-        self.text.setWordWrap(True)
-        layout.addWidget(self.text)
-
-        bottom_layout = QVBoxLayout()
-        bottom_layout.setContentsMargins(0, 0, 0, 0)
-        bottom_layout.setSpacing(0)
-
-        self.status_text = QLabel(self)
-        self.status_text.setText("")
-        self.status_text.setAlignment(
-            Qt.AlignmentFlag(
-                Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
-            )
-        )
-        self.status_text.setOpenExternalLinks(True)
-        self.status_text.setWordWrap(True)
-
-        bottom_layout.addWidget(self.status_text)
-
-        spacer_after = QSpacerItem(
-            20, 0, QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Expanding
-        )
-        bottom_layout.addItem(spacer_after)
-
-        layout.addLayout(bottom_layout)
-
-    def write(self, jobs):
-        text = ""
-        status_text = ""
-
-        if len(jobs) > 0:
-            job_name, job_status = list(jobs.items())[-1]
-            text += f"<strong>{job_name}</strong>".strip()
-            if job_status != "":
-                status_text += job_status.replace("\n", "<br/>").strip()
-
-        self.text.setText(text)
-        self.status_text.setText(status_text)
-
-
-class UnsupportedVersionOverlay(QMessageOverlay):
-    def __init__(self, parent: Optional[QWidget]):
-        super().__init__(parent, "")
-
-    def set_status(
-        self, status: SupportStatus, ngc_version: str, ngw_version: str
-    ) -> None:
-        text = ""
-        if status == SupportStatus.OLD_CONNECT:
-            text = self.tr(
-                "NextGIS Connect version is outdated. Please update the "
-                "plugin via Plugins - Manage and install plugins menu."
-            )
-        elif status == SupportStatus.OLD_NGW:
-            text = self.tr(
-                "NextGIS Web service version is outdated and not supported by "
-                "NextGIS Connect. Please contact your server administrator"
-                " for further assistance."
-            )
-
-        text += "\n\n" + self.tr(
-            "NextGIS Connect version: {}\nNextGIS Web version: {}"
-        ).format(ngc_version, ngw_version)
-
-        self.set_text(text)
-
-
 class QNGWResourceTreeView(QTreeView):
     itemDoubleClicked = pyqtSignal(QModelIndex)
+    overlay_action_requested = pyqtSignal(object)
+    overlay_visibility_changed = pyqtSignal(bool)
 
     def __init__(self, parent: Optional[QWidget]):
         super().__init__(parent)
@@ -334,37 +61,37 @@ class QNGWResourceTreeView(QTreeView):
         header.setStretchLastSection(True)
         header.setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
 
-        # no ngw connectiond message
-        self.no_ngw_connections_overlay = QMessageOverlay(
+        self._jobs: Dict[str, str] = {}
+        self._job_actions: Dict[str, OverlayButtonState] = {}
+        self._manual_loading_title = ""
+        self._manual_loading_message = ""
+        self._manual_loading_details: Optional[str] = None
+        self._manual_loading_action = OverlayButtonState()
+        self._manual_loading_draw_background = False
+        self._loading_cancel_pending = False
+        self._loading_cancel_message = ""
+        self._is_overlay_visible = False
+
+        self._overlay_host = OverlayHostWidget(self)
+        self._sync_overlay_geometry()
+        self.setMinimumHeight(self._overlay_host.minimum_overlay_height())
+        self.viewport().installEventFilter(self)
+        self.verticalScrollBar().installEventFilter(self)
+        self.horizontalScrollBar().installEventFilter(self)
+
+        self._overlay_state_model = PluginOverlayStateModel(self)
+        self._overlay_controller = PluginOverlayController(
+            self._overlay_state_model,
+            self._overlay_host,
             self,
-            self.tr(
-                "No connections to nextgis.com. Please <a href='{}'>create a connection</a>. "
-                "You can get your free Web GIS at "
-                '<a href="https://my.nextgis.com/?{}">nextgis.com</a>!'
-            ).format("#create_connection", utm_tags("start")),
         )
-        self.no_ngw_connections_overlay.hide()
-
-        self.unsupported_version_overlay = UnsupportedVersionOverlay(self)
-        self.unsupported_version_overlay.hide()
-        self.migration_overlay = MigrationOverlay(self)
-        self.migration_overlay.hide()
-
-        self.no_oauth_auth_overlay = NoNgstdAuthOverlay(self)
-        self.no_oauth_auth_overlay.hide()
-
-        self.ngw_job_block_overlay = QProcessOverlay(self)
-        self.ngw_job_block_overlay.hide()
-
-        self.not_found_overlay = QMessageOverlay(
-            self,
-            self.tr("No resources were found matching your search query"),
-            draw_background=False,
+        self._overlay_controller.action_requested.connect(
+            self.overlay_action_requested.emit
         )
-        self.not_found_overlay.text.setEnabled(False)
-        self.not_found_overlay.hide()
-
-        self.jobs = {}
+        self._overlay_controller.state_changed.connect(
+            self._handle_overlay_state_changed
+        )
+        self._overlay_state_model.update(has_connections=True)
 
     def setModel(self, model: Optional[QAbstractItemModel]) -> None:
         model = cast(QSortFilterProxyModel, model)
@@ -386,14 +113,23 @@ class QNGWResourceTreeView(QTreeView):
             self.expand(self._proxy_model.mapFromSource(index))
 
     def resizeEvent(self, e):
-        self.no_ngw_connections_overlay.resize(e.size())
-        self.ngw_job_block_overlay.resize(e.size())
-        self.unsupported_version_overlay.resize(e.size())
-        self.migration_overlay.resize(e.size())
-        self.no_oauth_auth_overlay.resize(e.size())
-        self.not_found_overlay.resize(e.size())
-
         super().resizeEvent(e)
+        self._sync_overlay_geometry()
+
+    def eventFilter(self, watched, event):
+        if watched in (
+            self.viewport(),
+            self.verticalScrollBar(),
+            self.horizontalScrollBar(),
+        ) and event.type() in (
+            QEvent.Type.Resize,
+            QEvent.Type.Show,
+            QEvent.Type.Hide,
+        ):
+            self._sync_overlay_geometry()
+            QTimer.singleShot(0, self._sync_overlay_geometry)
+
+        return super().eventFilter(watched, event)
 
     def mouseDoubleClickEvent(self, e):
         index = self.indexAt(e.pos())
@@ -402,34 +138,247 @@ class QNGWResourceTreeView(QTreeView):
 
         super().mouseDoubleClickEvent(e)
 
-    def showWelcomeMessage(self):
-        self.no_ngw_connections_overlay.show()
+    def create_web_gis_url(self) -> str:
+        return self._overlay_controller.resolver.create_web_gis_url()
 
-    def hideWelcomeMessage(self):
-        self.no_ngw_connections_overlay.hide()
+    def is_overlay_visible(self) -> bool:
+        return self._is_overlay_visible
 
-    def addBlockedJob(self, job_name):
-        self.jobs.update({job_name: ""})
-        self.ngw_job_block_overlay.write(self.jobs)
+    def _sync_overlay_geometry(self) -> None:
+        viewport_geometry = self.viewport().geometry()
+        if self._overlay_host.geometry() != viewport_geometry:
+            self._overlay_host.setGeometry(viewport_geometry)
 
-        self.ngw_job_block_overlay.show()
+        self._overlay_host.raise_()
+
+    def set_has_connections(self, value: bool) -> None:
+        self._overlay_state_model.update(has_connections=value)
+
+    def set_migration_required(self, value: bool) -> None:
+        self._overlay_state_model.update(has_pending_migration=value)
+
+    def set_auth_required(self, value: bool) -> None:
+        self._overlay_state_model.update(has_auth_error=value)
+
+    def set_search_empty(self, value: bool) -> None:
+        self._overlay_state_model.update(search_empty=value)
+
+    def clear_availability_state(self) -> None:
+        self._overlay_state_model.update(
+            is_available=True,
+            unavailable_title="",
+            unavailable_message="",
+            unavailable_details=None,
+            unavailable_icon="",
+            unavailable_action=OverlayButtonState(),
+        )
+
+    def set_unavailable_state(
+        self,
+        status: SupportStatus,
+        ngc_version: str,
+        ngw_version: str,
+    ) -> None:
+        if status == SupportStatus.OLD_CONNECT:
+            message = self.tr(
+                "NextGIS Connect version is outdated. Please update the plugin from the QGIS plugin manager."
+            )
+            action = OverlayButtonState(
+                action=OverlayAction.OPEN_PLUGIN_MANAGER,
+                text=self.tr("Update plugin"),
+            )
+            icon_name = "update"
+        else:
+            message = self.tr(
+                "The connected Web GIS version is no longer supported by this plugin.\nContact the server administrator."
+            )
+            action = OverlayButtonState()
+            icon_name = ""
+
+        details = self.tr(
+            "NextGIS Connect: {ngc_version}\nNextGIS Web: {ngw_version}"
+        ).format(
+            ngc_version=ngc_version,
+            ngw_version=ngw_version,
+        )
+        self._overlay_state_model.update(
+            is_available=False,
+            unavailable_title=self.tr("Version mismatch"),
+            unavailable_message=message,
+            unavailable_details=details,
+            unavailable_icon=icon_name,
+            unavailable_action=action,
+        )
+
+    def clear_error_state(self) -> None:
+        self._overlay_state_model.update(
+            has_error=False,
+            error_title="",
+            error_message="",
+            error_details=None,
+            error_icon="",
+            error_action=OverlayButtonState(),
+            error_secondary_action=OverlayButtonState(),
+        )
+
+    def set_error_state(
+        self,
+        message: str,
+        *,
+        title: Optional[str] = None,
+        details: Optional[str] = None,
+        retry_enabled: bool = True,
+        icon_name: str = "",
+        action: Optional[OverlayButtonState] = None,
+        secondary_action: Optional[OverlayButtonState] = None,
+    ) -> None:
+        overlay_action = OverlayButtonState()
+        if action is not None:
+            overlay_action = action
+        elif retry_enabled:
+            overlay_action = OverlayButtonState(
+                action=OverlayAction.RELOAD_TREE,
+                text=self.tr("Retry"),
+            )
+
+        self._overlay_state_model.update(
+            has_error=True,
+            error_title=title or self.tr("Unable to load resources"),
+            error_message=message,
+            error_details=details,
+            error_icon=icon_name,
+            error_action=overlay_action,
+            error_secondary_action=secondary_action or OverlayButtonState(),
+        )
+
+    def addBlockedJob(
+        self,
+        job_name,
+        cancel_action: Optional[OverlayButtonState] = None,
+    ):
+        self._jobs[job_name] = ""
+        self._job_actions[job_name] = (
+            OverlayButtonState() if cancel_action is None else cancel_action
+        )
+        self._clear_loading_cancel_pending()
+        self._sync_loading_state()
 
     def addJobStatus(self, job_name, status):
-        if job_name in self.jobs:
-            self.jobs[job_name] = status
-            self.ngw_job_block_overlay.write(self.jobs)
+        if job_name in self._jobs:
+            self._jobs[job_name] = status
+            self._sync_loading_state()
 
     def removeBlockedJob(self, job_name, check_overlay=True):
-        if job_name in self.jobs:
-            self.jobs.pop(job_name)
-            self.ngw_job_block_overlay.write(self.jobs)
+        if job_name in self._jobs:
+            self._jobs.pop(job_name)
+            self._job_actions.pop(job_name, None)
+            self._clear_loading_cancel_pending()
 
         if check_overlay:
-            self.check_overlay()
+            self._sync_loading_state()
 
     def check_overlay(self):
-        if len(self.jobs) == 0:
-            self.ngw_job_block_overlay.hide()
+        self._sync_loading_state()
+
+    def begin_loading(
+        self,
+        title: str,
+        *,
+        message: str = "",
+        details: Optional[str] = None,
+        cancel_action: Optional[OverlayButtonState] = None,
+        draw_background: bool = False,
+    ) -> None:
+        self._manual_loading_title = title
+        self._manual_loading_message = message
+        self._manual_loading_details = details
+        self._manual_loading_draw_background = draw_background
+        self._manual_loading_action = (
+            OverlayButtonState() if cancel_action is None else cancel_action
+        )
+        self._clear_loading_cancel_pending()
+        self._sync_loading_state()
+
+    def end_loading(self) -> None:
+        self._manual_loading_title = ""
+        self._manual_loading_message = ""
+        self._manual_loading_details = None
+        self._manual_loading_action = OverlayButtonState()
+        self._manual_loading_draw_background = False
+        self._clear_loading_cancel_pending()
+        self._sync_loading_state()
+
+    def set_loading_cancel_pending(
+        self,
+        message: str,
+        *,
+        pending: bool = True,
+    ) -> None:
+        self._loading_cancel_pending = pending
+        self._loading_cancel_message = message if pending else ""
+        self._sync_loading_state()
+
+    def _sync_loading_state(self) -> None:
+        if self._manual_loading_title != "":
+            loading_message = self._manual_loading_message
+            if self._loading_cancel_pending:
+                loading_message = self._loading_cancel_message
+
+            self._overlay_state_model.update(
+                is_loading=True,
+                loading_title=self._manual_loading_title,
+                loading_message=loading_message,
+                loading_details=self._manual_loading_details,
+                loading_action=self._manual_loading_action,
+                loading_draw_background=self._manual_loading_draw_background,
+                loading_cancel_pending=self._loading_cancel_pending,
+            )
+            return
+
+        if len(self._jobs) > 0:
+            job_name, job_status = list(self._jobs.items())[-1]
+            details = job_status.strip() or None
+            loading_message = self.tr(
+                "Please wait while the current operation finishes."
+            )
+            if self._loading_cancel_pending:
+                loading_message = self._loading_cancel_message
+
+            self._overlay_state_model.update(
+                is_loading=True,
+                loading_title=job_name,
+                loading_message=loading_message,
+                loading_details=details,
+                loading_action=self._job_actions.get(
+                    job_name,
+                    OverlayButtonState(),
+                ),
+                loading_draw_background=False,
+                loading_cancel_pending=self._loading_cancel_pending,
+            )
+            return
+
+        self._overlay_state_model.update(
+            is_loading=False,
+            loading_title="",
+            loading_message="",
+            loading_details=None,
+            loading_action=OverlayButtonState(),
+            loading_draw_background=True,
+            loading_cancel_pending=False,
+        )
+
+    def _clear_loading_cancel_pending(self) -> None:
+        self._loading_cancel_pending = False
+        self._loading_cancel_message = ""
+
+    def _handle_overlay_state_changed(self, state) -> None:
+        is_visible = state.kind != OverlayKind.NONE
+        if is_visible == self._is_overlay_visible:
+            return
+
+        self._is_overlay_visible = is_visible
+        self.overlay_visibility_changed.emit(is_visible)
 
     def keyPressEvent(self, event: Optional[QKeyEvent]) -> None:
         is_f2 = event.key() == Qt.Key.Key_F2

@@ -1,3 +1,4 @@
+import uuid
 from pathlib import Path
 from typing import Dict, List, Optional, cast
 
@@ -20,11 +21,22 @@ from nextgis_connect.detached_editing.path_preprocessor import (
     DetachedEditingPathPreprocessor,
 )
 from nextgis_connect.logging import logger
+from nextgis_connect.ngw_api.core.ngw_resource_factory import (
+    NGWResourceFactory,
+)
+from nextgis_connect.ngw_api.core.ngw_vector_layer import NGWVectorLayer
+from nextgis_connect.ngw_api.qgis.qgis_ngw_connection import QgsNgwConnection
+from nextgis_connect.ngw_connection import NgwConnection
+from nextgis_connect.ngw_connection.application.connections_manager import (
+    ConnectionUpdateState,
+    NgwConnectionsManager,
+)
 from nextgis_connect.settings import NgConnectSettings
 
 from . import utils
 from .detached_container import DetachedContainer
 from .detached_layer_config_widget import DetachedLayerConfigWidgetFactory
+from .detached_layer_factory import DetachedLayerFactory
 
 iface: QgisInterface
 
@@ -164,6 +176,35 @@ class DetachedEditing(QObject):
             return None
         return container.layer(layer)
 
+    @pyqtSlot(str, object)
+    def on_connection_updated(
+        self,
+        connection_id: str,
+        state: ConnectionUpdateState,
+    ) -> None:
+        if state == ConnectionUpdateState.DELETED:
+            return
+
+        connections_manager = NgwConnectionsManager()
+        connection = connections_manager.connection(connection_id)
+        if connection is None:
+            return
+
+        handled_paths = set()
+        project = QgsProject.instance()
+        for layer in project.mapLayers().values():
+            container_path = self.__layer_container_path(layer)
+            if container_path is not None and container_path in handled_paths:
+                continue
+
+            is_handled = self.__handle_connection_updated_for_layer(
+                layer,
+                connection,
+                state == ConnectionUpdateState.CREATED,
+            )
+            if is_handled and container_path is not None:
+                handled_paths.add(container_path)
+
     def __setup_layers(self) -> None:
         project = QgsProject.instance()
         assert project is not None
@@ -201,7 +242,6 @@ class DetachedEditing(QObject):
                 return False
 
             self.__containers[container_path] = container
-
         self.__containers_by_layer_id[layer.id()] = container
 
         # Check if layer wasn't added to project earlier
@@ -305,3 +345,171 @@ class DetachedEditing(QObject):
             container = self.__containers.pop(path, None)
             if container is not None:
                 container.deleteLater()
+
+    def __handle_connection_updated_for_layer(
+        self, layer: QgsMapLayer, connection: NgwConnection, is_new: bool
+    ) -> bool:
+        if not isinstance(layer, QgsVectorLayer):
+            return False
+
+        container_path = self.__layer_container_path(layer)
+        if container_path is None:
+            return False
+
+        instance_id = self.__layer_instance_id(layer, container_path)
+        if instance_id != connection.domain_uuid:
+            return False
+
+        resource_id = self.__layer_resource_id(layer, container_path)
+        if resource_id is None:
+            return False
+
+        container_was_created = False
+        if not container_path.exists():
+            is_created = self.__create_empty_container(
+                connection.id, resource_id, container_path
+            )
+            if not is_created:
+                return False
+
+            self.__restore_layer_source(layer, container_path)
+            container_was_created = True
+
+        if not utils.is_ngw_container(container_path, check_metadata=True):
+            return False
+
+        if layer.id() not in self.__containers_by_layer_id:
+            is_added = self.__setup_layer(layer)
+            if not is_added:
+                return False
+
+            self.__add_indicator_if_needed(layer)
+
+        container = self.__containers_by_layer_id.get(layer.id())
+        if container is None:
+            return False
+
+        metadata = container.metadata
+        if metadata is None:
+            return False
+
+        current_connection_id = metadata.connection_id
+        connections_manager = NgwConnectionsManager()
+        current_connection = None
+        if current_connection_id:
+            current_connection = connections_manager.connection(
+                current_connection_id
+            )
+
+        if container_was_created:
+            container.update_connection(connection.id, connection.domain_uuid)
+            container.synchronize(is_manual=True)
+            return True
+
+        if current_connection_id == connection.id:
+            container.update_connection(connection.id, connection.domain_uuid)
+            container.refresh_additional_data()
+            return True
+
+        if is_new and current_connection is None:
+            container.update_connection(connection.id, connection.domain_uuid)
+            container.refresh_additional_data()
+            return True
+
+        return False
+
+    def __add_indicator_if_needed(self, layer: QgsMapLayer) -> None:
+        root = QgsProject.instance().layerTreeRoot()
+        node = root.findLayer(layer)
+        if node is None:
+            return
+
+        container = self.__containers_by_layer_id.get(layer.id())
+        if container is None:
+            return
+
+        container.add_indicator(node)
+
+    def __layer_container_path(self, layer: QgsMapLayer) -> Optional[Path]:
+        try:
+            return utils.container_path(layer)
+        except Exception:
+            return None
+
+    def __layer_instance_id(
+        self, layer: QgsMapLayer, container_path: Optional[Path]
+    ) -> Optional[str]:
+        instance_id = layer.customProperty("ngw_instance_id")
+        if instance_id is not None and self.__is_uuid(str(instance_id)):
+            return str(instance_id)
+
+        if container_path is not None and self.__is_uuid(
+            container_path.parent.name
+        ):
+            return container_path.parent.name
+
+        return None
+
+    def __layer_resource_id(
+        self, layer: QgsMapLayer, container_path: Optional[Path]
+    ) -> Optional[int]:
+        resource_id = layer.customProperty("ngw_resource_id")
+        if resource_id is not None:
+            resource_id_string = str(resource_id)
+            if resource_id_string.isdigit():
+                return int(resource_id_string)
+
+        if container_path is None:
+            return None
+
+        if container_path.stem.isdigit():
+            return int(container_path.stem)
+
+        return None
+
+    def __create_empty_container(
+        self, connection_id: str, resource_id: int, container_path: Path
+    ) -> bool:
+        ngw_connection = QgsNgwConnection(connection_id)
+        resources_factory = NGWResourceFactory(ngw_connection)
+        try:
+            ngw_layer = resources_factory.get_resource(resource_id)
+        except Exception:
+            logger.exception("Could not resolve resource for detached layer")
+            return False
+
+        if not isinstance(ngw_layer, NGWVectorLayer):
+            return False
+
+        detached_factory = DetachedLayerFactory()
+        container_path.parent.mkdir(parents=True, exist_ok=True)
+
+        try:
+            detached_factory.create_initial_container(
+                ngw_layer, container_path
+            )
+        except Exception:
+            logger.exception("Could not create missing detached container")
+            return False
+
+        return True
+
+    def __restore_layer_source(
+        self, layer: QgsVectorLayer, container_path: Path
+    ) -> None:
+        try:
+            layer.setDataSource(
+                utils.detached_layer_uri(container_path),
+                layer.name(),
+                "ogr",
+            )
+        except Exception:
+            logger.exception("Could not restore detached layer source")
+
+    def __is_uuid(self, value: str) -> bool:
+        try:
+            uuid.UUID(value)
+        except (TypeError, ValueError, AttributeError):
+            return False
+
+        return True

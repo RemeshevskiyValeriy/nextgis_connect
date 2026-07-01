@@ -49,10 +49,10 @@ from nextgis_connect.exceptions import (
 from nextgis_connect.logging import escape_html, format_container_data, logger
 from nextgis_connect.network.qt_network_error import QtNetworkError
 from nextgis_connect.ngw_api.core.ngw_error import NGWError
-from nextgis_connect.ngw_connection.ngw_connection import NgwConnection
-from nextgis_connect.ngw_connection.ngw_connections_manager import (
+from nextgis_connect.ngw_connection.application.connections_manager import (
     NgwConnectionsManager,
 )
+from nextgis_connect.ngw_connection.domain.connection import NgwConnection
 from nextgis_connect.settings import NgConnectSettings
 
 from .compat_qgis import CompatQt
@@ -456,6 +456,9 @@ class QgsNgwConnection(QObject):
 
         loop = QEventLoop()
         reply.finished.connect(loop.quit)
+        if feedback is not None:
+            feedback.canceled.connect(loop.quit)
+
         if filename is not None:
             reply.uploadProgress.connect(self.sendUploadProgress)
 
@@ -465,7 +468,13 @@ class QgsNgwConnection(QObject):
         # approach which is actually should be used when dealing with QNetworkAccessManager).
         # NOTE: actualy this is also our client timeout for any single request to NGW. We are able to set it to some not-large value because
         # we use tus uplod for large files => we do not warry that large files will not be uploaded this way.
-        if not reply.isFinished():  # isFinished() checks that finished() is emmited before, but not after this method
+        is_feedback_canceled = feedback is not None and feedback.isCanceled()
+        if is_feedback_canceled:
+            reply.abort()
+
+        # isFinished() checks that finished() is emitted before this point,
+        # but not after this check.
+        if not reply.isFinished() and not is_feedback_canceled:
             timer = QTimer()
             timer.setSingleShot(True)
             timer.timeout.connect(loop.quit)
@@ -479,6 +488,10 @@ class QgsNgwConnection(QObject):
 
         if feedback is not None and feedback.isCanceled():
             raise NgConnectError("Request was canceled")
+
+        status_code = reply.attribute(
+            QNetworkRequest.Attribute.HttpStatusCodeAttribute
+        )
 
         # Indicate that request has been timed out by QGIS.
         # TODO: maybe use QgsNetworkAccessManager::requestTimedOut()?
@@ -513,6 +526,9 @@ class QgsNgwConnection(QObject):
             error.add_note(f"URL: {request.url().toString()}")
             qt_error_info.add_exception_notes(error)
             raise error
+
+        elif status_code is not None and status_code // 100 != 2:
+            return request, reply
 
         elif reply.error() != QNetworkReply.NetworkError.NoError:
             qt_error_info = QtNetworkError.from_qt(reply.error()).value
@@ -769,7 +785,11 @@ class QgsNgwConnection(QObject):
         if sent != 0 and total != 0:
             self.uploadProgressCallback(total, sent)
 
-    def get_ngw_components(self):
+    def get_ngw_components(
+        self,
+        *,
+        feedback: Optional[QgsFeedback] = None,
+    ):
         if self.__ngw_components is not None:
             return self.__ngw_components
 
@@ -781,7 +801,7 @@ class QgsNgwConnection(QObject):
             return self.__ngw_components
 
         logger.debug("↓ Get versions")
-        result = self.get(GET_VERSION_URL)
+        result = self.get(GET_VERSION_URL, feedback=feedback)
         if not isinstance(result, dict):
             raise NgwConnectionError("Unexpected versions result")
 
@@ -798,8 +818,12 @@ class QgsNgwConnection(QObject):
 
         return self.__ngw_components
 
-    def get_version(self):
-        ngw_components = self.get_ngw_components()
+    def get_version(
+        self,
+        *,
+        feedback: Optional[QgsFeedback] = None,
+    ):
+        ngw_components = self.get_ngw_components(feedback=feedback)
         return ngw_components.get("nextgisweb")
 
     def __wait_for_answer(

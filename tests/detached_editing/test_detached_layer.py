@@ -227,6 +227,10 @@ class TestDetachedLayer(NgConnectTestCase):
                 container_mock.metadata.connection_id,
             )
             self.assertEqual(
+                qgs_layer.customProperty("ngw_instance_id"),
+                container_mock.metadata.instance_id,
+            )
+            self.assertEqual(
                 qgs_layer.customProperty("ngw_resource_id"),
                 container_mock.metadata.resource_id,
             )

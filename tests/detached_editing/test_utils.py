@@ -31,6 +31,21 @@ class TestDetachedLayerEditingUtils(NgConnectTestCase):
             layer.setCustomProperty("ngw_is_detached_layer", False)
             self.assertFalse(utils.is_ngw_container(layer))
 
+    def test_reset_container_properties(self) -> None:
+        layer = self.layer(TestData.Points)
+
+        layer.setCustomProperty("ngw_is_detached_layer", True)
+        layer.setCustomProperty("ngw_connection_id", "connection")
+        layer.setCustomProperty("ngw_instance_id", "instance")
+        layer.setCustomProperty("ngw_resource_id", 1)
+
+        utils.reset_container_properties(layer)
+
+        self.assertIsNone(layer.customProperty("ngw_is_detached_layer"))
+        self.assertIsNone(layer.customProperty("ngw_connection_id"))
+        self.assertIsNone(layer.customProperty("ngw_instance_id"))
+        self.assertIsNone(layer.customProperty("ngw_resource_id"))
+
 
 if __name__ == "__main__":
     unittest.main()

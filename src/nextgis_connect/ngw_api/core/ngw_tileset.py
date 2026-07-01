@@ -3,7 +3,7 @@ from typing import Tuple
 from qgis.core import QgsProviderRegistry
 
 from nextgis_connect.ngw_api.core.ngw_resource import NGWResource
-from nextgis_connect.ngw_connection.ngw_connections_manager import (
+from nextgis_connect.ngw_connection.application.connections_manager import (
     NgwConnectionsManager,
 )
 

@@ -442,6 +442,7 @@ class NgwStylesDownloader(NGWResourceModelJob):
         ngw_resources: Union[NGWQGISStyle, List[NGWQGISStyle]],
     ) -> None:
         super().__init__()
+        self._feedback = QgsFeedback()
         if isinstance(ngw_resources, list):
             self.ngw_resources = ngw_resources
         else:
@@ -452,6 +453,9 @@ class NgwStylesDownloader(NGWResourceModelJob):
         total = len(self.ngw_resources)
 
         for i, style_resource in enumerate(self.ngw_resources):
+            if self._feedback.isCanceled():
+                raise NgConnectError("Request was canceled")
+
             name = style_resource.display_name
             progress = "" if total == "1" else f"\n({i + 1}/{total})"
             self.statusChanged.emit(

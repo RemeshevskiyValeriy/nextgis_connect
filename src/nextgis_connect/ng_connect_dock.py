@@ -26,10 +26,11 @@ import json
 import os
 import tempfile
 import urllib.parse
+import uuid
 from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import List, Optional, cast
+from typing import List, Optional, Set, cast
 
 from qgis import utils as qgis_utils
 from qgis.core import (
@@ -73,6 +74,7 @@ from qgis.PyQt.QtNetwork import QNetworkReply, QNetworkRequest
 from qgis.PyQt.QtWidgets import (
     QAction,
     QActionGroup,
+    QApplication,
     QDialog,
     QFileDialog,
     QFrame,
@@ -141,11 +143,15 @@ from nextgis_connect.ngw_api.qt.qt_ngw_resource_model_job_error import (
     JobServerRequestError,
     JobWarning,
 )
-from nextgis_connect.ngw_connection.ngw_connection_edit_dialog import (
+from nextgis_connect.ngw_connection.application.connections_manager import (
+    NgwConnectionsManager,
+)
+from nextgis_connect.ngw_connection.domain.connection import NgwConnection
+from nextgis_connect.ngw_connection.presentation.connection_edit_dialog import (
     NgwConnectionEditDialog,
 )
-from nextgis_connect.ngw_connection.ngw_connections_manager import (
-    NgwConnectionsManager,
+from nextgis_connect.ngw_connection.presentation.diagnostics.dialog import (
+    NgwConnectionDiagnosticsDialog,
 )
 from nextgis_connect.ngw_resources_adder import NgwResourcesAdder
 from nextgis_connect.resource_properties.resource_properties_dialog import (
@@ -158,12 +164,17 @@ from nextgis_connect.search.search_panel import SearchPanel
 from nextgis_connect.search.search_settings import SearchSettings
 from nextgis_connect.search.utils import SearchType
 from nextgis_connect.settings import NgConnectSettings
+from nextgis_connect.shared.buttons.shining import ShiningButton
 from nextgis_connect.tree_widget import (
     QNGWResourceItem,
     QNGWResourceTreeModel,
     QNGWResourceTreeView,
 )
 from nextgis_connect.tree_widget.model import NGWResourceModelResponse
+from nextgis_connect.tree_widget.overlay import (
+    OverlayAction,
+    OverlayButtonState,
+)
 from nextgis_connect.tree_widget.proxy_model import NgConnectProxyModel
 
 HAS_NGSTD = importlib.util.find_spec("ngstd") is not None
@@ -179,6 +190,7 @@ FORM_CLASS, _ = uic.loadUiType(
 )
 
 ICONS_PATH = os.path.join(this_dir, "icons/")
+ROOT_RESOURCES_LOADER_JOB_ID = "NGWRootResourcesLoader"
 
 
 @dataclass
@@ -204,6 +216,13 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
         self.iface = iface
 
         self._first_gui_block_on_refresh = False
+        self.__active_cancelable_job_id: Optional[str] = None
+        self.__cancel_pending_job_id: Optional[str] = None
+        self.__canceled_job_ids: Set[str] = set()
+        self.__root_loading_cancel_requested = False
+        self.__root_children_loading_parent_id: Optional[int] = None
+        self.__is_tree_overlay_visible = False
+        self.__promo_banner_container: Optional[QFrame] = None
         self.__search_menu = None
 
         self.actionOpenInNGW = QAction(self.tr("Open in Web GIS"), self)
@@ -480,6 +499,12 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
             "AddLayersStub": self.tr("Adding resources to QGIS..."),
             "NgwSearch": self.tr("Searching resources..."),
         }
+        self._cancelable_blocked_jobs = {
+            "NGWMissingResourceUpdater",
+            "ResourcesDownloader",
+            "NgwCreateVectorLayersStubs",
+            "NgwStylesDownloader",
+        }
 
         # proxy model
         self.proxy_model = NgConnectProxyModel(self)
@@ -487,17 +512,15 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
         self.resource_model.found_resources_changed.connect(
             self.proxy_model.set_resources_id
         )
-        self.resource_model.found_resources_changed.connect(
-            lambda resources: (
-                self.resources_tree_view.not_found_overlay.setVisible(
-                    -1 in resources
-                )
-            )
-        )
 
         # ngw resources view
         self.resources_tree_view = QNGWResourceTreeView(self)
         self.resources_tree_view.setModel(self.proxy_model)
+        self.resource_model.found_resources_changed.connect(
+            lambda resources: self.resources_tree_view.set_search_empty(
+                -1 in resources
+            )
+        )
 
         self.resources_tree_view.customContextMenuRequested.connect(
             self.slotCustomContextMenu
@@ -505,12 +528,28 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
         self.resources_tree_view.itemDoubleClicked.connect(
             self.trvDoubleClickProcess
         )
+        self.resources_tree_view.overlay_action_requested.connect(
+            self.__handle_tree_overlay_action
+        )
+        self.resources_tree_view.overlay_visibility_changed.connect(
+            self.__handle_tree_overlay_visibility_changed
+        )
 
         size_policy = self.resources_tree_view.sizePolicy()
         size_policy.setVerticalPolicy(QSizePolicy.Policy.Expanding)
         self.resources_tree_view.setSizePolicy(size_policy)
 
         self.content.layout().addWidget(self.resources_tree_view)
+
+        self.__create_web_gis_button = ShiningButton(
+            self.tr("Create you own Web GIS!"),
+            self.content,
+        )
+        self.__create_web_gis_button.clicked.connect(
+            self.__open_create_web_gis_url
+        )
+        self.__create_web_gis_button.hide()
+        self.content.layout().addWidget(self.__create_web_gis_button)
 
         self.__add_banner()
 
@@ -556,6 +595,9 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
         )
         self.resources_tree_view.itemDoubleClicked.disconnect(
             self.trvDoubleClickProcess
+        )
+        self.resources_tree_view.overlay_visibility_changed.disconnect(
+            self.__handle_tree_overlay_visibility_changed
         )
 
         layer_tree_view = self.iface.layerTreeView()
@@ -805,10 +847,22 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
         # always unblock in case of any error so to allow to fix it
         self.unblock_gui()
 
+        if (
+            self.__root_children_loading_parent_id is not None
+            and job_name == "NGWResourceUpdater"
+        ):
+            self.__stop_root_children_loading()
+
+        if job_name is None and self.__root_loading_cancel_requested:
+            self.__show_root_loading_error(exception)
+            return
+
         if not self.resource_model.is_connected:
             self.disable_tools()
 
-        msg, msg_ext, icon = self.__get_model_exception_description(exception)
+        _msg, _msg_ext, _icon = self.__get_model_exception_description(
+            exception
+        )
 
         connections_manager = NgwConnectionsManager()
         current_connection_id = connections_manager.current_connection_id
@@ -842,7 +896,7 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
             if result == QDialog.DialogCode.Accepted:
                 self.reinit_tree(force=True)
             else:
-                self.disable_tools()
+                self.__show_connection_parameters_error(message)
             del dialog
             return
 
@@ -864,7 +918,8 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
                     updated_connection = replace(
                         current_connection, url=updated_url
                     )
-                    connections_manager.save(updated_connection)
+                    connections_manager.upsert(updated_connection)
+                    connections_manager.save()
                     logger.debug(
                         'Meet "http://", ".nextgis.com" connection error at '
                         "very first time using this web gis connection. Trying"
@@ -891,8 +946,9 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
                 if result == QDialog.DialogCode.Accepted:
                     self.reinit_tree(force=True)
                 else:
-                    self.disable_tools()
+                    self.__show_connection_parameters_error(message)
                 del dialog
+                return
 
         # The second time return back http if there was an error: this might be some
         # other error, not related to http/https changing.
@@ -901,7 +957,8 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
             self.try_check_https = False
             updated_url = current_connection.url.replace("https://", "http://")
             updated_connection = replace(current_connection, url=updated_url)
-            connections_manager.save(updated_connection)
+            connections_manager.upsert(updated_connection)
+            connections_manager.save()
             logger.debug(
                 'Failed to reconnect with "https://". Return "http://" back'
             )
@@ -912,7 +969,21 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
             isinstance(exception, JobServerRequestError)
             and exception.user_msg is not None
         ):
+            if job_name == ROOT_RESOURCES_LOADER_JOB_ID:
+                self.__show_root_loading_error(exception)
+                return
+
+            if job_name in self.__canceled_job_ids:
+                return
+
             self.show_error(exception.user_msg)
+            return
+
+        if job_name == ROOT_RESOURCES_LOADER_JOB_ID:
+            self.__show_root_loading_error(exception)
+            return
+
+        if job_name in self.__canceled_job_ids:
             return
 
         if (
@@ -925,6 +996,294 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
         error_id = NgConnectInterface.instance().show_error(exception)
         if self.__is_reinit_tree:
             self.__reinit_tree_error = error_id
+
+    def __start_root_loading_overlay(self) -> None:
+        self.__root_loading_cancel_requested = False
+        self.__root_children_loading_parent_id = None
+        self.__cancel_pending_job_id = None
+        self.resources_tree_view.begin_loading(
+            self.tr("Loading Web GIS resources"),
+            message=self.tr("Loading the root resource."),
+            cancel_action=OverlayButtonState(
+                action=OverlayAction.CANCEL,
+                text=self.tr("Cancel"),
+            ),
+            draw_background=True,
+        )
+
+    def __start_root_children_loading(self) -> bool:
+        root_index = self.resource_model.index(0, 0, QModelIndex())
+        if not root_index.isValid():
+            return False
+
+        parent_id = root_index.data(QNGWResourceItem.NGWResourceIdRole)
+        if parent_id is None:
+            return False
+
+        has_active_updater = any(
+            job.getJobId() == "NGWResourceUpdater"
+            for job in self.resource_model.jobs
+        )
+        if (
+            not self.resource_model.canFetchMore(root_index)
+            and not has_active_updater
+        ):
+            return False
+
+        self.__root_children_loading_parent_id = int(parent_id)
+        self.__cancel_pending_job_id = None
+        self.resources_tree_view.begin_loading(
+            self.tr("Loading Web GIS resources"),
+            message=self.tr("Loading the root resource contents."),
+            cancel_action=OverlayButtonState(
+                action=OverlayAction.CANCEL,
+                text=self.tr("Cancel"),
+            ),
+            draw_background=True,
+        )
+
+        if (
+            self.resource_model.canFetchMore(root_index)
+            and not has_active_updater
+        ):
+            self.resource_model.fetchMore(root_index)
+
+        return True
+
+    def __has_pending_root_children_loading(
+        self,
+        *,
+        finishing_updater: bool = False,
+    ) -> bool:
+        if self.__root_children_loading_parent_id is None:
+            return False
+
+        root_index = self.resource_model.index_from_id(
+            self.__root_children_loading_parent_id
+        )
+        if root_index is None or not root_index.isValid():
+            return False
+
+        updater_count = sum(
+            1
+            for job in self.resource_model.jobs
+            if job.getJobId() == "NGWResourceUpdater"
+        )
+        if finishing_updater and updater_count > 0:
+            updater_count -= 1
+
+        return (
+            self.resource_model.canFetchMore(root_index) or updater_count > 0
+        )
+
+    def __stop_root_children_loading(self) -> None:
+        self.__root_children_loading_parent_id = None
+        self.resources_tree_view.end_loading()
+
+    def __show_root_loading_error(self, exception: Exception) -> None:
+        self.__root_children_loading_parent_id = None
+        self.resources_tree_view.end_loading()
+        self.disable_tools()
+
+        if self.__root_loading_cancel_requested:
+            self.resources_tree_view.set_error_state(
+                self.tr("The root resource loading was canceled."),
+                title=self.tr("Loading canceled"),
+                details=self.tr(
+                    "Try loading the resource tree again when the connection becomes available."
+                ),
+                retry_enabled=False,
+                icon_name="cloud_off",
+                action=OverlayButtonState(
+                    action=OverlayAction.RELOAD_TREE,
+                    text=self.tr("Try again"),
+                ),
+            )
+            return
+
+        if self.__is_internal_server_error(exception):
+            self.resources_tree_view.set_error_state(
+                self.tr(
+                    "The server returned an internal error while loading the root resource."
+                ),
+                title=self.tr("Unable to load resources"),
+                details=self.tr(
+                    "Contact support for the current Web GIS instance."
+                ),
+                retry_enabled=False,
+                icon_name="cloud_alert",
+                action=OverlayButtonState(
+                    action=OverlayAction.CONTACT_SUPPORT,
+                    text=self.tr("Contact support"),
+                ),
+            )
+            return
+
+        if self.__is_invalid_connection_error(exception):
+            self.resources_tree_view.set_error_state(
+                self.tr("Invalid NextGIS Web connection."),
+                title=self.tr("Unable to load resources"),
+                details=self.tr(
+                    "Open settings and check the selected connection."
+                ),
+                retry_enabled=False,
+                icon_name="globe_2_cancel",
+                action=OverlayButtonState(
+                    action=OverlayAction.OPEN_PLUGIN_SETTINGS,
+                    text=self.tr("Open settings"),
+                ),
+            )
+            return
+
+        details = self.tr(
+            "Run diagnostics to check the connection and server availability."
+        )
+        user_message = getattr(exception, "user_msg", None)
+        if user_message:
+            details = f"{details}\n\n{user_message}"
+
+        self.resources_tree_view.set_error_state(
+            self.tr("The root resource could not be loaded."),
+            title=self.tr("Unable to load resources"),
+            details=details,
+            retry_enabled=False,
+            icon_name="globe_2_cancel",
+            action=OverlayButtonState(
+                action=OverlayAction.RELOAD_TREE,
+                text=self.tr("Try again"),
+            ),
+            secondary_action=OverlayButtonState(
+                action=OverlayAction.RUN_DIAGNOSTICS,
+                text=self.tr("Run diagnostics"),
+            ),
+        )
+
+    def __show_connection_parameters_error(self, message: str) -> None:
+        self.__root_children_loading_parent_id = None
+        self.resources_tree_view.end_loading()
+        self.disable_tools()
+        self.resources_tree_view.set_error_state(
+            message,
+            title=self.tr("Unable to connect"),
+            details=self.tr(
+                "Open settings and check the selected connection."
+            ),
+            retry_enabled=False,
+            icon_name="globe_2_cancel",
+            action=OverlayButtonState(
+                action=OverlayAction.OPEN_PLUGIN_SETTINGS,
+                text=self.tr("Open settings"),
+            ),
+            secondary_action=OverlayButtonState(
+                action=OverlayAction.RUN_DIAGNOSTICS,
+                text=self.tr("Run diagnostics"),
+            ),
+        )
+
+    def __is_internal_server_error(self, exception: Exception) -> bool:
+        candidates = [
+            exception,
+            getattr(exception, "wrapped_exception", None),
+            getattr(exception, "__cause__", None),
+        ]
+
+        for candidate in candidates:
+            if candidate is None:
+                continue
+
+            if getattr(candidate, "code", None) == ErrorCode.ServerError:
+                return True
+
+            text = " ".join(
+                part
+                for part in (
+                    str(candidate),
+                    getattr(candidate, "user_msg", None),
+                    getattr(candidate, "user_message", None),
+                    getattr(candidate, "detail", None),
+                )
+                if part
+            ).lower()
+            if "500" in text and "internal" in text:
+                return True
+
+        return False
+
+    def __is_invalid_connection_error(self, exception: Exception) -> bool:
+        candidates = [
+            exception,
+            getattr(exception, "wrapped_exception", None),
+            getattr(exception, "__cause__", None),
+        ]
+
+        for candidate in candidates:
+            if candidate is None:
+                continue
+
+            if getattr(candidate, "code", None) == ErrorCode.InvalidConnection:
+                return True
+
+        return False
+
+    def __open_current_connection_diagnostics(self) -> None:
+        connection = NgwConnectionsManager().current_connection
+        if connection is None:
+            return
+
+        dialog = NgwConnectionDiagnosticsDialog(connection, self)
+        dialog.exec()
+
+    @pyqtSlot()
+    def __open_create_web_gis_url(self) -> None:
+        QDesktopServices.openUrl(
+            QUrl(self.resources_tree_view.create_web_gis_url())
+        )
+
+    def __update_create_web_gis_button_visibility(self) -> None:
+        connection = NgwConnectionsManager().current_connection
+        is_visible = (
+            not self.__is_tree_overlay_visible
+            and connection is not None
+            and self.__is_demo_or_sandbox_connection(connection)
+        )
+        self.__create_web_gis_button.setVisible(is_visible)
+
+    def __update_promo_banner_visibility(self) -> None:
+        if self.__promo_banner_container is None:
+            return
+
+        self.__promo_banner_container.setVisible(
+            not self.__is_tree_overlay_visible
+        )
+
+    def __is_demo_or_sandbox_connection(
+        self,
+        connection: NgwConnection,
+    ) -> bool:
+        connection_host = urllib.parse.urlparse(
+            NgwConnection.normalize_url(connection.url)
+        ).netloc
+        demo_host = urllib.parse.urlparse(utils.nextgis_domain("demo")).netloc
+        sandbox_host = urllib.parse.urlparse(
+            utils.nextgis_domain("sandbox")
+        ).netloc
+
+        return connection_host in (demo_host, sandbox_host)
+
+    def __try_sandbox_web_gis(self) -> None:
+        sandbox_url = utils.nextgis_domain("sandbox")
+        connection = NgwConnection(
+            str(uuid.uuid4()),
+            self.tr("Sandbox"),
+            sandbox_url,
+            None,
+        )
+
+        connections_manager = NgwConnectionsManager()
+        connections_manager.upsert(connection)
+        connections_manager.current_connection_id = connection.id
+        connections_manager.save()
+        self.reinit_tree(force=True)
 
     def __get_model_exception_description(self, exception: Exception):
         msg = None
@@ -994,10 +1353,34 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
 
     @pyqtSlot(str)
     def __modelJobStarted(self, job_id: str):
+        if (
+            self.__cancel_pending_job_id is not None
+            and self.__cancel_pending_job_id != job_id
+        ):
+            self.__cancel_pending_job_id = None
+            self.resources_tree_view.set_loading_cancel_pending(
+                "",
+                pending=False,
+            )
+
+        if job_id == ROOT_RESOURCES_LOADER_JOB_ID:
+            self.__start_root_loading_overlay()
+
         if job_id in self.blocked_jobs:
             self.setUserVisible(True)
             self.block_gui()
-            self.resources_tree_view.addBlockedJob(self.blocked_jobs[job_id])
+            cancel_action = None
+            if job_id in self._cancelable_blocked_jobs:
+                self.__active_cancelable_job_id = job_id
+                cancel_action = OverlayButtonState(
+                    action=OverlayAction.CANCEL,
+                    text=self.tr("Cancel"),
+                )
+
+            self.resources_tree_view.addBlockedJob(
+                self.blocked_jobs[job_id],
+                cancel_action=cancel_action,
+            )
 
     @pyqtSlot(str, str)
     def __modelJobStatusChanged(self, job_id: str, status: str):
@@ -1012,13 +1395,36 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
         # occurred during job execution
         self.jobs_count += 1
 
-        if job_id == "NGWRootResourcesLoader":
+        if job_id == ROOT_RESOURCES_LOADER_JOB_ID:
+            if not self.__start_root_children_loading():
+                self.resources_tree_view.end_loading()
+                self.unblock_gui()
+            self.__root_loading_cancel_requested = False
+
+        if (
+            job_id == "NGWResourceUpdater"
+            and self.__root_children_loading_parent_id is not None
+            and not self.__has_pending_root_children_loading(
+                finishing_updater=True,
+            )
+        ):
+            self.__stop_root_children_loading()
             self.unblock_gui()
 
         if job_id in self.blocked_jobs:
             self.unblock_gui()
             self.resources_tree_view.removeBlockedJob(
                 self.blocked_jobs[job_id], check_overlay=False
+            )
+            self.__canceled_job_ids.discard(job_id)
+            if self.__active_cancelable_job_id == job_id:
+                self.__active_cancelable_job_id = None
+
+        if self.__cancel_pending_job_id == job_id:
+            self.__cancel_pending_job_id = None
+            self.resources_tree_view.set_loading_cancel_pending(
+                "",
+                pending=False,
             )
 
         self.__add_layers_after_finish(job_uuid)
@@ -1028,6 +1434,8 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
             for job in self.resource_model.jobs
         ):
             self.resources_tree_view.check_overlay()
+
+        self.__update_create_web_gis_button_visibility()
 
     @pyqtSlot()
     def __onModelBlockIndexes(self):
@@ -1070,30 +1478,113 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
                 )
             )
 
+    @pyqtSlot(bool)
+    def __handle_tree_overlay_visibility_changed(
+        self, is_visible: bool
+    ) -> None:
+        self.__is_tree_overlay_visible = is_visible
+        self.__update_create_web_gis_button_visibility()
+        self.__update_promo_banner_visibility()
+
+    @pyqtSlot(object)
+    def __handle_tree_overlay_action(self, action: OverlayAction) -> None:
+        if action == OverlayAction.CREATE_CONNECTION:
+            dialog = NgwConnectionEditDialog(self)
+            if dialog.exec() != QDialog.DialogCode.Accepted:
+                return
+
+            self.reinit_tree(force=True)
+            return
+
+        if action == OverlayAction.CREATE_WEB_GIS:
+            QDesktopServices.openUrl(
+                QUrl(self.resources_tree_view.create_web_gis_url())
+            )
+            return
+
+        if action == OverlayAction.CREATE_SANDBOX_CONNECTION:
+            self.__try_sandbox_web_gis()
+            return
+
+        if action == OverlayAction.OPEN_PLUGIN_SETTINGS:
+            self.iface.showOptionsDialog(
+                self.iface.mainWindow(), "NextGIS Connect"
+            )
+            return
+
+        if action == OverlayAction.OPEN_NEXTGIS_SETTINGS:
+            self.iface.showOptionsDialog(self.iface.mainWindow(), "NextGIS")
+            return
+
+        if action == OverlayAction.OPEN_PLUGIN_MANAGER:
+            self.iface.pluginManagerInterface().showPluginManager(3)
+            return
+
+        if action == OverlayAction.CONVERT_CONNECTIONS:
+            NgwConnectionsManager().convert_old_connections(convert_auth=True)
+            self.reinit_tree(force=True)
+            return
+
+        if action == OverlayAction.CANCEL:
+            self.__cancel_active_loading()
+            return
+
+        if action == OverlayAction.RELOAD_TREE:
+            self.reinit_tree(force=True)
+            return
+
+        if action == OverlayAction.RUN_DIAGNOSTICS:
+            self.__open_current_connection_diagnostics()
+            return
+
+        if action == OverlayAction.CONTACT_SUPPORT:
+            utm = utils.utm_tags("error")
+            QDesktopServices.openUrl(
+                QUrl(f"{utils.nextgis_domain()}/contact/?{utm}")
+            )
+            return
+
+        if action == OverlayAction.OPEN_NEXTGIS_SITE:
+            QDesktopServices.openUrl(QUrl(utils.nextgis_domain()))
+
     def reinit_tree(self, force=False):
         self.__is_reinit_tree = True
+        self.__root_loading_cancel_requested = False
+        self.__root_children_loading_parent_id = None
+        self.__cancel_pending_job_id = None
         if self.__reinit_tree_error is not None:
             NgConnectInterface.instance().close_error(self.__reinit_tree_error)
             self.__reinit_tree_error = None
+
+        self.resources_tree_view.clear_error_state()
+        self.resources_tree_view.clear_availability_state()
+        self.resources_tree_view.set_auth_required(False)
+        self.resources_tree_view.set_migration_required(False)
+        self.resources_tree_view.set_search_empty(False)
+        self.resources_tree_view.end_loading()
 
         # clear tree and states
         self.block_gui()
 
         try:
             connections_manager = NgwConnectionsManager()
+            if connections_manager.has_not_converted_connections():
+                connections_manager.convert_old_connections(convert_auth=True)
+
             current_connection = connections_manager.current_connection
             if current_connection is None:
+                self.__init_title()
                 self.jobs_count = 0
                 self.resource_model.resetModel(None)
                 self.unblock_gui()
                 self.disable_tools()
-                if connections_manager.has_not_converted_connections():
-                    self.resources_tree_view.migration_overlay.show()
-                else:
-                    self.resources_tree_view.showWelcomeMessage()
+                self.resources_tree_view.set_has_connections(False)
+                self.__update_create_web_gis_button_visibility()
                 return
 
             self.__init_title()
+            self.resources_tree_view.set_has_connections(True)
+            self.__update_create_web_gis_button_visibility()
 
             if (
                 HAS_NGSTD
@@ -1102,15 +1593,10 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
             ):
                 self.jobs_count = 0
                 self.resource_model.resetModel(None)
-                self.resources_tree_view.no_oauth_auth_overlay.show()
+                self.resources_tree_view.set_auth_required(True)
                 self.unblock_gui()
                 self.disable_tools()
                 return
-
-            self.resources_tree_view.hideWelcomeMessage()
-            self.resources_tree_view.migration_overlay.hide()
-            self.resources_tree_view.unsupported_version_overlay.hide()
-            self.resources_tree_view.no_oauth_auth_overlay.hide()
 
             if force:
                 if HAS_NGSTD and current_connection.method == "NextGIS":
@@ -1123,6 +1609,7 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
 
                 self._first_gui_block_on_refresh = True
                 ngw_connection = QgsNgwConnection(current_connection.id)
+                self.__start_root_loading_overlay()
 
                 self.resource_model.resetModel(ngw_connection)
 
@@ -1130,17 +1617,17 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
                     self.resource_model.ngw_version is not None
                     and not self.resource_model.is_ngw_version_supported
                 ):
+                    self.resources_tree_view.end_loading()
                     self.unblock_gui()
                     self.disable_tools()
 
-                    self.resources_tree_view.unsupported_version_overlay.set_status(
+                    self.resources_tree_view.set_unavailable_state(
                         self.resource_model.support_status,
                         qgis_utils.pluginMetadata(
                             "nextgis_connect", "version"
                         ),
                         self.resource_model.ngw_version,
                     )
-                    self.resources_tree_view.unsupported_version_overlay.show()
 
                     logger.error("NGW version is outdated")
 
@@ -1149,17 +1636,57 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
 
         except Exception as error:
             self.jobs_count = 0
+            self.resources_tree_view.end_loading()
             self.resource_model.resetModel(None)
 
             self.unblock_gui()
             self.disable_tools()
 
             logger.exception("Model update error")
-
-            NgConnectInterface.instance().show_error(error)
+            self.resources_tree_view.set_error_state(
+                self.tr("The resource tree could not be refreshed."),
+                details=str(error),
+            )
 
         self.__update_search_button()
         self.__is_reinit_tree = False
+
+    def __cancel_active_loading(self) -> None:
+        if self.__cancel_pending_job_id is not None:
+            return
+
+        if self.resource_model.cancel_job(ROOT_RESOURCES_LOADER_JOB_ID):
+            self.__root_loading_cancel_requested = True
+            self.__mark_loading_cancel_requested(ROOT_RESOURCES_LOADER_JOB_ID)
+            return
+
+        if self.__root_children_loading_parent_id is not None:
+            if self.resource_model.cancel_job("NGWResourceUpdater"):
+                self.__root_loading_cancel_requested = True
+                self.__canceled_job_ids.add("NGWResourceUpdater")
+                self.__mark_loading_cancel_requested("NGWResourceUpdater")
+                return
+
+        if self.__active_cancelable_job_id is None:
+            return
+
+        if self.__active_cancelable_job_id == "AddLayersStub":
+            self.__mark_loading_cancel_requested(
+                self.__active_cancelable_job_id
+            )
+            return
+
+        if not self.resource_model.cancel_job(self.__active_cancelable_job_id):
+            return
+
+        self.__canceled_job_ids.add(self.__active_cancelable_job_id)
+        self.__mark_loading_cancel_requested(self.__active_cancelable_job_id)
+
+    def __mark_loading_cancel_requested(self, job_id: str) -> None:
+        self.__cancel_pending_job_id = job_id
+        self.resources_tree_view.set_loading_cancel_pending(
+            self.tr("Canceling..."),
+        )
 
     @pyqtSlot()
     def __action_refresh_tree(self):
@@ -1496,16 +2023,28 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
 
         job_id = "AddLayersStub"
         self.block_gui()
-        self.resources_tree_view.addBlockedJob(self.blocked_jobs[job_id])
+        self.__active_cancelable_job_id = job_id
+        self.resources_tree_view.addBlockedJob(
+            self.blocked_jobs[job_id],
+            cancel_action=OverlayButtonState(
+                action=OverlayAction.CANCEL,
+                text=self.tr("Cancel"),
+            ),
+        )
+        QApplication.processEvents()
 
-        adder.run()
+        try:
+            adder.run()
+        finally:
+            self.unblock_gui()
+            self.resources_tree_view.removeBlockedJob(
+                self.blocked_jobs[job_id]
+            )
+            if self.__active_cancelable_job_id == job_id:
+                self.__active_cancelable_job_id = None
 
-        self.unblock_gui()
-        self.resources_tree_view.removeBlockedJob(self.blocked_jobs[job_id])
-
-        tree_rigistry_bridge.setLayerInsertionPoint(backup_point)
-
-        plugin.enable_synchronization()
+            tree_rigistry_bridge.setLayerInsertionPoint(backup_point)
+            plugin.enable_synchronization()
 
     @pyqtSlot()
     def create_group(self) -> None:
@@ -1696,17 +2235,13 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
             ngw_resource = sel_index.data(QNGWResourceItem.NGWResourceRole)
 
             self.block_gui()
+            self.resources_tree_view.begin_loading(
+                self.tr("Loading metadata"),
+                message=ngw_resource.display_name,
+            )
 
             try:
-                self.resources_tree_view.ngw_job_block_overlay.show()
-                self.resources_tree_view.ngw_job_block_overlay.text.setText(
-                    "<strong>{} {}</strong><br/>".format(
-                        self.tr("Get resource metadata"),
-                        ngw_resource.display_name,
-                    )
-                )
                 ngw_resource.update()
-                self.resources_tree_view.ngw_job_block_overlay.hide()
 
                 dlg = MetadataDialog(ngw_resource, self)
                 dlg.exec()
@@ -1715,17 +2250,17 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
                 ng_error = NgwError()
                 ng_error.__cause__ = error
                 NgConnectInterface.instance().show_error(ng_error)
-                self.resources_tree_view.ngw_job_block_overlay.hide()
 
             except NgConnectError as error:
                 NgConnectInterface.instance().show_error(error)
-                self.resources_tree_view.ngw_job_block_overlay.hide()
 
             except Exception as error:
                 ng_error = NgConnectError()
                 ng_error.__cause__ = error
                 NgConnectInterface.instance().show_error(ng_error)
-                self.resources_tree_view.ngw_job_block_overlay.hide()
+
+            finally:
+                self.resources_tree_view.end_loading()
 
             self.unblock_gui()
 
@@ -2008,12 +2543,10 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
             ngw_resource = sel_index.data(QNGWResourceItem.NGWResourceRole)
 
             # block gui
-            self.resources_tree_view.ngw_job_block_overlay.show()
             self.block_gui()
-            self.resources_tree_view.ngw_job_block_overlay.text.setText(
-                "<strong>{} {}</strong><br/>".format(
-                    self.tr("Duplicating"), ngw_resource.display_name
-                )
+            self.resources_tree_view.begin_loading(
+                self.tr("Duplicating resource"),
+                message=ngw_resource.display_name,
             )
             # main part
             try:
@@ -2030,9 +2563,9 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
                 )
                 logger.exception(error_mes)
 
-            # unblock gui
-            self.resources_tree_view.ngw_job_block_overlay.hide()
-            self.unblock_gui()
+            finally:
+                self.resources_tree_view.end_loading()
+                self.unblock_gui()
 
     def create_wfs_or_ogcf_service(self, service_type: str):
         assert service_type in ("WFS", "OGC API - Features")
@@ -2269,7 +2802,7 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
         last_used_dir = settings.value("style/lastStyleDir", QDir.homePath())
         style_name = ngw_qgis_style.display_name
         path_to_qml = os.path.join(last_used_dir, f"{style_name}.qml")
-        filepath, selected_filter = QFileDialog.getSaveFileName(
+        filepath, _selected_filter = QFileDialog.getSaveFileName(
             self,
             caption=self.tr("Save QML"),
             directory=path_to_qml,
@@ -2424,16 +2957,28 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
 
         job_id = "AddLayersStub"
         self.block_gui()
-        self.resources_tree_view.addBlockedJob(self.blocked_jobs[job_id])
+        self.__active_cancelable_job_id = job_id
+        self.resources_tree_view.addBlockedJob(
+            self.blocked_jobs[job_id],
+            cancel_action=OverlayButtonState(
+                action=OverlayAction.CANCEL,
+                text=self.tr("Cancel"),
+            ),
+        )
+        QApplication.processEvents()
 
-        adder.run()
+        try:
+            adder.run()
+        finally:
+            self.unblock_gui()
+            self.resources_tree_view.removeBlockedJob(
+                self.blocked_jobs[job_id]
+            )
+            if self.__active_cancelable_job_id == job_id:
+                self.__active_cancelable_job_id = None
 
-        self.unblock_gui()
-        self.resources_tree_view.removeBlockedJob(self.blocked_jobs[job_id])
-
-        tree_rigistry_bridge.setLayerInsertionPoint(backup_point)
-
-        plugin.enable_synchronization()
+            tree_rigistry_bridge.setLayerInsertionPoint(backup_point)
+            plugin.enable_synchronization()
 
     def __on_ngstd_user_info_updated(self):
         connections_manager = NgwConnectionsManager()
@@ -2586,13 +3131,13 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
         if len(search_string) == 0:
             self.__on_search_reset()
         else:
-            self.resources_tree_view.not_found_overlay.hide()
+            self.resources_tree_view.set_search_empty(False)
             self.resource_model.search(search_string)
 
     @pyqtSlot()
     def __on_search_reset(self) -> None:
         self.resource_model.reset_search()
-        self.resources_tree_view.not_found_overlay.hide()
+        self.resources_tree_view.set_search_empty(False)
 
     @pyqtSlot(bool)
     def __on_search_type_changed(self, value: bool) -> None:
@@ -2666,10 +3211,12 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
         )
         promo_url = f"{promo_base_url}?{utm_template}"
 
-        banner_layout = QVBoxLayout()
+        banner_container = QFrame(self.content)
+        banner_container.setFrameShape(QFrame.Shape.NoFrame)
+        banner_layout = QVBoxLayout(banner_container)
         banner_layout.setContentsMargins(0, 4, 0, 4)
 
-        banner = QFrame(self.content)
+        banner = QFrame(banner_container)
         banner.setObjectName("NgConnectBanner")
         banner.setFrameShape(QFrame.Shape.StyledPanel)
         banner.setFrameShadow(QFrame.Shadow.Raised)
@@ -2710,12 +3257,14 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
         banner.layout().addWidget(banner_label)
         banner_layout.addWidget(banner)
 
-        self.content.layout().addLayout(banner_layout)
+        self.__promo_banner_container = banner_container
+        self.content.layout().addWidget(banner_container)
+        self.__update_promo_banner_visibility()
 
         def open_link(url: str) -> None:
             if url == "#close":
-                banner_layout.deleteLater()
-                banner.deleteLater()
+                self.__promo_banner_container = None
+                banner_container.deleteLater()
                 settings.dismiss_promo(promo_campaign)
                 logger.debug(f"Dismissed promo {promo_campaign}")
                 return
@@ -2735,10 +3284,12 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
 
 
 class NGWPanelToolBar(QToolBar):
+    SIZE = 20
+
     def __init__(self):
         super().__init__(None)
 
-        self.setIconSize(QSize(24, 24))
+        self.setIconSize(QSize(self.SIZE, self.SIZE))
         self.setSizePolicy(
             QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed
         )
@@ -2751,8 +3302,8 @@ class NGWPanelToolBar(QToolBar):
         a0.accept()
 
     def fix_icons_size(self) -> None:
-        self.setIconSize(QSize(24, 24))
+        self.setIconSize(QSize(self.SIZE, self.SIZE))
 
         for button in self.findChildren(QToolButton):
-            button.setIconSize(QSize(24, 24))
+            button.setIconSize(QSize(self.SIZE, self.SIZE))
             button.setFixedSize(button.sizeHint())

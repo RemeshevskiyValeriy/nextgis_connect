@@ -1,0 +1,2 @@
+from .connection_edit_dialog import NgwConnectionEditDialog
+from .connections_widget import NgwConnectionsWidget

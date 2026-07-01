@@ -71,11 +71,20 @@ class NgConnectTestCase(QgisTestCase):
     @classmethod
     def tearDownClass(cls):
         QgsSettings().clear()
+        cls._clear_auth_configs()
 
         for path in cls._temp_paths:
             safe_remove(path)
 
         super().tearDownClass()
+
+    @classmethod
+    def _clear_auth_configs(cls) -> None:
+        auth_manager = QgsApplication.authManager()
+        for config_id in list(auth_manager.availableAuthMethodConfigs()):
+            if config_id == "NextGIS":
+                continue
+            auth_manager.removeAuthenticationConfig(config_id)
 
     @classmethod
     def create_temp_file(cls, suffix: str = "") -> Path:
@@ -188,7 +197,7 @@ class NgConnectTestCase(QgisTestCase):
             "https://sandbox.nextgis.com/",
             None,
         )
-        connections_manager.save(guest_connection)
+        connections_manager.upsert(guest_connection)
         cls._connections_id[TestConnection.SandboxGuest] = guest_connection_id
 
         # Create basic connection
@@ -202,10 +211,11 @@ class NgConnectTestCase(QgisTestCase):
         basic_connection = NgwConnection(
             basic_connection_id,
             "TEST_LOGIN_CONNECTION",
-            "https://sandbox.nextgis.com/",
+            "https://login-sandbox.nextgis.com/",
             auth_config.id(),
         )
-        connections_manager.save(basic_connection)
+        connections_manager.upsert(basic_connection)
+        connections_manager.save()
         cls._connections_id[TestConnection.SandboxWithLogin] = (
             basic_connection_id
         )

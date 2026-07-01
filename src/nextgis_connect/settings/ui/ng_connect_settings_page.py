@@ -9,7 +9,7 @@ from qgis.gui import (
     QgsOptionsWidgetFactory,
 )
 from qgis.PyQt import uic
-from qgis.PyQt.QtCore import QSize, Qt, pyqtSlot
+from qgis.PyQt.QtCore import Qt, pyqtSlot
 from qgis.PyQt.QtGui import QIcon
 from qgis.PyQt.QtWidgets import (
     QComboBox,
@@ -17,7 +17,6 @@ from qgis.PyQt.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QMessageBox,
-    QPushButton,
     QSpinBox,
     QVBoxLayout,
     QWidget,
@@ -28,11 +27,11 @@ from nextgis_connect import NgConnectInterface
 from nextgis_connect.core.ui.labeled_slider import LabeledSlider
 from nextgis_connect.logging import logger, update_level
 from nextgis_connect.ng_connect_dock import NgConnectDock
-from nextgis_connect.ngw_connection.ngw_connection import NgwConnection
-from nextgis_connect.ngw_connection.ngw_connections_manager import (
+from nextgis_connect.ngw_connection.application.connections_manager import (
     NgwConnectionsManager,
 )
-from nextgis_connect.ngw_connection.ngw_connections_widget import (
+from nextgis_connect.ngw_connection.domain.connection import NgwConnection
+from nextgis_connect.ngw_connection.presentation.connections_widget import (
     NgwConnectionsWidget,
 )
 from nextgis_connect.settings import NgConnectSettings
@@ -47,12 +46,9 @@ from nextgis_connect.settings.tasks.clear_ng_connect_cache_task import (
 class NgConnectOptionsPageWidget(QgsOptionsPageWidget):
     """NextGIS Connect settings page"""
 
-    __widget: QWidget
     __clear_task: Optional[ClearNgConnectCacheTask]
     __current_connection: Optional[NgwConnection]
-    __connections: List[NgwConnection]
-    __is_accepted: bool
-    __is_cancelled: bool
+    __connections_manager: NgwConnectionsManager
 
     CACHE_SIZE_VALUES: ClassVar[List[int]] = [
         8 * 1024,
@@ -84,8 +80,15 @@ class NgConnectOptionsPageWidget(QgsOptionsPageWidget):
         self.__widget.setParent(self)
 
         self.__clear_task = None
+        self.__connections_manager = NgwConnectionsManager(parent=self)
+        self.__connections_manager.connection_updated.connect(
+            NgConnectInterface.instance().connection_updated.emit,
+        )
 
-        self.connections_widget = NgwConnectionsWidget(self.__widget)
+        self.connections_widget = NgwConnectionsWidget(
+            self.__widget,
+            connections_manager=self.__connections_manager,
+        )
         self.__widget.connectionsGroupBox.layout().addWidget(
             self.connections_widget
         )
@@ -107,16 +110,10 @@ class NgConnectOptionsPageWidget(QgsOptionsPageWidget):
 
         self.__init_settings()
 
-    def __del__(self):
-        # Workaround
-        if not self.__is_accepted and not self.__is_cancelled:
-            self.cancel()
-
     def apply(self) -> None:
-        self.__is_accepted = True
-
         settings = NgConnectSettings()
 
+        self.__connections_manager.save()
         self.__save_current_connection()
         self.__save_uploading_settings(settings)
         self.__save_resources_settings(settings)
@@ -129,28 +126,10 @@ class NgConnectOptionsPageWidget(QgsOptionsPageWidget):
         plugin.settings_changed.emit()
 
     def cancel(self) -> None:
-        self.__is_cancelled = True
-        connections_manager = NgwConnectionsManager()
-        current_connections = connections_manager.connections
-
-        # Remove new
-        delta = set(current_connections) - set(self.__connections)
-        for connection in delta:
-            connections_manager.remove(connection.id)
-
-        # Restore old
-        for connection in self.__connections:
-            connections_manager.save(connection)
-
-        if self.__need_reinit:
-            # TODO (ivanbarsukov): refactoring
-            dock = iface.mainWindow().findChild(NgConnectDock, "NGConnectDock")  # type: ignore
-            dock.reinit_tree(force=True)
+        self.__connections_manager.reset()
 
     def __init_settings(self) -> None:
         settings = NgConnectSettings()
-        self.__is_accepted = False
-        self.__is_cancelled = False
         self.__init_connections()
         self.__init_uploading_settings(settings)
         self.__init_resources_settings(settings)
@@ -160,27 +139,16 @@ class NgConnectOptionsPageWidget(QgsOptionsPageWidget):
         self.__init_other_settings(settings)
 
     def __init_connections(self) -> None:
-        connections_manager = NgwConnectionsManager()
-        self.__current_connection = connections_manager.current_connection
-        self.__connections = connections_manager.connections
-
-        self.__need_reinit = False
-
-        if connections_manager.has_not_converted_connections():
-            message_bar = cast(QgsMessageBar, self.__widget.messageBar)
-            widget = message_bar.createMessage(
-                self.tr(
-                    "Do you want to convert connections created in previous"
-                    " versions of NextGIS Connect?"
-                )
+        if self.__connections_manager.has_not_converted_connections():
+            self.__connections_manager.convert_old_connections(
+                convert_auth=True
             )
 
-            button = QPushButton(widget)
-            button.setText("Convert")
-            button.pressed.connect(self.__convert_old_connections)
-            widget.layout().addWidget(button)
+        self.__current_connection = (
+            self.__connections_manager.current_connection
+        )
 
-            message_bar.pushWidget(widget, Qgis.MessageLevel.Warning)
+        self.__need_reinit = False
 
     def __init_uploading_settings(self, settings: NgConnectSettings) -> None:
         self.__widget.fixGeometryCheckBox.setChecked(
@@ -338,28 +306,18 @@ class NgConnectOptionsPageWidget(QgsOptionsPageWidget):
         )
 
     def __save_current_connection(self):
-        connections_manager = NgwConnectionsManager()
         old_connection = self.__current_connection
-        new_connection_id = self.connections_widget.connection_id()
+        new_connection = self.__connections_manager.current_connection
 
         if not self.__need_reinit:
-            if (old_connection is not None and new_connection_id is None) or (
-                old_connection is None and new_connection_id is not None
+            if (old_connection is not None and new_connection is None) or (
+                old_connection is None and new_connection is not None
             ):
                 self.__need_reinit = True
-                connections_manager.current_connection_id = new_connection_id
-            elif old_connection is not None and new_connection_id is not None:
-                new_connection = connections_manager.connection(
-                    new_connection_id
-                )
-                if old_connection != new_connection:
-                    self.__need_reinit = True
-                    connections_manager.current_connection_id = (
-                        new_connection_id
-                    )
+            elif old_connection is not None and new_connection is not None:
+                self.__need_reinit = old_connection != new_connection
 
-        self.__current_connection = connections_manager.current_connection
-        self.__connections = connections_manager.connections
+        self.__current_connection = new_connection
 
         method = ""
         if self.__current_connection is not None:
@@ -532,11 +490,11 @@ class NgConnectOptionsPageWidget(QgsOptionsPageWidget):
         self.__widget.debugNetworkCheckBox.setEnabled(state)
 
     def __convert_old_connections(self) -> None:
-        connections_manager = NgwConnectionsManager()
-        connections_manager.convert_old_connections(convert_auth=True)
+        self.__connections_manager.convert_old_connections(convert_auth=True)
 
-        self.__current_connection = connections_manager.current_connection
-        self.__connections = connections_manager.connections
+        self.__current_connection = (
+            self.__connections_manager.current_connection
+        )
 
         message_bar = cast(QgsMessageBar, self.__widget.messageBar)
 
@@ -546,7 +504,7 @@ class NgConnectOptionsPageWidget(QgsOptionsPageWidget):
             Qgis.MessageLevel.Success,
         )
 
-        self.connections_widget.refresh()
+        self.connections_widget.load_connections()
 
         self.__need_reinit = True
 

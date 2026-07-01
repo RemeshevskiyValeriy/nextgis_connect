@@ -6,7 +6,7 @@ from qgis.PyQt.QtCore import Qt, QUrl, pyqtSlot
 from qgis.PyQt.QtGui import QDesktopServices, QIcon, QMovie
 from qgis.PyQt.QtWidgets import QAction, QLineEdit, QWidget
 
-from nextgis_connect.ngw_connection.ngw_connections_manager import (
+from nextgis_connect.ngw_connection.application.connections_manager import (
     NgwConnectionsManager,
 )
 from nextgis_connect.search.abstract_search_line_edit import (
@@ -67,7 +67,6 @@ class TextSearchLineEdit(AbstractSearchLineEdit):
             self.update_history,
             Qt.ConnectionType.QueuedConnection,  # type: ignore
         )
-
 
     @pyqtSlot(str)
     def set_connection_id(self, connection_id: str) -> None:
@@ -132,7 +131,9 @@ class TextSearchLineEdit(AbstractSearchLineEdit):
                 self.tr("Open help in the browser")
             )
 
-            self.__open_help_action.triggered.connect(self.__open_help_in_browser)
+            self.__open_help_action.triggered.connect(
+                self.__open_help_in_browser
+            )
 
         elif self.__open_help_action is not None:
             self.__open_help_action.deleteLater()

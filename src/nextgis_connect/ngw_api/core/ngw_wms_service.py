@@ -21,7 +21,7 @@
 from qgis.core import QgsApplication, QgsProviderRegistry
 
 from nextgis_connect.exceptions import ErrorCode, NgwError
-from nextgis_connect.ngw_connection.ngw_connections_manager import (
+from nextgis_connect.ngw_connection.application.connections_manager import (
     NgwConnectionsManager,
 )
 

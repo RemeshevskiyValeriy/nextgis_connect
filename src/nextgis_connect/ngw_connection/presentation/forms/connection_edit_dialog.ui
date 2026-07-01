@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>495</width>
-    <height>370</height>
+    <height>420</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -31,14 +31,28 @@
      <layout class="QVBoxLayout" name="verticalLayout_2">
       <item>
        <layout class="QGridLayout" name="gridLayout">
-        <item row="2" column="0">
+        <item row="1" column="1">
+         <widget class="QLabel" name="nameRequiredLabel">
+          <property name="text">
+           <string>&lt;span style=&quot;color:#ff0000;&quot;&gt;This field is required&lt;/span&gt;</string>
+          </property>
+         </widget>
+        </item>
+        <item row="3" column="1">
+         <widget class="QLabel" name="urlRequiredLabel">
+          <property name="text">
+           <string>&lt;span style=&quot;color:#ff0000;&quot;&gt;This field is required&lt;/span&gt;</string>
+          </property>
+         </widget>
+        </item>
+        <item row="0" column="0">
          <widget class="QLabel" name="nameLabel">
           <property name="text">
            <string>Name&lt;span style=&quot; color:#ff0000;&quot;&gt;*&lt;/span&gt;</string>
           </property>
          </widget>
         </item>
-        <item row="0" column="0">
+        <item row="2" column="0">
          <widget class="QLabel" name="urlLabel">
           <property name="text">
            <string>URL&lt;span style=&quot;color:#ff0000;&quot;&gt;*&lt;/span&gt;</string>
@@ -46,13 +60,6 @@
          </widget>
         </item>
         <item row="2" column="1">
-         <widget class="QgsHighlightableLineEdit" name="nameLineEdit">
-          <property name="text">
-           <string/>
-          </property>
-         </widget>
-        </item>
-        <item row="0" column="1">
          <widget class="QgsHighlightableLineEdit" name="urlLineEdit">
           <property name="text">
            <string/>
@@ -62,19 +69,43 @@
           </property>
          </widget>
         </item>
-        <item row="1" column="1">
-         <widget class="QLabel" name="urlErrorLabel">
+        <item row="0" column="1">
+         <widget class="QgsHighlightableLineEdit" name="nameLineEdit">
           <property name="text">
-           <string>&lt;span style=&quot;color:#ff0000;&quot;&gt;This field is required&lt;/span&gt;</string>
+           <string/>
           </property>
          </widget>
         </item>
-        <item row="3" column="1">
-         <widget class="QLabel" name="nameRequiredLabel">
+        <item row="4" column="0">
+         <widget class="QLabel" name="login_label">
           <property name="text">
-           <string>&lt;span style=&quot;color:#ff0000;&quot;&gt;This field is required&lt;/span&gt;</string>
+           <string>Login as</string>
           </property>
          </widget>
+        </item>
+        <item row="4" column="1">
+         <layout class="QHBoxLayout" name="loginLayout">
+          <property name="spacing">
+           <number>6</number>
+          </property>
+          <item>
+           <widget class="QComboBox" name="userComboBox">
+            <property name="sizePolicy">
+             <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
+              <horstretch>0</horstretch>
+              <verstretch>0</verstretch>
+             </sizepolicy>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QLabel" name="authWarningLabel">
+            <property name="text">
+             <string/>
+            </property>
+           </widget>
+          </item>
+         </layout>
         </item>
        </layout>
       </item>
@@ -141,13 +172,6 @@
       </item>
       <item>
        <layout class="QHBoxLayout" name="horizontalLayout">
-        <item>
-         <widget class="QLabel" name="authWarningLabel">
-          <property name="text">
-           <string/>
-          </property>
-         </widget>
-        </item>
         <item>
          <widget class="QgsAuthConfigSelect" name="authWidget">
           <property name="sizePolicy">
@@ -243,9 +267,11 @@
   </customwidget>
  </customwidgets>
  <tabstops>
-  <tabstop>urlLineEdit</tabstop>
   <tabstop>nameLineEdit</tabstop>
+  <tabstop>urlLineEdit</tabstop>
+  <tabstop>userComboBox</tabstop>
   <tabstop>testConnectionButton</tabstop>
+  <tabstop>buttonBox</tabstop>
  </tabstops>
  <resources/>
  <connections/>

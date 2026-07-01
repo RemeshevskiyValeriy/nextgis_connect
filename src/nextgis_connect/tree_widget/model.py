@@ -18,6 +18,7 @@ from typing import (
 )
 from urllib.parse import quote_plus
 
+from qgis.core import QgsFeedback
 from qgis.PyQt.QtCore import (
     QAbstractItemModel,
     QModelIndex,
@@ -34,7 +35,12 @@ from nextgis_connect.compat import parse_version
 from nextgis_connect.detached_editing.detached_layer_factory import (
     DetachedLayerFactory,
 )
-from nextgis_connect.exceptions import ErrorCode, NgwConnectionError, NgwError
+from nextgis_connect.exceptions import (
+    ErrorCode,
+    NgConnectError,
+    NgwConnectionError,
+    NgwError,
+)
 from nextgis_connect.logging import logger
 from nextgis_connect.ng_connect_interface import NgConnectInterface
 from nextgis_connect.ngw_api.core import (
@@ -173,6 +179,9 @@ class NGWResourcesModelJob(QObject):
 
         self.__thread.start()
 
+    def cancel(self) -> None:
+        self.__worker.cancel()
+
     def finishProcess(self):
         if self.__thread is None:
             return
@@ -198,6 +207,7 @@ class NgwCreateVectorLayersStubs(NGWResourceModelJob):
         ngw_resources: Union[NGWVectorLayer, List[NGWVectorLayer]],
     ) -> None:
         super().__init__()
+        self._feedback = QgsFeedback()
         if isinstance(ngw_resources, list):
             self.ngw_resources = ngw_resources
         else:
@@ -214,6 +224,9 @@ class NgwCreateVectorLayersStubs(NGWResourceModelJob):
 
         total = str(len(self.ngw_resources))
         for i, ngw_resource in enumerate(self.ngw_resources):
+            if self._feedback.isCanceled():
+                raise NgConnectError("Request was canceled")
+
             name = ngw_resource.display_name
             progress = "" if total == "1" else f"\n({i + 1}/{total})"
             self.statusChanged.emit(
@@ -468,7 +481,9 @@ class NgwSearch(NGWResourceModelJob):
         if not self.is_new_api:
             return list(
                 map(
-                    lambda value: f"{tag.old_query_name}{operator}={quote_plus(str(value))}",
+                    lambda value: (
+                        f"{tag.old_query_name}{operator}={quote_plus(str(value))}"
+                    ),
                     values,
                 )
             )
@@ -636,6 +651,7 @@ class QNGWResourceTreeModelBase(QAbstractItemModel):
         self.root_item = QModelItem()
         self.ngw_version = None
         self.support_status = None
+        self._version_check_feedback: Optional[QgsFeedback] = None
 
         self._dangling_resources: Dict[int, NGWResource] = {}
         self.__not_permitted_resources = set()
@@ -668,8 +684,11 @@ class QNGWResourceTreeModelBase(QAbstractItemModel):
         request_error = None
         # Get NGW version.
         if ngw_connection is not None:
+            self._version_check_feedback = QgsFeedback()
             try:
-                self.ngw_version = self._ngw_connection.get_version()
+                self.ngw_version = self._ngw_connection.get_version(
+                    feedback=self._version_check_feedback
+                )
                 self.support_status = utils.is_version_supported(
                     self.ngw_version
                 )
@@ -688,6 +707,8 @@ class QNGWResourceTreeModelBase(QAbstractItemModel):
                 request_error = error
                 self.ngw_version = None
                 self.support_status = None
+            finally:
+                self._version_check_feedback = None
 
         self.endResetModel()
 
@@ -845,6 +866,23 @@ class QNGWResourceTreeModelBase(QAbstractItemModel):
         job.start()
 
         return job
+
+    def cancel_job(self, job_id: str) -> bool:
+        if (
+            job_id == "NGWRootResourcesLoader"
+            and self._version_check_feedback is not None
+        ):
+            self._version_check_feedback.cancel()
+            return True
+
+        for job in list(self.jobs):
+            if job.getJobId() != job_id:
+                continue
+
+            job.cancel()
+            return True
+
+        return False
 
     def __jobStartedProcess(self):
         job = cast(NGWResourcesModelJob, self.sender())

@@ -54,7 +54,7 @@ from nextgis_connect.ngw_api.core.ngw_resource_factory import (
     NGWResourceFactory,
 )
 from nextgis_connect.ngw_api.qgis.qgis_ngw_connection import QgsNgwConnection
-from nextgis_connect.ngw_connection.ngw_connections_manager import (
+from nextgis_connect.ngw_connection.application.connections_manager import (
     NgwConnectionsManager,
 )
 from nextgis_connect.settings import NgConnectSettings
@@ -215,6 +215,44 @@ class DetachedContainer(QObject):
     def changes_info(self) -> DetachedContainerChangesInfo:
         return self.__changes
 
+    def refresh_additional_data(self) -> bool:
+        return self.synchronize(update_additional_only=True)
+
+    def update_connection(
+        self, connection_id: str, instance_id: Optional[str]
+    ) -> bool:
+        if self.metadata is None:
+            return False
+
+        current_connection_id = self.metadata.connection_id
+        current_instance_id = self.metadata.instance_id
+        next_instance_id = (
+            current_instance_id if instance_id is None else instance_id
+        )
+        if (
+            current_connection_id == connection_id
+            and current_instance_id == next_instance_id
+        ):
+            return False
+
+        with closing(make_connection(self.path)) as connection, closing(
+            connection.cursor()
+        ) as cursor:
+            cursor.execute(
+                """
+                UPDATE ngw_metadata
+                SET connection_id=?, instance_id=?
+                """,
+                (connection_id, next_instance_id),
+            )
+            connection.commit()
+
+        self.__additional_data_fetch_date = None
+        self.__update_state(is_full_update=True)
+        self.__update_layers_properties()
+
+        return True
+
     def add_layer(self, layer: QgsVectorLayer) -> None:
         detached_layer = DetachedLayer(self, layer)
         detached_layer.editing_started.connect(self.editing_started)
@@ -295,11 +333,26 @@ class DetachedContainer(QObject):
 
         view.removeIndicator(node, self.__indicator)
 
-    def synchronize(self, *, is_manual: bool = False) -> bool:
+    def synchronize(
+        self,
+        *,
+        is_manual: bool = False,
+        update_additional_only: bool = False,
+    ) -> bool:
+        if self.is_edit_mode_enabled:
+            if update_additional_only:
+                self.__additional_data_fetch_date = None
+            return False
+
+        if self.state == DetachedLayerState.Synchronization:
+            if update_additional_only:
+                self.__additional_data_fetch_date = None
+            return False
+
         if (
-            self.is_edit_mode_enabled
-            or self.state == DetachedLayerState.Synchronization
-            or (not is_manual and not self.metadata.is_auto_sync_enabled)
+            not update_additional_only
+            and not is_manual
+            and not self.metadata.is_auto_sync_enabled
         ):
             return False
 
@@ -309,8 +362,16 @@ class DetachedContainer(QObject):
 
         self.__is_silent_sync = False
 
-        if is_manual:
+        if update_additional_only:
             self.__additional_data_fetch_date = None
+            sync_task = FetchAdditionalDataTask(
+                self.path, need_update_structure=True
+            )
+            sync_task.taskCompleted.connect(self.__on_additional_data_fetched)
+            sync_task.taskTerminated.connect(self.__on_additional_data_fetched)
+        elif is_manual:
+            self.__additional_data_fetch_date = None
+            sync_task = self.__init_sync_task()
         else:
             if self.state == DetachedLayerState.Error:
                 if (
@@ -326,7 +387,7 @@ class DetachedContainer(QObject):
                 if datetime.now() - self.check_date < period:
                     return False
 
-        sync_task = self.__init_sync_task()
+            sync_task = self.__init_sync_task()
 
         if sync_task is None:
             self.__check_date = datetime.now()

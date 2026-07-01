@@ -13,7 +13,7 @@ from qgis.PyQt.QtCore import (
 from qgis.PyQt.QtNetwork import QNetworkReply, QNetworkRequest
 
 from nextgis_connect.logging import logger
-from nextgis_connect.ngw_connection.ngw_connections_manager import (
+from nextgis_connect.ngw_connection.application.connections_manager import (
     NgwConnectionsManager,
 )
 from nextgis_connect.search.search_settings import SearchSettings

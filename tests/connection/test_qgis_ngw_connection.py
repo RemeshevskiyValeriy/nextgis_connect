@@ -1,0 +1,89 @@
+import unittest
+from unittest.mock import patch
+
+from tests.ng_connect_testcase import NgConnectTestCase, TestConnection
+
+
+class TestQgsNgwConnection(NgConnectTestCase):
+    def setUp(self) -> None:
+        super().setUp()
+
+        from nextgis_connect.ngw_api.qgis.qgis_ngw_connection import (
+            QgsNgwConnection,
+        )
+
+        self.qgs_ngw_connection_class = QgsNgwConnection
+        self.qgs_ngw_connection_class.clear_cached_ngw_components()
+
+    def tearDown(self) -> None:
+        self.qgs_ngw_connection_class.clear_cached_ngw_components()
+        super().tearDown()
+
+    def test_get_ngw_components_is_cached_by_connection_id(self) -> None:
+        connection_id = self.connection_id(TestConnection.SandboxGuest)
+        components = {"nextgisweb": "4.9.0.dev1", "auth": "1.0.0"}
+
+        with patch.object(
+            self.qgs_ngw_connection_class,
+            "get",
+            autospec=True,
+            return_value=components,
+        ) as mock_get:
+            first_connection = self.qgs_ngw_connection_class(connection_id)
+            second_connection = self.qgs_ngw_connection_class(connection_id)
+
+            self.assertEqual(first_connection.get_ngw_components(), components)
+            self.assertEqual(
+                second_connection.get_ngw_components(), components
+            )
+
+        self.assertEqual(mock_get.call_count, 1)
+
+    def test_invalidate_cached_ngw_components_forces_refetch(self) -> None:
+        connection_id = self.connection_id(TestConnection.SandboxGuest)
+        first_components = {"nextgisweb": "4.9.0.dev1"}
+        second_components = {"nextgisweb": "5.0.0.dev1"}
+
+        with patch.object(
+            self.qgs_ngw_connection_class,
+            "get",
+            autospec=True,
+            side_effect=[first_components, second_components],
+        ) as mock_get:
+            ngw_connection = self.qgs_ngw_connection_class(connection_id)
+
+            self.assertEqual(
+                ngw_connection.get_ngw_components(), first_components
+            )
+
+            ngw_connection.invalidate_cached_ngw_components()
+
+            self.assertEqual(
+                ngw_connection.get_ngw_components(), second_components
+            )
+
+        self.assertEqual(mock_get.call_count, 2)
+
+    def test_reset_model_invalidates_cached_versions(self) -> None:
+        connection_id = self.connection_id(TestConnection.SandboxGuest)
+
+        from nextgis_connect.tree_widget.model import QNGWResourceTreeModel
+
+        with patch.object(
+            self.qgs_ngw_connection_class,
+            "invalidate_cached_ngw_components",
+            autospec=True,
+        ) as mock_invalidate, patch.object(
+            self.qgs_ngw_connection_class,
+            "get_version",
+            autospec=True,
+            return_value="4.9.0.dev1",
+        ):
+            model = QNGWResourceTreeModel()
+            model.resetModel(self.qgs_ngw_connection_class(connection_id))
+
+        self.assertEqual(mock_invalidate.call_count, 1)
+
+
+if __name__ == "__main__":
+    unittest.main()

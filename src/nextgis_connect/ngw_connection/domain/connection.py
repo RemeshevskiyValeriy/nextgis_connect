@@ -1,4 +1,3 @@
-import re
 import uuid
 from dataclasses import dataclass
 from typing import Any, Dict, Optional
@@ -33,6 +32,11 @@ class NgwConnection:
 
     def update_network_request(self, request: QNetworkRequest) -> bool:
         if self.auth_config_id is None:
+            return False
+
+        request_host = urlparse(request.url().toString()).netloc
+        connection_host = urlparse(self.normalize_url(self.url)).netloc
+        if request_host != connection_host:
             return False
 
         auth_manager = QgsApplication.authManager()

@@ -15,7 +15,10 @@ from qgis.PyQt.QtWidgets import QHBoxLayout, QLabel, QVBoxLayout, QWidget
 
 from nextgis_connect.exceptions import NgConnectError
 from nextgis_connect.logging import logger
-from nextgis_connect.ngw_connection.ngw_connections_widget import (
+from nextgis_connect.ngw_connection.application.connections_manager import (
+    NgwConnectionsManager,
+)
+from nextgis_connect.ngw_connection.presentation.connections_widget import (
     NgwConnectionsWidget,
 )
 from nextgis_connect.utils import wrap_sql_value
@@ -87,8 +90,16 @@ class DetachedLayerConfigPage(QgsMapLayerConfigWidget):
 
     def apply(self) -> None:
         """Called when changes to the layer need to be made"""
+        self.__connections_widget.apply_connections()
+
         new_connection_id = self.__connections_widget.connection_id()
         new_autosync_state = self.__widget.autosync_checkbox.isChecked()
+        new_instance_id = self.__metadata.instance_id
+        if new_connection_id is not None:
+            connection = NgwConnectionsManager().connection(new_connection_id)
+            if connection is not None:
+                new_instance_id = connection.domain_uuid
+
         if (
             new_connection_id == self.__metadata.connection_id
             and new_autosync_state == self.__metadata.is_auto_sync_enabled
@@ -103,6 +114,7 @@ class DetachedLayerConfigPage(QgsMapLayerConfigWidget):
                 UPDATE ngw_metadata
                 SET
                     connection_id={wrap_sql_value(new_connection_id)},
+                    instance_id={wrap_sql_value(new_instance_id)},
                     is_auto_sync_enabled={wrap_sql_value(new_autosync_state)}
                 """  # nosec B608
             )

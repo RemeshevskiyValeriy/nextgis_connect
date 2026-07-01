@@ -1,2 +1,3 @@
-from .ngw_connection import NgwConnection
-from .ngw_connections_manager import NgwConnectionsManager
+from .application import ConnectionUpdateState, NgwConnectionsManager
+from .domain import NgwConnection
+from .infrastructure import NgwConnectionSettingsMigrator
