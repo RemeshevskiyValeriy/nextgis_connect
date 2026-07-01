@@ -31,6 +31,8 @@ from qgis.gui import QgisInterface, QgsMessageBarItem
 from qgis.PyQt.QtCore import (
     QT_VERSION_STR,
     QAbstractItemModel,
+    QCoreApplication,
+    QEvent,
     QItemSelectionModel,
     QMetaObject,
     QSysInfo,
@@ -53,7 +55,6 @@ from nextgis_connect.exceptions import (
 from nextgis_connect.logging import logger
 from nextgis_connect.ng_connect_dock import NgConnectDock
 from nextgis_connect.ng_connect_interface import NgConnectInterface
-from nextgis_connect.ngw_api import qgis as qgis_ngw_api
 from nextgis_connect.ngw_connection.application.connections_manager import (
     NgwConnectionsManager,
 )
@@ -272,7 +273,13 @@ class NgConnectPlugin(NgConnectInterface):
     def __unload_ng_connect_dock(self) -> None:
         self.__ng_resources_tree_dock.setVisible(False)
         self.iface.removeDockWidget(self.__ng_resources_tree_dock)
+        self.__ng_resources_tree_dock.close()
         self.__ng_resources_tree_dock.deleteLater()
+        QCoreApplication.sendPostedEvents(
+            self.__ng_resources_tree_dock,
+            QEvent.Type.DeferredDelete,
+        )
+        self.__ng_resources_tree_dock = None
 
     def __init_ng_connect_menus(self) -> None:
         # Show panel action
@@ -353,15 +360,31 @@ class NgConnectPlugin(NgConnectInterface):
         )
 
         assert self.__ng_connect_toolbar is not None
+        self.__show_ngw_resources_tree_action.triggered.disconnect(
+            self.__ng_resources_tree_dock.setUserVisible,
+        )
+        self.__ng_resources_tree_dock.visibilityChanged.disconnect(
+            self.__show_ngw_resources_tree_action.setChecked,
+        )
         self.__ng_connect_toolbar.hide()
+        self.iface.mainWindow().removeToolBar(self.__ng_connect_toolbar)
         self.__ng_connect_toolbar.deleteLater()
+        QCoreApplication.sendPostedEvents(
+            self.__ng_connect_toolbar,
+            QEvent.Type.DeferredDelete,
+        )
+        self.__ng_connect_toolbar = None
+
         self.__show_ngw_resources_tree_action.deleteLater()
+        self.__show_ngw_resources_tree_action = None
         self.__action_about.deleteLater()
+        self.__action_about = None
 
         plugin_help_menu = self.iface.pluginHelpMenu()
         assert plugin_help_menu is not None
         plugin_help_menu.removeAction(self.__show_help_action)
         self.__show_help_action.deleteLater()
+        self.__show_help_action = None
 
     def __init_ng_layer_actions(self) -> None:
         # Tools for NGW communicate
