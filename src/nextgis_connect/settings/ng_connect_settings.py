@@ -48,7 +48,7 @@ class NgConnectSettings:
 
     @property
     def supported_ngw_version(self) -> str:
-        return "5.4.0"
+        return "5.5.0"
 
     @property
     def supported_container_version(self) -> str:
