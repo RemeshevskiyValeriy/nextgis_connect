@@ -13,6 +13,7 @@ from qgis.core import (
 )
 from qgis.gui import QgisInterface
 from qgis.PyQt.QtCore import QObject, QTimer, pyqtSlot
+from qgis.PyQt.QtWidgets import QAction
 from qgis.utils import iface  # type: ignore
 
 from nextgis_connect.compat import QGIS_3_34
@@ -132,6 +133,10 @@ class DetachedEditing(QObject):
             layer.state == utils.DetachedLayerState.Synchronization
             for layer in self.__containers.values()
         )
+
+    @property
+    def identification_action(self) -> QAction:
+        return self._identification_manager.action
 
     @pyqtSlot(name="synchronizeLayers")
     def synchronize_layers(self) -> None:

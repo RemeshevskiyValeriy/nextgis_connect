@@ -139,6 +139,11 @@ class IdentificationManager(QObject):
             self._action.deleteLater()
             self._action = None  # type: ignore
 
+    @property
+    def action(self) -> QAction:
+        assert self._action is not None
+        return self._action
+
     def results_dialog(self) -> IdentificationResultsWidget:
         if self._results_dialog is not None:
             return self._results_dialog
