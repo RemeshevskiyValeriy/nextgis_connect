@@ -1079,10 +1079,6 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
         self.resources_tree_view.begin_loading(
             self.tr("Loading Web GIS resources"),
             message=self.tr("Loading the root resource."),
-            cancel_action=OverlayButtonState(
-                action=OverlayAction.CANCEL,
-                text=self.tr("Cancel"),
-            ),
             draw_background=True,
         )
 
@@ -1110,10 +1106,6 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
         self.resources_tree_view.begin_loading(
             self.tr("Loading Web GIS resources"),
             message=self.tr("Loading the root resource contents."),
-            cancel_action=OverlayButtonState(
-                action=OverlayAction.CANCEL,
-                text=self.tr("Cancel"),
-            ),
             draw_background=True,
         )
 
@@ -1730,18 +1722,6 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
     def __cancel_active_loading(self) -> None:
         if self.__cancel_pending_job_id is not None:
             return
-
-        if self.resource_model.cancel_job(ROOT_RESOURCES_LOADER_JOB_ID):
-            self.__root_loading_cancel_requested = True
-            self.__mark_loading_cancel_requested(ROOT_RESOURCES_LOADER_JOB_ID)
-            return
-
-        if self.__root_children_loading_parent_id is not None:
-            if self.resource_model.cancel_job("NGWResourceUpdater"):
-                self.__root_loading_cancel_requested = True
-                self.__canceled_job_ids.add("NGWResourceUpdater")
-                self.__mark_loading_cancel_requested("NGWResourceUpdater")
-                return
 
         if self.__active_cancelable_job_id is None:
             return
