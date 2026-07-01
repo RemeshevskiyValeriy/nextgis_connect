@@ -1747,6 +1747,173 @@ class TestDetachedLayerAttachments(NgConnectTestCase):
         self.assertIsInstance(attachment, AttachmentMetadata)
         self.assertEqual(attachments[0], attachment)
 
+    @mock_container(TestData.Points)
+    def test_identification_refreshes_non_versioned_attachments(
+        self, container_mock: MagicMock, qgs_layer: QgsVectorLayer
+    ) -> None:
+        layer = DetachedLayer(container_mock, qgs_layer)
+
+        module = "nextgis_connect.detached_editing.detached_layer"
+        with patch(f"{module}.QgsNgwConnection") as connection_mock:
+            ngw_connection = connection_mock.return_value
+            ngw_connection.get.side_effect = [
+                [
+                    {
+                        "id": 101,
+                        "name": "server-101",
+                        "description": "description-101",
+                        "mime_type": "image/png",
+                        "size": 1001,
+                        "fileobj": 501,
+                    },
+                    {
+                        "id": 102,
+                        "name": "server-102",
+                        "description": "description-102",
+                        "mime_type": "text/plain",
+                        "size": 1002,
+                        "fileobj": 502,
+                    },
+                ],
+                [
+                    {
+                        "id": 102,
+                        "name": "server-102-updated",
+                        "description": "description-102-updated",
+                        "mime_type": "text/plain",
+                        "size": 2002,
+                        "fileobj": 602,
+                    },
+                    {
+                        "id": 103,
+                        "name": "server-103",
+                        "description": "description-103",
+                        "mime_type": "image/jpeg",
+                        "size": 1003,
+                        "fileobj": 503,
+                    },
+                ],
+            ]
+
+            first_attachments = layer.feature_attachments_for_identification(
+                self.FEATURE_1
+            )
+            second_attachments = layer.feature_attachments_for_identification(
+                self.FEATURE_1
+            )
+
+        self.assertEqual(
+            [attachment.ngw_aid for attachment in first_attachments],
+            [101, 102],
+        )
+        self.assertEqual(
+            [attachment.ngw_aid for attachment in second_attachments],
+            [102, 103],
+        )
+
+        second_by_ngw_aid = {
+            attachment.ngw_aid: attachment for attachment in second_attachments
+        }
+        self.assertEqual(second_by_ngw_aid[102].name, "server-102-updated")
+        self.assertEqual(
+            second_by_ngw_aid[102].description, "description-102-updated"
+        )
+        self.assertEqual(second_by_ngw_aid[102].size, 2002)
+        self.assertEqual(second_by_ngw_aid[102].fileobj, 602)
+
+    @mock_container(TestData.Points)
+    def test_identification_overlays_local_attachment_changes(
+        self, container_mock: MagicMock, qgs_layer: QgsVectorLayer
+    ) -> None:
+        layer = DetachedLayer(container_mock, qgs_layer)
+        local_file_path = self.create_temp_file(".txt")
+        local_file_path.write_text("local attachment")
+
+        module = "nextgis_connect.detached_editing.detached_layer"
+        with patch(f"{module}.QgsNgwConnection") as connection_mock:
+            ngw_connection = connection_mock.return_value
+            ngw_connection.get.side_effect = [
+                [
+                    {
+                        "id": 201,
+                        "name": "server-201",
+                        "description": "description-201",
+                        "mime_type": "text/plain",
+                        "size": 201,
+                        "fileobj": 701,
+                    },
+                    {
+                        "id": 202,
+                        "name": "server-202",
+                        "description": "description-202",
+                        "mime_type": "text/plain",
+                        "size": 202,
+                        "fileobj": 702,
+                    },
+                ],
+                [
+                    {
+                        "id": 201,
+                        "name": "server-201-new",
+                        "description": "description-201-new",
+                        "mime_type": "text/plain",
+                        "size": 1201,
+                        "fileobj": 801,
+                    },
+                    {
+                        "id": 202,
+                        "name": "server-202-new",
+                        "description": "description-202-new",
+                        "mime_type": "text/plain",
+                        "size": 1202,
+                        "fileobj": 802,
+                    },
+                    {
+                        "id": 203,
+                        "name": "server-203",
+                        "description": "description-203",
+                        "mime_type": "image/jpeg",
+                        "size": 203,
+                        "fileobj": 703,
+                    },
+                ],
+            ]
+
+            server_attachments = layer.feature_attachments_for_identification(
+                self.FEATURE_1
+            )
+
+            by_ngw_aid = {
+                attachment.ngw_aid: attachment
+                for attachment in server_attachments
+            }
+
+            self.assertTrue(qgs_layer.startEditing())
+            try:
+                layer.update_attachment(
+                    replace(by_ngw_aid[201], name="local-201")
+                )
+                layer.remove_attachment(self.FEATURE_1, by_ngw_aid[202].aid)
+                layer.add_attachment(self.FEATURE_1, local_file_path)
+
+                attachments = layer.feature_attachments_for_identification(
+                    self.FEATURE_1
+                )
+            finally:
+                qgs_layer.rollBack()
+
+        names_by_ngw_aid = {
+            attachment.ngw_aid: attachment.name for attachment in attachments
+        }
+
+        self.assertEqual(names_by_ngw_aid[201], "local-201")
+        self.assertNotIn(202, names_by_ngw_aid)
+        self.assertEqual(names_by_ngw_aid[203], "server-203")
+        self.assertIn(
+            local_file_path.name,
+            {attachment.name for attachment in attachments},
+        )
+
     @mock_container(
         TestData.Points,
         descriptions={1: "initial-description"},

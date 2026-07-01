@@ -21,7 +21,11 @@ from qgis.PyQt.QtCore import (
     pyqtSignal,
     pyqtSlot,
 )
+from qgis.PyQt.QtGui import QColor, QPainter, QPixmap
 
+from nextgis_connect.detached_editing.identification.settings import (
+    IdentificationSettings,
+)
 from nextgis_connect.detached_editing.utils import AttachmentMetadata
 from nextgis_connect.logging import logger
 from nextgis_connect.types import AttachmentId
@@ -133,7 +137,7 @@ class AttachmentsModel(QAbstractListModel):
         if role == Qt.ItemDataRole.ToolTipRole:
             return attachment.description
         if role == Qt.ItemDataRole.DecorationRole:
-            return self._icon(attachment.aid)
+            return self._decoration(attachment.aid)
         if role == self.Roles.NAME:
             return attachment.name or ""
         if role == self.Roles.DESCRIPTION:
@@ -229,7 +233,7 @@ class AttachmentsModel(QAbstractListModel):
         self.beginResetModel()
         self._attachments = list(attachments)
         self._is_initialized = True
-        self.update_cached_states()
+        self.update_cached_states(emit_changes=False)
         self.endResetModel()
 
     def clear_attachments(self) -> None:
@@ -249,7 +253,11 @@ class AttachmentsModel(QAbstractListModel):
         position = len(self._attachments)
         self.beginInsertRows(QModelIndex(), position, position)
         self._attachments.append(attachment)
-        self._is_cached[attachment.aid] = attachment.file_path.exists()
+        self._is_cached[attachment.aid] = (
+            attachment.file_path.exists()
+            if attachment.file_path is not None
+            else False
+        )
         self.endInsertRows()
 
         self.attachment_added.emit(attachment.aid)
@@ -262,7 +270,11 @@ class AttachmentsModel(QAbstractListModel):
         for row, existing_attachment in enumerate(self._attachments):
             if existing_attachment.aid == attachment.aid:
                 self._attachments[row] = attachment
-                self._is_cached[attachment.aid] = attachment.file_path.exists()
+                self._is_cached[attachment.aid] = (
+                    attachment.file_path.exists()
+                    if attachment.file_path is not None
+                    else False
+                )
                 index = self.index(row)
                 self.dataChanged.emit(index, index)
                 self.attachment_updated.emit(attachment.aid)
@@ -301,10 +313,25 @@ class AttachmentsModel(QAbstractListModel):
         self.endRemoveRows()
 
     @pyqtSlot()
-    def update_cached_states(self) -> None:
+    def update_cached_states(self, emit_changes: bool = True) -> None:
         for attachment in self._attachments:
-            self._is_cached[attachment.aid] = attachment.file_path.exists()
+            self._is_cached[attachment.aid] = (
+                attachment.file_path.exists()
+                if attachment.file_path is not None
+                else False
+            )
         self._ICONS_CACHE.clear()
+        if emit_changes and self._attachments:
+            top_left = self.index(0)
+            bottom_right = self.index(len(self._attachments) - 1)
+            self.dataChanged.emit(
+                top_left,
+                bottom_right,
+                [
+                    Qt.ItemDataRole.DecorationRole,
+                    int(self.Roles.IS_CACHED),
+                ],
+            )
 
     def attachment_by_id(self, aid: int) -> Optional[AttachmentMetadata]:
         """Return attachment by identifier.
@@ -317,11 +344,11 @@ class AttachmentsModel(QAbstractListModel):
                 return attachment
         return None
 
-    def _icon(self, aid: int) -> Any:
-        """Return cached icon for attachment id.
+    def _decoration(self, aid: int) -> Any:
+        """Return cached decoration for attachment id.
 
         :param aid: Attachment identifier.
-        :return: Icon object.
+        :return: Icon or pixmap object.
         """
         if aid in self._ICONS_CACHE:
             return self._ICONS_CACHE[aid]
@@ -335,16 +362,11 @@ class AttachmentsModel(QAbstractListModel):
             self.Roles.IS_CACHED,
         )
 
-        IMAGES_MIME_TYPES = {
-            "image/png",
-            "image/jpg",
-            "image/jpeg",
-            "image/gif",
-            "image/bmp",
-            "image/tiff",
-            "image/svg+xml",
-            "image/webp",
-        }
+        thumbnail = self._thumbnail(attachment, is_cached=bool(is_cached))
+        if thumbnail is not None:
+            self._ICONS_CACHE[aid] = thumbnail
+            return thumbnail
+
         suffix = (
             Path(attachment.name).suffix.lstrip(".").upper()
             if attachment.name
@@ -356,7 +378,7 @@ class AttachmentsModel(QAbstractListModel):
         icon_name = "files/general_file.svg"
         if not is_cached:
             icon_name = "files/not_downloaded_file.svg"
-        elif attachment.mime_type in IMAGES_MIME_TYPES:
+        elif self._is_image(attachment):
             icon_name = "files/image_file.svg"
         else:
             icon_name = "files/no_extension_file.svg"
@@ -376,3 +398,39 @@ class AttachmentsModel(QAbstractListModel):
 
         self._ICONS_CACHE[aid] = icon
         return icon
+
+    def _thumbnail(
+        self, attachment: AttachmentMetadata, *, is_cached: bool
+    ) -> Optional[QPixmap]:
+        if not self._is_image(attachment):
+            return None
+
+        if (
+            attachment.thumbnail_path is None
+            or not attachment.thumbnail_path.exists()
+        ):
+            return None
+
+        pixmap = QPixmap(str(attachment.thumbnail_path))
+        if pixmap.isNull():
+            return None
+
+        if not is_cached:
+            return self._dimmed_thumbnail(pixmap)
+
+        return pixmap
+
+    def _dimmed_thumbnail(self, pixmap: QPixmap) -> QPixmap:
+        result = QPixmap(pixmap)
+        painter = QPainter(result)
+        painter.fillRect(result.rect(), QColor(0, 0, 0, 56))
+        painter.end()
+        return result
+
+    def _is_image(self, attachment: AttachmentMetadata) -> bool:
+        mime_type = attachment.mime_type or ""
+        settings = IdentificationSettings()
+        return (
+            mime_type in settings.attachment_thumbnail_mime_types
+            or mime_type.startswith("image/")
+        )

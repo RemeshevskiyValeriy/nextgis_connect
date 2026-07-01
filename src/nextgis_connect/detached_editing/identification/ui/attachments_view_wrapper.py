@@ -5,6 +5,7 @@ from qgis.PyQt.QtCore import (
     QAbstractItemModel,
     QSortFilterProxyModel,
     Qt,
+    QTimer,
     pyqtSignal,
 )
 from qgis.PyQt.QtGui import (
@@ -26,6 +27,11 @@ from nextgis_connect.detached_editing.identification.ui.attachments_view import 
     AttachmentsView,
 )
 from nextgis_connect.logging import logger
+from nextgis_connect.tree_widget.overlay import (
+    OverlayHostWidget,
+    OverlayKind,
+    OverlayState,
+)
 from nextgis_connect.ui.icon import draw_icon, material_icon
 
 
@@ -60,6 +66,8 @@ class AttachmentsViewWrapper(QWidget):
         super().__init__(parent)
         self._is_read_only = True
         self._overlay_mode = self.OverlayMode.HIDDEN
+        self._is_loading = False
+        self._pending_loading_state: Optional[OverlayState] = None
         self._model: Optional[QAbstractItemModel] = None
         self._init_styles()
         self._load_ui()
@@ -135,6 +143,42 @@ class AttachmentsViewWrapper(QWidget):
         self._overlay.hide()
         self._overlay.setMinimumWidth(200)
 
+        self._loading_overlay = OverlayHostWidget(self)
+        self._sync_loading_overlay_geometry()
+        self._loading_delay_timer = QTimer(self)
+        self._loading_delay_timer.setSingleShot(True)
+        self._loading_delay_timer.timeout.connect(
+            self._show_pending_loading_overlay
+        )
+
+        self._refresh_overlay()
+
+    def begin_loading(
+        self, title: str, message: str = "", delay_ms: int = 200
+    ) -> None:
+        self._is_loading = True
+        self._pending_loading_state = OverlayState(
+            kind=OverlayKind.LOADING,
+            title=title,
+            message=message,
+            draw_background=False,
+            show_progress=True,
+        )
+        self._overlay.hide()
+
+        if delay_ms <= 0 or self._loading_overlay.isVisible():
+            self._show_pending_loading_overlay()
+            return
+
+        self._loading_delay_timer.start(delay_ms)
+
+    def end_loading(self) -> None:
+        self._is_loading = False
+        self._pending_loading_state = None
+        self._loading_delay_timer.stop()
+        self._loading_overlay.set_overlay_state(
+            OverlayState(kind=OverlayKind.NONE)
+        )
         self._refresh_overlay()
 
     def _init_styles(self) -> None:
@@ -191,6 +235,7 @@ class AttachmentsViewWrapper(QWidget):
             return
         self._overlay.resize(self._view.size())
         self._overlay.move(self._view.pos())
+        self._sync_loading_overlay_geometry()
         self._update_overlay_label_width()
 
     def dragEnterEvent(self, event: QDragEnterEvent) -> None:  # type: ignore[override]
@@ -322,6 +367,10 @@ class AttachmentsViewWrapper(QWidget):
         self._overlay.show()
 
     def _refresh_overlay(self) -> None:
+        if self._is_loading:
+            self._overlay.hide()
+            return
+
         if self._overlay_mode in (
             self.OverlayMode.DRAG_AND_DROP,
             self.OverlayMode.DRAG_AND_DROP_MULTIPLE,
@@ -336,6 +385,21 @@ class AttachmentsViewWrapper(QWidget):
 
         self._overlay_mode = self.OverlayMode.HIDDEN
         self._overlay.hide()
+
+    def _sync_loading_overlay_geometry(self) -> None:
+        if not self._view or not self._loading_overlay:
+            return
+
+        self._loading_overlay.setGeometry(self._view.geometry())
+        self._loading_overlay.raise_()
+
+    def _show_pending_loading_overlay(self) -> None:
+        if not self._is_loading or self._pending_loading_state is None:
+            return
+
+        self._loading_overlay.set_overlay_state(self._pending_loading_state)
+        self._sync_loading_overlay_geometry()
+        self._loading_overlay.raise_()
 
     def _set_model(self, model: Optional[QAbstractItemModel]) -> None:
         """Attach a model and refresh overlay tracking for its changes.

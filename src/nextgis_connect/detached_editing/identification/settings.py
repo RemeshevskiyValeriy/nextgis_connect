@@ -89,9 +89,14 @@ class IdentificationSettings:
     @property
     def attachment_thumbnail_mime_types(self) -> Set[str]:
         return {
-            "image/png",
-            "image/jpeg",
+            "image/bmp",
+            "image/gif",
             "image/jpg",
+            "image/jpeg",
+            "image/png",
+            "image/svg+xml",
+            "image/tiff",
+            "image/webp",
         }
 
     @property

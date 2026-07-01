@@ -148,6 +148,7 @@ class AttachmentMetadata:
     size: Optional[int] = None
     sha256: Optional[str] = None
     file_path: Optional[Path] = None
+    thumbnail_path: Optional[Path] = None
 
 
 def make_connection(layer: Union[QgsMapLayer, Path]) -> sqlite3.Connection:
