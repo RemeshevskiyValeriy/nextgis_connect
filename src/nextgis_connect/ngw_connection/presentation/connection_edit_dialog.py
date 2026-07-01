@@ -726,13 +726,14 @@ class NgwConnectionEditDialog(QDialog, WIDGET):
         self.__name_loader.succeeded.connect(self.__handle_name_loader_success)
         self.__name_loader.failed.connect(self.__handle_name_loader_failure)
         self.__name_loader.finished.connect(self.__handle_name_loader_finished)
-        self.nameLineEdit.setEnabled(False)
+        self.nameLineEdit.setReadOnly(True)
         save_button = self.buttonBox.button(
             QDialogButtonBox.StandardButton.Save
         )
         save_button.setEnabled(False)
         self.__name_loader_button.start()
         self.__name_loader.start()
+        self.nameLineEdit.setFocus(Qt.FocusReason.OtherFocusReason)
 
     def __handle_name_loader_success(
         self,
@@ -748,10 +749,11 @@ class NgwConnectionEditDialog(QDialog, WIDGET):
 
     def __handle_name_loader_finished(self) -> None:
         self.__name_loader = None
-        self.nameLineEdit.setEnabled(True)
+        self.nameLineEdit.setReadOnly(False)
         self.__name_loader_button.stop()
         self.__remove_temporary_auth_config()
         self.__validate()
+        self.nameLineEdit.setFocus(Qt.FocusReason.OtherFocusReason)
 
     def __start_verification(
         self,
