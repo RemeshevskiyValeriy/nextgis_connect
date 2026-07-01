@@ -32,6 +32,7 @@ from qgis.gui import (
 from qgis.PyQt import uic
 from qgis.PyQt.QtCore import (
     Qt,
+    QTimer,
     pyqtSignal,
     pyqtSlot,
 )
@@ -724,6 +725,44 @@ class IdentificationResultsWidget(QgsDockWidget, ResultsDialogBase):
         self._attachments_tab.set_read_only(not is_enabled)
         self._description_tab.set_read_only(not is_enabled)
 
+    def __refresh_current_feature_after_sync(self) -> None:
+        selected_result = self.__current_feature_result()
+        if selected_result is None:
+            self.__on_feature_changed(self.features_combobox.currentIndex())
+            return
+
+        layer = cast(QgsVectorLayer, selected_result.mLayer)
+        refreshed_feature = layer.getFeature(selected_result.mFeature.id())
+        if not refreshed_feature.isValid():
+            self.__on_feature_changed(self.features_combobox.currentIndex())
+            return
+
+        if self.__is_feature_changed(
+            selected_result.mFeature, refreshed_feature
+        ):
+            selected_result.mFeature = refreshed_feature
+            self.__on_feature_changed(self.features_combobox.currentIndex())
+            return
+
+        self.edit_button.setEnabled(not layer.readOnly())
+        self.__update_edit_mode(layer.isEditable())
+
+    def __is_feature_changed(
+        self, previous_feature: QgsFeature, current_feature: QgsFeature
+    ) -> bool:
+        if previous_feature.id() != current_feature.id():
+            return True
+
+        if previous_feature.attributes() != current_feature.attributes():
+            return True
+
+        previous_geometry = previous_feature.geometry()
+        current_geometry = current_feature.geometry()
+        if previous_geometry.isNull() or current_geometry.isNull():
+            return previous_geometry.isNull() != current_geometry.isNull()
+
+        return previous_geometry.asWkb() != current_geometry.asWkb()
+
     def __add_form(
         self, layer: QgsVectorLayer, feature_id: QgsFeatureId
     ) -> None:
@@ -860,4 +899,4 @@ class IdentificationResultsWidget(QgsDockWidget, ResultsDialogBase):
     @pyqtSlot(DetachedLayerState)
     def __on_state_changed(self, state: DetachedLayerState) -> None:
         if state == DetachedLayerState.Synchronized:
-            self.__on_feature_changed(self.features_combobox.currentIndex())
+            QTimer.singleShot(0, self.__refresh_current_feature_after_sync)
