@@ -3652,6 +3652,7 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
 class NGWPanelToolBar(QToolBar):
     ICON_SIZE = 24
     BUTTON_SIZE = 32
+    MENU_BUTTON_WIDTH = 44
 
     def __init__(self):
         super().__init__(None)
@@ -3670,10 +3671,16 @@ class NGWPanelToolBar(QToolBar):
 
     def fix_icons_size(self) -> None:
         icon_size = QSize(self.ICON_SIZE, self.ICON_SIZE)
-        button_size = QSize(self.BUTTON_SIZE, self.BUTTON_SIZE)
         self.setIconSize(icon_size)
 
         for button in self.findChildren(QToolButton):
             button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonIconOnly)
             button.setIconSize(icon_size)
-            button.setFixedSize(button_size)
+            width = (
+                self.MENU_BUTTON_WIDTH
+                if button.menu() is not None
+                and button.popupMode()
+                != QToolButton.ToolButtonPopupMode.DelayedPopup
+                else self.BUTTON_SIZE
+            )
+            button.setFixedSize(QSize(width, self.BUTTON_SIZE))
