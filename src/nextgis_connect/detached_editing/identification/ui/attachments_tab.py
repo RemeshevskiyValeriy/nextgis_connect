@@ -1,7 +1,7 @@
 import shutil
-from contextlib import closing, suppress
+from contextlib import closing, contextmanager, suppress
 from pathlib import Path
-from typing import Any, List, Optional, Set, Tuple, Union, cast
+from typing import Any, Iterator, List, Optional, Set, Tuple, Union, cast
 from zipfile import ZIP_DEFLATED, ZipFile
 
 from qgis.core import (
@@ -24,6 +24,7 @@ from qgis.PyQt.QtGui import QDesktopServices, QImageReader
 from qgis.PyQt.QtWidgets import (
     QAction,
     QActionGroup,
+    QApplication,
     QFileDialog,
     QHBoxLayout,
     QListView,
@@ -767,6 +768,7 @@ class AttachmentsTab(QWidget):
         assert connection is not None
 
         attachments = detached_layer.feature_attachments(self._feature_id)
+        attachments_to_download = []
 
         for attachment in attachments:
             if attachment.ngw_aid is None:
@@ -776,14 +778,23 @@ class AttachmentsTab(QWidget):
                 self._feature_id, attachment.aid
             )
             assert attachment_path is not None
+            attachments_to_download.append((attachment, attachment_path))
 
-            self._download_attachment(
-                connection,
-                resource_id,
-                feature_ngw_fid,
-                attachment.ngw_aid,
-                attachment_path,
-            )
+        if not attachments_to_download:
+            return
+
+        with self._attachment_download_overlay(
+            self.tr("Downloading attachments"),
+            self.tr("Fetching attachment files."),
+        ):
+            for attachment, attachment_path in attachments_to_download:
+                self._download_attachment(
+                    connection,
+                    resource_id,
+                    feature_ngw_fid,
+                    attachment.ngw_aid,
+                    attachment_path,
+                )
 
         self._attachments_model.update_cached_states()
 
@@ -904,14 +915,29 @@ class AttachmentsTab(QWidget):
             ngw_fid, ngw_aid = rows[0]
 
         assert attachment.file_path is not None
-        self._download_attachment(
-            ngw_connection,
-            detached_layer.container.metadata.resource_id,
-            ngw_fid,
-            ngw_aid,
-            attachment.file_path,
-        )
+        with self._attachment_download_overlay(
+            self.tr("Downloading attachment"),
+            self.tr("Fetching attachment file."),
+        ):
+            self._download_attachment(
+                ngw_connection,
+                detached_layer.container.metadata.resource_id,
+                ngw_fid,
+                ngw_aid,
+                attachment.file_path,
+            )
         self._attachments_model.update_cached_states()
+
+    @contextmanager
+    def _attachment_download_overlay(
+        self, title: str, message: str
+    ) -> Iterator[None]:
+        self._view_wrapper.begin_loading(title, message, delay_ms=0)
+        QApplication.processEvents()
+        try:
+            yield
+        finally:
+            self._view_wrapper.end_loading()
 
     def _download_attachment(
         self,
