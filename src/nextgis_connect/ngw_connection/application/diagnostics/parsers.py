@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Optional
 
 from nextgis_connect.compat import parse_version
+from nextgis_connect.core.constants import PACKAGE_NAME, PLUGIN_NAME
 from nextgis_connect.ng_connect_interface import NgConnectInterface
 
 
@@ -21,10 +22,7 @@ class QgisPluginRepositoryParser:
                 or plugin.findtext("package_name")
                 or ""
             )
-            if (
-                name != NgConnectInterface.PLUGIN_NAME
-                and file_name != NgConnectInterface.PACKAGE_NAME
-            ):
+            if name != PLUGIN_NAME and file_name != PACKAGE_NAME:
                 continue
 
             version_string = (
