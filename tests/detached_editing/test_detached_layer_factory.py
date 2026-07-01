@@ -28,7 +28,6 @@ from nextgis_connect.ngw_api.core import NGWVectorLayer
 from nextgis_connect.ngw_connection import NgwConnection
 from nextgis_connect.resources.ngw_fields import NgwFields
 from nextgis_connect.settings import NgConnectSettings
-from nextgis_connect.utils import SupportStatus, is_version_supported
 from tests.ng_connect_testcase import (
     NgConnectTestCase,
     TestConnection,
@@ -335,7 +334,7 @@ class TestDetachedContainerFactory(NgConnectTestCase):
                 self.assertEqual(metadata.layer_name, display_name)
 
     @mock.patch(
-        "nextgis_connect.detached_editing.detached_layer_factory.datetime"
+        "nextgis_connect.detached_editing.container.container_factory.datetime"
     )
     def test_fill(self, datetime_mock) -> None:
         datetime_mock.now.return_value = FIXED_DATETIME
@@ -344,21 +343,7 @@ class TestDetachedContainerFactory(NgConnectTestCase):
         ngw_layer = self.resource(TestData.Points, connection)
         assert isinstance(ngw_layer, NGWVectorLayer)
 
-        with self.subTest("1.0 Before 5.0"):
-            self.assertEqual(
-                is_version_supported("4.9.0"), SupportStatus.SUPPORTED
-            )
-            export_path = self._create_pseudo_export(
-                ngw_layer,
-                source_path=self.data_path(TestData.Points),
-                fid_field="fid",
-                ngw_fid_field="fid",
-            )
-            self._test_fill(
-                connection, ngw_layer, export_path, fid_field="fid"
-            )
-
-        with self.subTest("2. After 5.0"):
+        with self.subTest("After 5.0"):
             export_path = self._create_pseudo_export(
                 ngw_layer,
                 source_path=self.data_path(TestData.Points),
@@ -370,7 +355,7 @@ class TestDetachedContainerFactory(NgConnectTestCase):
             )
 
     @mock.patch(
-        "nextgis_connect.detached_editing.detached_layer_factory.datetime"
+        "nextgis_connect.detached_editing.container.container_factory.datetime"
     )
     def test_fill_with_fid_field(self, datetime_mock) -> None:
         datetime_mock.now.return_value = FIXED_DATETIME
@@ -392,26 +377,7 @@ class TestDetachedContainerFactory(NgConnectTestCase):
         ngw_layer = self.resource(layer_json_with_fid_field, connection)
         assert isinstance(ngw_layer, NGWVectorLayer)
 
-        with self.subTest("1.0 Before 5.0"):
-            self.assertEqual(
-                is_version_supported("4.9.0"), SupportStatus.SUPPORTED
-            )
-            source_layer = cast(QgsVectorLayer, self.layer(TestData.Points))
-            export_path = self._create_pseudo_export(
-                ngw_layer,
-                source_path=self.data_path(TestData.Points),
-                fid_field="fid",
-                ngw_fid_field="fid_1",
-                custom_values={
-                    fid: {"fid": fid + 100}
-                    for fid in source_layer.allFeatureIds()
-                },
-            )
-            self._test_fill(
-                connection, ngw_layer, export_path, fid_field="fid_1"
-            )
-
-        with self.subTest("2. After 5.0"):
+        with self.subTest("After 5.0"):
             source_layer = cast(QgsVectorLayer, self.layer(TestData.Points))
             export_path = self._create_pseudo_export(
                 ngw_layer,

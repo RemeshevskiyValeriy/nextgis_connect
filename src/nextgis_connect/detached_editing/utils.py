@@ -15,6 +15,7 @@ from qgis.core import (
     qgsfunction,
 )
 
+from nextgis_connect.compat import QgsFeatureId
 from nextgis_connect.exceptions import (
     ContainerError,
     ErrorCode,
@@ -24,6 +25,16 @@ from nextgis_connect.logging import logger
 from nextgis_connect.ng_connect_interface import NgConnectInterface
 from nextgis_connect.resources.ngw_field import NgwField
 from nextgis_connect.resources.ngw_fields import NgwFields
+from nextgis_connect.types import (
+    AttachmentId,
+    FeatureId,
+    FileObjectId,
+    NgwAttachmentId,
+    NgwFeatureId,
+    Unset,
+    UnsetType,
+    VersionId,
+)
 from nextgis_connect.utils import wrap_sql_table_name, wrap_sql_value
 
 
@@ -52,7 +63,7 @@ class VersioningSynchronizationState(Enum):
 class DetachedContainerMetaData:
     container_version: str
     connection_id: str
-    instance_id: Optional[str]
+    instance_id: str
     resource_id: int
     table_name: str
     layer_name: str
@@ -83,35 +94,27 @@ class DetachedContainerMetaData:
 
 
 @dataclass(frozen=True)
+class DetachedContainerContext:
+    path: Path
+    metadata: DetachedContainerMetaData
+
+
+@dataclass(frozen=True)
 class DetachedContainerChangesInfo:
     added_features_count: int = 0
     removed_features_count: int = 0
     restored_features_count: int = 0
-    updated_attributes_count: int = 0
-    updated_geometries_count: int = 0
-    updated_descriptions_count: int = 0
-    added_attachments_count: int = 0
-    removed_attachments_count: int = 0
-    updated_attachments_count: int = 0
-
-    @property
-    def updated_features_count(self) -> int:
-        return (
-            self.updated_attributes_count
-            + self.updated_geometries_count
-            + self.restored_features_count
-        )
+    updated_features_count: int = 0
 
 
 @dataclass(frozen=True)
-class FeatureMetaData:
-    fid: Optional[int] = None
-    ngw_fid: Optional[int] = None
-    version: Optional[int] = None
-    description: Optional[str] = None
+class FeatureMetadata:
+    fid: FeatureId
+    ngw_fid: Optional[NgwFeatureId] = None
+    version: Optional[VersionId] = None
 
 
-def container_path(layer: Union[QgsMapLayer, Path]) -> Path:
+def container_path(layer: Union[QgsMapLayer, Path, str]) -> Path:
     path = Path()
     if isinstance(layer, QgsMapLayer):
         path = Path(layer.source().split("|")[0])
@@ -128,6 +131,25 @@ def container_path(layer: Union[QgsMapLayer, Path]) -> Path:
     return path
 
 
+@dataclass(frozen=True)
+class AttachmentMetadata:
+    """Metadata for an attachment."""
+
+    fid: FeatureId
+    aid: AttachmentId
+    ngw_fid: Optional[NgwFeatureId] = None
+    ngw_aid: Optional[NgwAttachmentId] = None
+    version: Union[VersionId, UnsetType] = Unset
+    keyname: Optional[str] = None
+    name: Optional[str] = None
+    description: Optional[str] = None
+    fileobj: Union[FileObjectId, UnsetType, None] = Unset
+    mime_type: Optional[str] = None
+    size: Optional[int] = None
+    sha256: Optional[str] = None
+    file_path: Optional[Path] = None
+
+
 def make_connection(layer: Union[QgsMapLayer, Path]) -> sqlite3.Connection:
     connection = sqlite3.connect(str(container_path(layer)))
     connection.execute("PRAGMA foreign_keys = ON")
@@ -135,8 +157,24 @@ def make_connection(layer: Union[QgsMapLayer, Path]) -> sqlite3.Connection:
 
 
 def detached_layer_uri(
-    path: Path, metadata: Optional[DetachedContainerMetaData] = None
+    path_or_context: Union[Path, DetachedContainerContext],
+    metadata: Optional[DetachedContainerMetaData] = None,
 ) -> str:
+    """
+    Build a layer URI for a detached container.
+
+    Accepts either:
+    - `path_or_context` as a `Path` and optional `metadata`, or
+    - `path_or_context` as a `DetachedContainerContext` (metadata is
+      taken from the context in this case).
+    """
+    if isinstance(path_or_context, DetachedContainerContext):
+        context = path_or_context
+        path = context.path
+        metadata = context.metadata
+    else:
+        path = path_or_context
+
     if metadata is not None:
         return f"{path}|layername={metadata.table_name}"
 
@@ -150,7 +188,8 @@ def detached_layer_uri(
                 WHERE data_type='features'
                 """
             )
-            return f"{path}|layername={cursor.fetchone()[0]}"
+            layer_name = cursor.fetchone()[0]
+            return f"{path}|layername={layer_name}"
     except Exception as error:
         raise ContainerError from error
 
@@ -246,7 +285,7 @@ def _(cursor: sqlite3.Cursor) -> DetachedContainerMetaData:
         epoch,
         version,
         sync_date,
-        error_code,
+        _error_code,
         is_auto_sync_enabled,
     ) = cursor.fetchone()
 
@@ -315,6 +354,7 @@ def _(cursor: sqlite3.Cursor) -> DetachedContainerMetaData:
             OR EXISTS(SELECT 1 FROM ngw_added_attachments)
             OR EXISTS(SELECT 1 FROM ngw_removed_attachments)
             OR EXISTS(SELECT 1 FROM ngw_updated_attachments)
+            OR EXISTS(SELECT 1 FROM ngw_restored_attachments)
         """
     )
     has_changes = bool(cursor.fetchone()[0])
@@ -352,12 +392,28 @@ def container_changes(path: Path) -> DetachedContainerChangesInfo:
               (SELECT COUNT(*) FROM ngw_added_features) added,
               (SELECT COUNT(*) FROM ngw_removed_features) removed,
               (SELECT COUNT(*) FROM ngw_restored_features) restored,
-              (SELECT COUNT(DISTINCT fid) FROM ngw_updated_attributes) attributes,
-              (SELECT COUNT(*) FROM ngw_updated_geometries) geometries,
-              (SELECT COUNT(*) FROM ngw_updated_descriptions) descriptions,
-              (SELECT COUNT(*) FROM ngw_added_attachments) added_attachments,
-              (SELECT COUNT(*) FROM ngw_removed_attachments) removed_attachments,
-              (SELECT COUNT(*) FROM ngw_updated_attachments) updated_attachments
+              (
+                  SELECT COUNT(DISTINCT fid) FROM (
+                      SELECT fid FROM ngw_updated_attributes
+                      UNION
+                      SELECT fid FROM ngw_updated_geometries
+                      UNION
+                      SELECT fid FROM ngw_updated_descriptions
+                      UNION
+                      SELECT fid FROM ngw_features_attachments
+                          WHERE aid IN (SELECT aid FROM ngw_added_attachments)
+                      UNION
+                      SELECT fid FROM ngw_features_attachments
+                          WHERE aid IN (SELECT aid FROM ngw_removed_attachments)
+                      UNION
+                      SELECT fid FROM ngw_features_attachments
+                          WHERE aid IN (SELECT aid FROM ngw_updated_attachments)
+                      UNION
+                      SELECT fid FROM ngw_features_attachments
+                          WHERE aid IN (SELECT aid FROM ngw_restored_attachments)
+                  ) AS all_changed_fids
+                  WHERE fid NOT IN (SELECT fid FROM ngw_added_features)
+              ) updated
             """
         )
         result = cursor.fetchone()
@@ -366,12 +422,7 @@ def container_changes(path: Path) -> DetachedContainerChangesInfo:
             added_features_count=result[0],
             removed_features_count=result[1],
             restored_features_count=result[2],
-            updated_attributes_count=result[3],
-            updated_geometries_count=result[4],
-            updated_descriptions_count=result[5],
-            added_attachments_count=result[6],
-            removed_attachments_count=result[7],
-            updated_attachments_count=result[8],
+            updated_features_count=result[3],
         )
 
 

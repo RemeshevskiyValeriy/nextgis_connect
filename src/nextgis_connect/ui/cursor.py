@@ -36,7 +36,7 @@ class NgConnectCursor(Enum):
     IDENTIFY = _CursorMetadata("cursors/identification.svg", 3, 6)
 
 
-def create_cursor(cursor: NgConnectCursor) -> QCursor:
+def create_cursor(cursor_metadata: NgConnectCursor) -> QCursor:
     """
     Generate a QCursor object based on the provided NgConnectCursor.
 
@@ -44,14 +44,12 @@ def create_cursor(cursor: NgConnectCursor) -> QCursor:
     specified in the `_CursorMetadata` of the given `NgConnectCursor`.
     Based on QgsApplication::getThemeCursor.
 
-    :param cursor: The cursor type to generate.
-    :type cursor: NgConnectCursor
+    :param cursor_metadata: The cursor type to generate.
     :return: A QCursor object for the specified cursor type.
-    :rtype: QCursor
     """
     DEFAULT_ICON_SIZE = 32.0
 
-    icon = plugin_icon(cursor.value.icon)
+    icon = plugin_icon(cursor_metadata.value.icon)
     if icon is None or icon.isNull():
         return QCursor()
 
@@ -62,8 +60,8 @@ def create_cursor(cursor: NgConnectCursor) -> QCursor:
             math.ceil(DEFAULT_ICON_SIZE * scale),
             math.ceil(DEFAULT_ICON_SIZE * scale),
         ),
-        math.ceil(cursor.value.active_x * scale),
-        math.ceil(cursor.value.active_y * scale),
+        math.ceil(cursor_metadata.value.active_x * scale),
+        math.ceil(cursor_metadata.value.active_y * scale),
     )
 
     return cursor

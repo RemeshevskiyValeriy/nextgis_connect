@@ -1,3 +1,4 @@
+from contextlib import suppress
 from typing import Any, Optional
 
 from qgis.core import QgsVectorLayer
@@ -126,9 +127,7 @@ class DescriptionTab(QWidget):
         if self._description_changed_connection is None:
             return
 
-        try:
+        with suppress(RuntimeError, TypeError):
             self.disconnect(self._description_changed_connection)
-        except (RuntimeError, TypeError):
-            pass
 
         self._description_changed_connection = None

@@ -21,7 +21,7 @@ from nextgis_connect.detached_editing.container.container import (
     DetachedContainer,
 )
 from nextgis_connect.detached_editing.container.container_factory import (
-    DetachedLayerFactory,
+    DetachedContainerFactory,
 )
 from nextgis_connect.detached_editing.container.path_preprocessor import (
     DetachedEditingPathPreprocessor,
@@ -496,7 +496,7 @@ class DetachedEditing(QObject):
         if not isinstance(ngw_layer, NGWVectorLayer):
             return False
 
-        detached_factory = DetachedLayerFactory()
+        detached_factory = DetachedContainerFactory()
         container_path.parent.mkdir(parents=True, exist_ok=True)
 
         try:

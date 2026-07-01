@@ -29,6 +29,7 @@ class ConflictResolution:
 
     resolution_type: ResolutionType
     conflict: VersioningConflict
+    # result_item: Any
 
 
 @dataclass(frozen=True)

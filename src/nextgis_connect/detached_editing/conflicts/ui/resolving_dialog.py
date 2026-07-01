@@ -63,9 +63,7 @@ from nextgis_connect.detached_editing.utils import (
     DetachedContainerContext,
     detached_layer_uri,
 )
-from nextgis_connect.ngw_connection.ngw_connections_manager import (
-    NgwConnectionsManager,
-)
+from nextgis_connect.ngw_connection import NgwConnectionsManager
 from nextgis_connect.types import NgwFeatureId
 from nextgis_connect.ui.icon import material_icon
 

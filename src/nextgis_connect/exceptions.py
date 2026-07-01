@@ -27,6 +27,7 @@ class ErrorCode(IntEnum):
     AuthorizationError = 401
     PermissionsError = 403
     NotFound = 404
+    SslHandshakeError = auto()
     QgisTimeoutError = auto()
 
     AddingError = 480
@@ -54,7 +55,6 @@ class ErrorCode(IntEnum):
     AttachmentNotFound = auto()
 
     NetworkError = auto()
-    SslHandshakeError = auto()
 
     SynchronizationError = 1200
     NotVersionedContentChanged = auto()

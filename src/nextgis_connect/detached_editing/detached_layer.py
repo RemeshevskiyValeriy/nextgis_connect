@@ -1,8 +1,21 @@
 import json
+import shutil
 import sqlite3
 from contextlib import closing
 from copy import deepcopy
-from typing import TYPE_CHECKING, Any, Dict, Iterable, List, Tuple, cast
+from dataclasses import replace
+from pathlib import Path
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Dict,
+    Iterable,
+    List,
+    Optional,
+    Tuple,
+    Union,
+    cast,
+)
 
 from qgis.core import (
     QgsFeature,
@@ -22,25 +35,50 @@ from nextgis_connect.compat import (
     QgsFeatureList,
     QgsGeometryMap,
 )
-from nextgis_connect.detached_editing.serialization import (
+from nextgis_connect.detached_editing.container.editing.commands.attachment_add import (
+    AttachmentAddCommand,
+)
+from nextgis_connect.detached_editing.container.editing.commands.attachment_remove import (
+    AttachmentRemoveCommand,
+)
+from nextgis_connect.detached_editing.container.editing.commands.attachment_update import (
+    AttachmentUpdateCommand,
+)
+from nextgis_connect.detached_editing.container.editing.commands.description_update import (
+    DescriptionUpdateCommand,
+)
+from nextgis_connect.detached_editing.detached_layer_edit_buffer import (
+    DetachedLayerEditBuffer,
+)
+from nextgis_connect.detached_editing.sync.common.serialization import (
     deserialize_value,
     serialize_geometry,
     serialize_value,
     simplify_value,
 )
 from nextgis_connect.detached_editing.utils import (
+    AttachmentMetadata,
     DetachedContainerMetaData,
     detached_layer_uri,
+    is_attachment_new,
+    is_feature_new,
     make_connection,
 )
-from nextgis_connect.exceptions import ContainerError
+from nextgis_connect.exceptions import (
+    ContainerError,
+    DetachedEditingError,
+    ErrorCode,
+)
 from nextgis_connect.logging import logger
 from nextgis_connect.resources.ngw_field import FieldId
-from nextgis_connect.types import NgwFeatureId
+from nextgis_connect.settings.ng_connect_cache_manager import (
+    NgConnectCacheManager,
+)
+from nextgis_connect.types import AttachmentId, NgwFeatureId
 from nextgis_connect.utils import wrap_sql_value
 
 if TYPE_CHECKING:
-    from .detached_container import DetachedContainer
+    from .container.container import DetachedContainer
 
 
 class DetachedLayer(QObject):
@@ -64,7 +102,12 @@ class DetachedLayer(QObject):
     structure_changed = pyqtSignal(name="structureChanged")
     settings_changed = pyqtSignal(name="settingsChanged")
 
-    error_occurred = pyqtSignal(ContainerError, name="erroroccurred")
+    description_updated = pyqtSignal(QgsFeatureId, str)
+    attachment_added = pyqtSignal(QgsFeatureId, AttachmentId)
+    attachment_updated = pyqtSignal(QgsFeatureId, AttachmentId)
+    attachment_removed = pyqtSignal(QgsFeatureId, AttachmentId)
+
+    error_occurred = pyqtSignal(ContainerError, name="errorOccurred")
 
     def __init__(
         self,
@@ -76,6 +119,8 @@ class DetachedLayer(QObject):
         self.__qgs_layer = layer
         self.__is_structure_changed = False
         self.__is_layer_changed = False
+        self.__edit_buffer = None
+        self.__commands = []  # Keep increased reference count of commands
         self.__errors = []
 
         self.__fix_source_if_needed()
@@ -105,6 +150,15 @@ class DetachedLayer(QObject):
     @property
     def qgs_layer(self) -> QgsVectorLayer:
         return self.__qgs_layer
+
+    @property
+    def edit_buffer(self) -> Optional[DetachedLayerEditBuffer]:
+        """
+        Get the edit buffer for the detached layer.
+        :return: DetachedLayerEditBuffer instance or None if not in edit mode.
+        :rtype: Optional[DetachedLayerEditBuffer]
+        """
+        return self.__edit_buffer
 
     @property
     def is_edit_mode_enabled(self) -> bool:
@@ -159,6 +213,348 @@ class DetachedLayer(QObject):
             "ogr",
         )
 
+    def feature_description(
+        self, feature: Union[QgsFeatureId, QgsFeature]
+    ) -> Optional[str]:
+        """Get feature description from detached layer.
+
+        :param feature: Feature ID or QgsFeature.
+        :return: Description string or empty string if not found.
+        """
+        if isinstance(feature, QgsFeature):
+            feature_id = feature.id()
+        else:
+            feature_id = feature
+            self.__assert_existed_feature(feature_id)
+
+        value = None
+
+        if self.__edit_buffer:
+            value = self.__edit_buffer.updated_descriptions.get(feature_id)
+            if is_feature_new(feature_id):
+                return value
+
+        if value is None:
+            with closing(
+                make_connection(self.__qgs_layer)
+            ) as connection, closing(connection.cursor()) as cursor:
+                cursor.execute(
+                    """
+                    SELECT description
+                    FROM ngw_features_descriptions
+                    WHERE fid = ?;
+                    """,
+                    (feature_id,),
+                )
+                rows = cursor.fetchall()
+                if rows:
+                    value = rows[0][0]
+
+        return value
+
+    def set_feature_description(
+        self, feature: Union[QgsFeatureId, QgsFeature], description: str
+    ) -> None:
+        """Set updated description for a feature.
+
+        :param feature: Feature ID or QgsFeature.
+        :param description: New description string.
+        """
+        self.__assert_edit_buffer_initialized()
+        if isinstance(feature, QgsFeature):
+            feature_id = feature.id()
+        else:
+            feature_id = feature
+            self.__assert_existed_feature(feature_id)
+
+        command = DescriptionUpdateCommand(
+            self,
+            feature_id,
+            self.feature_description(feature_id),
+            description,
+        )
+        command.setText(
+            self.tr("Change feature {} description").format(feature_id)
+        )
+        self.__commands.append(command)
+        self.qgs_layer.undoStack().push(command)
+
+    def feature_attachments_count(
+        self, feature: Union[QgsFeatureId, QgsFeature]
+    ) -> int:
+        """Get the number of attachments for a feature.
+
+        :param feature: Feature ID or QgsFeature.
+        :return: Number of attachments.
+        """
+        if isinstance(feature, QgsFeature):
+            feature_id = feature.id()
+        else:
+            feature_id = feature
+
+        count = 0
+        if self.__edit_buffer:
+            count += len(
+                self.__edit_buffer.added_attachments.get(feature_id, [])
+            )
+            count -= len(
+                self.__edit_buffer.removed_attachments.get(feature_id, set())
+            )
+
+        if is_feature_new(feature_id):
+            return count
+
+        with closing(make_connection(self.__qgs_layer)) as connection, closing(
+            connection.cursor()
+        ) as cursor:
+            cursor.execute(
+                """
+                SELECT COUNT(*)
+                FROM ngw_features_attachments
+                LEFT JOIN ngw_removed_attachments AS removed
+                ON ngw_features_attachments.aid = removed.aid
+                WHERE fid = ? AND removed.aid IS NULL;
+                """,
+                (feature_id,),
+            )
+            rows = cursor.fetchall()
+            count += rows[0][0]
+
+        return count
+
+    def feature_attachments(
+        self, feature: Union[QgsFeatureId, QgsFeature]
+    ) -> List[AttachmentMetadata]:
+        if isinstance(feature, QgsFeature):
+            feature_id = feature.id()
+        else:
+            feature_id = feature
+
+        attachments = []
+        updated_attachments = {}
+        removed_aids = set()
+
+        if self.__edit_buffer:
+            attachments.extend(
+                self.__edit_buffer.added_attachments.get(
+                    feature_id, {}
+                ).values()
+            )
+            removed_aids = self.__edit_buffer.removed_attachments.get(
+                feature_id, set()
+            )
+            updated_attachments = self.__edit_buffer.updated_attachments.get(
+                feature_id, {}
+            )
+
+        if not is_feature_new(feature_id):
+            with closing(
+                make_connection(self.__qgs_layer)
+            ) as connection, closing(connection.cursor()) as cursor:
+                cursor.execute(
+                    """
+                    SELECT
+                        ngw_features_attachments.aid,
+                        ngw_features_attachments.ngw_aid,
+                        keyname,
+                        name,
+                        description,
+                        fileobj,
+                        mime_type,
+                        size
+                    FROM ngw_features_attachments
+                    LEFT JOIN ngw_removed_attachments AS removed
+                    ON ngw_features_attachments.aid = removed.aid
+                    WHERE fid = ? AND removed.aid IS NULL;
+                    """,
+                    (feature_id,),
+                )
+                rows = cursor.fetchall()
+                for row in rows:
+                    aid = row[0]
+                    if aid in removed_aids:
+                        continue
+                    elif aid in updated_attachments:
+                        attachment = updated_attachments[aid]
+                    else:
+                        attachment = AttachmentMetadata(
+                            fid=feature_id,
+                            aid=aid,
+                            ngw_aid=row[1],
+                            keyname=row[2],
+                            name=row[3],
+                            description=row[4],
+                            fileobj=row[5],
+                            mime_type=row[6],
+                            size=row[7],
+                        )
+                        attachment = replace(
+                            attachment,
+                            file_path=self.__attachment_path(attachment),
+                        )
+
+                    attachments.append(attachment)
+
+        attachments.sort(key=lambda attachment: attachment.aid)
+
+        return attachments
+
+    def feature_attachment(
+        self, feature_id: QgsFeatureId, attachment_id: AttachmentId
+    ) -> Optional[AttachmentMetadata]:
+        if self.__edit_buffer:
+            if (
+                feature_id in self.__edit_buffer.added_attachments
+                and attachment_id
+                in self.__edit_buffer.added_attachments[feature_id]
+            ):
+                return self.__edit_buffer.added_attachments[feature_id][
+                    attachment_id
+                ]
+
+            if (
+                feature_id in self.__edit_buffer.updated_attachments
+                and attachment_id
+                in self.__edit_buffer.updated_attachments[feature_id]
+            ):
+                return self.__edit_buffer.updated_attachments[feature_id][
+                    attachment_id
+                ]
+
+            if (
+                feature_id in self.__edit_buffer.removed_attachments
+                and attachment_id
+                in self.__edit_buffer.removed_attachments[feature_id]
+            ):
+                raise DetachedEditingError(
+                    f"Attachment {attachment_id} for feature {feature_id} not "
+                    "found in detached layer.",
+                    code=ErrorCode.AttachmentNotFound,
+                )
+
+        if is_feature_new(feature_id):
+            raise DetachedEditingError(
+                f"Feature {feature_id} is new and has no attachments "
+                "in detached layer.",
+                code=ErrorCode.AttachmentNotFound,
+            )
+
+        with closing(make_connection(self.__qgs_layer)) as connection, closing(
+            connection.cursor()
+        ) as cursor:
+            cursor.execute(
+                """
+                SELECT
+                    ngw_features_attachments.aid,
+                    ngw_features_attachments.ngw_aid,
+                    keyname,
+                    name,
+                    description,
+                    fileobj,
+                    mime_type,
+                    size
+                FROM ngw_features_attachments
+                LEFT JOIN ngw_removed_attachments AS removed
+                ON ngw_features_attachments.aid = removed.aid
+                WHERE fid = ? AND ngw_features_attachments.aid = ? AND removed.aid IS NULL;
+                """,
+                (feature_id, attachment_id),
+            )
+            row = cursor.fetchone()
+            if row:
+                attachment = AttachmentMetadata(
+                    fid=feature_id,
+                    aid=row[0],
+                    ngw_aid=row[1],
+                    keyname=row[2],
+                    name=row[3],
+                    description=row[4],
+                    fileobj=row[5],
+                    mime_type=row[6],
+                    size=row[7],
+                )
+                attachment = replace(
+                    attachment, file_path=self.__attachment_path(attachment)
+                )
+                return attachment
+
+        raise DetachedEditingError(
+            f"Attachment {attachment_id} for feature {feature_id} not "
+            "found in detached layer.",
+            code=ErrorCode.AttachmentNotFound,
+        )
+
+    def attachment_path(
+        self, feature_id: QgsFeatureId, attachment_id: AttachmentId
+    ) -> Optional[Path]:
+        attachment = self.feature_attachment(feature_id, attachment_id)
+        if attachment is None:
+            return None
+
+        return self.__attachment_path(attachment)
+
+    @pyqtSlot(QgsFeatureId, Path)
+    def add_attachment(
+        self, feature_id: QgsFeatureId, attachment_path: Path
+    ) -> AttachmentMetadata:
+        self.__assert_edit_buffer_initialized()
+        self.__assert_existed_feature(feature_id)
+
+        command = AttachmentAddCommand(self, feature_id, attachment_path)
+        command.setText(
+            self.tr("Add attachment {}").format(attachment_path.name)
+        )
+        self.__commands.append(command)
+        self.qgs_layer.undoStack().push(command)
+
+        return command.attachment
+
+    @pyqtSlot(QgsFeatureId, AttachmentMetadata)
+    def update_attachment(self, attachment: AttachmentMetadata) -> None:
+        self.__assert_edit_buffer_initialized()
+
+        old_attachment = self.feature_attachment(
+            attachment.fid, attachment.aid
+        )
+        if old_attachment is None:
+            raise DetachedEditingError(
+                f"Attachment {attachment.aid} for feature {attachment.fid} not "
+                "found in detached layer.",
+                code=ErrorCode.AttachmentNotFound,
+            )
+
+        command = AttachmentUpdateCommand(self, old_attachment, attachment)
+        command.setText(
+            self.tr("Update attachment {} for feature {}").format(
+                attachment.aid, attachment.fid
+            )
+        )
+        self.__commands.append(command)
+        self.qgs_layer.undoStack().push(command)
+
+    @pyqtSlot(QgsFeatureId, AttachmentId)
+    def remove_attachment(
+        self, feature_id: QgsFeatureId, attachment_id: AttachmentId
+    ) -> None:
+        self.__assert_edit_buffer_initialized()
+
+        attachment = self.feature_attachment(feature_id, attachment_id)
+        if attachment is None:
+            raise DetachedEditingError(
+                f"Attachment {attachment_id} for feature {feature_id} not "
+                "found in detached layer.",
+                code=ErrorCode.AttachmentNotFound,
+            )
+
+        command = AttachmentRemoveCommand(self, attachment)
+        command.setText(
+            self.tr("Remove attachment {} from feature {}").format(
+                attachment_id, feature_id
+            )
+        )
+        self.__commands.append(command)
+        self.qgs_layer.undoStack().push(command)
+
     @pyqtSlot()
     def __start_listen_changes(self) -> None:
         metadata = self.__container.metadata
@@ -185,6 +581,9 @@ class DetachedLayer(QObject):
         )
 
         self.__qgs_layer.beforeCommitChanges.connect(self.__create_backup)
+        self.__qgs_layer.afterCommitChanges.connect(self.__clear)
+
+        self.__edit_buffer = DetachedLayerEditBuffer(self)
 
         self.editing_started.emit()
 
@@ -211,13 +610,21 @@ class DetachedLayer(QObject):
         )
 
         self.__qgs_layer.beforeCommitChanges.disconnect(self.__create_backup)
+        self.__qgs_layer.afterCommitChanges.disconnect(self.__clear)
 
-        self.__reset_backup()
+        self.__clear()
+        self.__edit_buffer = None
 
         metadata = self.__container.metadata
         logger.debug(f"Stop listening changes in layer {metadata}")
 
         self.editing_finished.emit()
+
+    @pyqtSlot()
+    def __clear(self) -> None:
+        self.__edit_buffer.clear()
+        self.__commands = []
+        self.__reset_backup()
 
     @pyqtSlot(str, "QgsFeatureList")
     def __log_added_features(self, _: str, features: QgsFeatureList) -> None:
@@ -399,6 +806,350 @@ class DetachedLayer(QObject):
 
         self.__is_layer_changed = True
 
+    @pyqtSlot()
+    def __log_extensions(self) -> None:
+        self.__log_description_changes()
+        self.__log_added_attachments()
+        self.__log_removed_attachments()
+        self.__log_updated_attachments()
+
+    def __log_description_changes(self) -> None:
+        if not self.__edit_buffer.has_updated_descriptions:
+            return
+
+        ng_error = None
+
+        feature_ids: QgsFeatureIds = set()
+        try:
+            with closing(
+                make_connection(self.__qgs_layer)
+            ) as connection, closing(connection.cursor()) as cursor:
+                feature_ids = set(
+                    self.__edit_buffer.updated_descriptions.keys()
+                )
+                cursor.executemany(
+                    """
+                    INSERT INTO ngw_features_descriptions (
+                        fid, description
+                    )
+                    VALUES (?, ?)
+                    ON CONFLICT(fid) DO UPDATE SET
+                        description = ?
+                    """,
+                    (
+                        (
+                            fid,
+                            self.__edit_buffer.updated_descriptions.get(
+                                fid, ""
+                            ),
+                            self.__edit_buffer.updated_descriptions.get(
+                                fid, ""
+                            ),
+                        )
+                        for fid in feature_ids
+                    ),
+                )
+                cursor.executemany(
+                    """
+                    INSERT INTO ngw_updated_descriptions (fid, backup)
+                    VALUES (?, ?)
+                    ON CONFLICT DO NOTHING;
+                    """,
+                    (
+                        (fid, self.__description_backups.get(fid))
+                        for fid in feature_ids
+                    ),
+                )
+                connection.commit()
+
+        except Exception as error:
+            message = "Can't create description changes records"
+            ng_error = ContainerError(message)
+            ng_error.__cause__ = deepcopy(error)
+
+        if ng_error is not None:
+            self.__errors.append(ng_error)
+            return
+
+        metadata = self.__container.metadata
+        logger.debug(
+            f"Updated descriptions for {len(feature_ids)} features in layer "
+            f"{metadata}"
+        )
+
+        self.__is_layer_changed = True
+
+    def __log_removed_attachments(self) -> None:
+        if not self.__edit_buffer.has_removed_attachments:
+            return
+
+        ng_error = None
+
+        total_removed = 0
+        try:
+            with closing(
+                make_connection(self.__qgs_layer)
+            ) as connection, closing(connection.cursor()) as cursor:
+                for (
+                    removed_aids
+                ) in self.__edit_buffer.removed_attachments.values():
+                    if len(removed_aids) == 0:
+                        continue
+
+                    total_removed += len(removed_aids)
+                    joined_removed_aids = ",".join(map(str, removed_aids))
+                    attachments_rows = list(
+                        cursor.execute(
+                            f"""
+                            SELECT
+                                attachments.fid,
+                                metadata.ngw_fid,
+                                attachments.aid,
+                                attachments.ngw_aid,
+                                attachments.version,
+                                attachments.keyname,
+                                attachments.name,
+                                attachments.description,
+                                attachments.fileobj,
+                                attachments.mime_type,
+                                ngw_updated_attachments.backup
+                            FROM ngw_features_attachments AS attachments
+                            LEFT JOIN ngw_features_metadata AS metadata
+                                ON metadata.fid = attachments.fid
+                            LEFT JOIN ngw_updated_attachments
+                                ON ngw_updated_attachments.aid = attachments.aid
+                            WHERE attachments.aid IN ({joined_removed_aids});
+                            """
+                        )
+                    )
+
+                    remove_backups = []
+                    for row in attachments_rows:
+                        before_deletion = self.__attachment_backup_record(row)
+                        updated_backup = row[10]
+                        after_sync = before_deletion
+                        if updated_backup is not None:
+                            after_sync = json.loads(updated_backup)
+
+                        remove_backups.append(
+                            (
+                                row[2],
+                                json.dumps(
+                                    {
+                                        "after_sync": after_sync,
+                                        "before_deletion": before_deletion,
+                                    }
+                                ),
+                            )
+                        )
+
+                    cursor.executemany(
+                        """
+                        INSERT INTO ngw_removed_attachments (aid, backup)
+                        VALUES (?, ?)
+                        ON CONFLICT DO NOTHING;
+                        """,
+                        remove_backups,
+                    )
+                    cursor.execute(
+                        f"""
+                        DELETE FROM ngw_updated_attachments
+                        WHERE aid IN ({joined_removed_aids});
+                        """
+                    )
+
+                connection.commit()
+
+        except Exception as error:
+            message = "Can't create attachment removal records"
+            ng_error = ContainerError(message)
+            ng_error.__cause__ = deepcopy(error)
+
+        if ng_error is not None:
+            self.__errors.append(ng_error)
+            return
+
+        metadata = self.__container.metadata
+        logger.debug(
+            f"Removed {total_removed} attachments in layer {metadata}"
+        )
+
+        self.__is_layer_changed = True
+
+    def __log_added_attachments(self) -> None:
+        if not self.__edit_buffer.has_added_attachments:
+            return
+
+        ng_error = None
+
+        all_added_attachments = self.__edit_buffer.added_attachments.values()
+
+        aid_mapping = {}
+        try:
+            with closing(
+                make_connection(self.__qgs_layer)
+            ) as connection, closing(connection.cursor()) as cursor:
+                for added_attachments in all_added_attachments:
+                    for attachment in added_attachments.values():
+                        cursor.execute(
+                            """
+                            INSERT INTO ngw_features_attachments (
+                                fid,
+                                name,
+                                description,
+                                mime_type
+                            )
+                            VALUES (?, ?, ?, ?)
+                            RETURNING aid;
+                            """,
+                            (
+                                attachment.fid,
+                                attachment.name,
+                                attachment.description,
+                                attachment.mime_type,
+                            ),
+                        )
+                        new_aid = cursor.fetchone()[0]
+                        aid_mapping[attachment.aid] = new_aid
+
+                cursor.executemany(
+                    """
+                    INSERT INTO ngw_added_attachments (aid)
+                    VALUES (?);
+                    """,
+                    ((aid,) for aid in aid_mapping.values()),
+                )
+
+                connection.commit()
+
+        except Exception as error:
+            message = "Can't create attachment update records"
+            ng_error = ContainerError(message)
+            ng_error.__cause__ = deepcopy(error)
+
+        try:
+            for added_attachments in all_added_attachments:
+                for attachment in added_attachments.values():
+                    new_aid = aid_mapping[attachment.aid]
+                    new_path = self.attachment_path(attachment.fid, new_aid)
+                    if new_path is None:
+                        raise DetachedEditingError(
+                            f"Can't get path for new attachment {new_aid} "
+                            f"of feature {attachment.fid}.",
+                            code=ErrorCode.AttachmentNotFound,
+                        )
+
+                    assert attachment.file_path is not None
+                    new_path.parent.mkdir(parents=True, exist_ok=True)
+                    shutil.move(attachment.file_path, new_path)
+
+        except Exception as error:
+            message = "Can't move added attachment files"
+            ng_error = ContainerError(message)
+            ng_error.__cause__ = deepcopy(error)
+
+        if ng_error is not None:
+            self.__errors.append(ng_error)
+            return
+
+        metadata = self.__container.metadata
+        logger.debug(f"Updated {aid_mapping} attachments in layer {metadata}")
+
+        self.__is_layer_changed = True
+
+    def __log_updated_attachments(self) -> None:
+        if not self.__edit_buffer.has_updated_attachments:
+            return
+
+        ng_error = None
+
+        total_updated = 0
+        try:
+            with closing(
+                make_connection(self.__qgs_layer)
+            ) as connection, closing(connection.cursor()) as cursor:
+                for (
+                    updated_attachments
+                ) in self.__edit_buffer.updated_attachments.values():
+                    if len(updated_attachments) == 0:
+                        continue
+
+                    total_updated += len(updated_attachments)
+
+                    updated_aids = list(updated_attachments.keys())
+                    joined_updated_aids = ",".join(map(str, updated_aids))
+                    attachments_rows = list(
+                        cursor.execute(
+                            f"""
+                            SELECT
+                                attachments.fid,
+                                metadata.ngw_fid,
+                                attachments.aid,
+                                attachments.ngw_aid,
+                                attachments.version,
+                                attachments.keyname,
+                                attachments.name,
+                                attachments.description,
+                                attachments.fileobj,
+                                attachments.mime_type
+                            FROM ngw_features_attachments AS attachments
+                            LEFT JOIN ngw_features_metadata AS metadata
+                                ON metadata.fid = attachments.fid
+                            WHERE attachments.aid IN ({joined_updated_aids});
+                            """
+                        )
+                    )
+
+                    cursor.executemany(
+                        """
+                        UPDATE ngw_features_attachments
+                        SET name = ?, description = ?
+                        WHERE aid = ?;
+                        """,
+                        (
+                            (
+                                attachment.name,
+                                attachment.description,
+                                attachment.aid,
+                            )
+                            for attachment in updated_attachments.values()
+                        ),
+                    )
+                    cursor.executemany(
+                        """
+                        INSERT INTO ngw_updated_attachments (aid, backup)
+                        VALUES (?, ?)
+                        ON CONFLICT DO NOTHING;
+                        """,
+                        (
+                            (
+                                row[2],
+                                json.dumps(
+                                    self.__attachment_backup_record(row)
+                                ),
+                            )
+                            for row in attachments_rows
+                        ),
+                    )
+
+                connection.commit()
+
+        except Exception as error:
+            message = "Can't create attachment update records"
+            ng_error = ContainerError(message)
+            ng_error.__cause__ = deepcopy(error)
+
+        if ng_error is not None:
+            self.__errors.append(ng_error)
+            return
+
+        metadata = self.__container.metadata
+        logger.debug(
+            f"Updated {total_updated} attachments in layer {metadata}"
+        )
+
+        self.__is_layer_changed = True
+
     @pyqtSlot(str, "QList<QgsField>")
     def __on_attribute_added(
         self, layer_id: str, added_fields: List[QgsField]
@@ -471,7 +1222,8 @@ class DetachedLayer(QObject):
         try:
             self.__create_backup_for_updated_fields()
             self.__create_backup_for_updated_geometries()
-            self.__create_backup_for_deleted()
+            self.__create_backup_for_deleted_features()
+            self.__create_backup_for_updated_descriptions()
         except Exception as error:
             message = "Can't create backup before changes"
             ng_error = ContainerError(message)
@@ -537,7 +1289,7 @@ class DetachedLayer(QObject):
             for feature in features_before_change
         )
 
-    def __create_backup_for_deleted(self) -> None:
+    def __create_backup_for_deleted_features(self) -> None:
         deleted_features_id: QgsFeatureIds = (
             self.__qgs_layer.editBuffer().deletedFeatureIds()
         )
@@ -553,6 +1305,39 @@ class DetachedLayer(QObject):
         self.__deleted_features = {
             feature.id(): feature for feature in deleted_features
         }
+
+    def __create_backup_for_updated_descriptions(self) -> None:
+        if (
+            self.__edit_buffer is None
+            or not self.__edit_buffer.has_updated_descriptions
+        ):
+            return
+
+        updated_descriptions = self.__edit_buffer.updated_descriptions
+
+        self.__description_backups: Dict[QgsFeatureId, str] = dict()
+
+        updated_fids = list(
+            fid
+            for fid in updated_descriptions.keys()
+            if not is_feature_new(fid)
+        )
+        joined_updated_fids = ",".join(map(str, updated_fids))
+        with closing(make_connection(self.__qgs_layer)) as connection, closing(
+            connection.cursor()
+        ) as cursor:
+            cursor.execute(
+                f"""
+                SELECT fid, description, version
+                FROM ngw_features_descriptions
+                WHERE fid IN ({joined_updated_fids});
+                """,
+            )
+            rows = cursor.fetchall()
+            self.__description_backups = {
+                row[0]: serialize_value({"value": row[1], "version": row[2]})
+                for row in rows
+            }
 
     def __reset_backup(self) -> None:
         self.__updated_attributes = dict()
@@ -586,9 +1371,18 @@ class DetachedLayer(QObject):
         geometries_backups = self.__extract_geometries_backups(
             cursor, joined_removed_fids
         )
-
+        description_backups = self.__extract_description_backups(
+            cursor, joined_removed_fids
+        )
+        attachment_backups = self.__extract_attachment_backups(
+            cursor, joined_removed_fids
+        )
         features_backup = self.__serialize_deletion_backup(
-            removed_fids, fields_backups, geometries_backups
+            removed_fids,
+            fields_backups,
+            geometries_backups,
+            description_backups,
+            attachment_backups,
         )
 
         # Update records
@@ -614,6 +1408,17 @@ class DetachedLayer(QObject):
         if len(geometries_backups) > 0:
             script += f"""
             DELETE FROM ngw_updated_geometries
+                WHERE fid in ({joined_removed_fids});
+            """  # nosec B608
+        script += f"""
+            DELETE FROM ngw_features_attachments
+                WHERE fid in ({joined_removed_fids});
+        """  # nosec B608
+        if len(description_backups) > 0:
+            script += f"""
+            DELETE FROM ngw_updated_descriptions
+                WHERE fid in ({joined_removed_fids});
+            DELETE FROM ngw_features_descriptions
                 WHERE fid in ({joined_removed_fids});
             """  # nosec B608
 
@@ -647,11 +1452,149 @@ class DetachedLayer(QObject):
             )
         }
 
+    def __extract_description_backups(
+        self, cursor: sqlite3.Cursor, joined_fids: str
+    ) -> Dict[QgsFeatureId, Tuple[Dict[str, Any], Dict[str, Any]]]:
+        result: Dict[QgsFeatureId, Tuple[Dict[str, Any], Dict[str, Any]]] = {}
+        for row in cursor.execute(
+            f"""
+            SELECT
+                ngw_features_descriptions.fid,
+                ngw_updated_descriptions.backup,
+                ngw_features_descriptions.description,
+                ngw_features_descriptions.version
+            FROM ngw_features_descriptions
+            LEFT JOIN ngw_updated_descriptions
+                ON ngw_updated_descriptions.fid = ngw_features_descriptions.fid
+            WHERE ngw_features_descriptions.fid IN ({joined_fids})
+            """
+        ):
+            fid = row[0]
+            before_delete = {"value": row[2], "version": row[3]}
+            after_sync = before_delete
+            if row[1]:
+                after_sync = cast(Dict[str, Any], json.loads(row[1]))
+
+            result[fid] = (after_sync, before_delete)
+
+        return result
+
+    def __extract_attachment_backups(
+        self, cursor: sqlite3.Cursor, joined_fids: str
+    ) -> Dict[
+        QgsFeatureId,
+        Tuple[List[Dict[str, Any]], List[Dict[str, Any]]],
+    ]:
+        after_sync_by_fid: Dict[QgsFeatureId, List[Dict[str, Any]]] = {}
+        before_deletion_by_fid: Dict[QgsFeatureId, List[Dict[str, Any]]] = {}
+
+        for row in cursor.execute(
+            f"""
+            SELECT
+                attachments.fid,
+                metadata.ngw_fid,
+                attachments.aid,
+                attachments.ngw_aid,
+                attachments.version,
+                attachments.keyname,
+                attachments.name,
+                attachments.description,
+                attachments.fileobj,
+                attachments.mime_type,
+                ngw_updated_attachments.backup
+            FROM ngw_features_attachments AS attachments
+            LEFT JOIN ngw_features_metadata AS metadata
+                ON metadata.fid = attachments.fid
+            LEFT JOIN ngw_updated_attachments
+                ON ngw_updated_attachments.aid = attachments.aid
+            LEFT JOIN ngw_removed_attachments AS removed
+                ON removed.aid = attachments.aid
+            WHERE attachments.fid IN ({joined_fids})
+                AND removed.aid IS NULL;
+            """
+        ):
+            fid = row[0]
+            before_deletion = self.__attachment_backup_record(row[:10])
+            after_sync = before_deletion
+            if row[10] is not None:
+                after_sync = cast(Dict[str, Any], json.loads(row[10]))
+
+            if fid not in after_sync_by_fid:
+                after_sync_by_fid[fid] = []
+            after_sync_by_fid[fid].append(after_sync)
+
+            if fid not in before_deletion_by_fid:
+                before_deletion_by_fid[fid] = []
+            before_deletion_by_fid[fid].append(before_deletion)
+
+        for fid, backup in cursor.execute(
+            f"""
+            SELECT attachments.fid, removed.backup
+            FROM ngw_removed_attachments AS removed
+            LEFT JOIN ngw_features_attachments AS attachments
+                ON attachments.aid = removed.aid
+            WHERE attachments.fid IN ({joined_fids});
+            """
+        ):
+            if fid not in after_sync_by_fid:
+                after_sync_by_fid[fid] = []
+            backup_data = cast(Dict[str, Any], json.loads(backup))
+            after_sync_by_fid[fid].append(
+                cast(Dict[str, Any], backup_data["after_sync"])
+            )
+
+        result: Dict[
+            QgsFeatureId,
+            Tuple[List[Dict[str, Any]], List[Dict[str, Any]]],
+        ] = {}
+        all_fids = set(after_sync_by_fid.keys()) | set(
+            before_deletion_by_fid.keys()
+        )
+        for fid in all_fids:
+            after_sync_attachments = sorted(
+                after_sync_by_fid.get(fid, []),
+                key=lambda attachment: attachment["aid"],
+            )
+            before_deletion_attachments = sorted(
+                before_deletion_by_fid.get(fid, []),
+                key=lambda attachment: attachment["aid"],
+            )
+            result[fid] = (
+                after_sync_attachments,
+                before_deletion_attachments,
+            )
+
+        return result
+
+    def __attachment_backup_record(
+        self,
+        row: Tuple[Any, ...],
+    ) -> Dict[str, Any]:
+        return {
+            "fid": row[0],
+            "ngw_fid": row[1],
+            "aid": row[2],
+            "ngw_aid": row[3],
+            "version": serialize_value(row[4]),
+            "keyname": row[5],
+            "name": row[6],
+            "description": row[7],
+            "fileobj": serialize_value(row[8]),
+            "mime_type": row[9],
+        }
+
     def __serialize_deletion_backup(
         self,
         fids: Iterable[NgwFeatureId],
         fields_backups: Dict[Tuple[QgsFeatureId, FieldId], str],
         geometries_backups: Dict[QgsFeatureId, str],
+        descriptions_backups: Dict[
+            QgsFeatureId, Tuple[Dict[str, Any], Dict[str, Any]]
+        ],
+        attachments_backups: Dict[
+            QgsFeatureId,
+            Tuple[List[Dict[str, Any]], List[Dict[str, Any]]],
+        ],
     ) -> Dict[NgwFeatureId, Dict[str, Any]]:
         result = {}
 
@@ -672,6 +1615,17 @@ class DetachedLayer(QObject):
                 fields_before_deletion.append(
                     [field.ngw_id, value_before_deletion]
                 )
+            description_after_sync = {}
+            description_before_deletion = {}
+            if fid in descriptions_backups:
+                description_after_sync = descriptions_backups[fid][0]
+                description_before_deletion = descriptions_backups[fid][1]
+
+            attachments_after_sync = []
+            attachments_before_deletion = []
+            if fid in attachments_backups:
+                attachments_after_sync = attachments_backups[fid][0]
+                attachments_before_deletion = attachments_backups[fid][1]
 
             serialized_geometry = serialize_geometry(
                 feature.geometry(),
@@ -681,10 +1635,14 @@ class DetachedLayer(QObject):
                 "after_sync": {
                     "fields": fields_after_sync,
                     "geom": geometries_backups.get(fid, serialized_geometry),
+                    "description": description_after_sync,
+                    "attachments": attachments_after_sync,
                 },
                 "before_deletion": {
                     "fields": fields_before_deletion,
                     "geom": serialized_geometry,
+                    "description": description_before_deletion,
+                    "attachments": attachments_before_deletion,
                 },
             }
             result[fid] = feature_record
@@ -692,6 +1650,8 @@ class DetachedLayer(QObject):
         return result
 
     def __on_commit_changes(self) -> None:
+        self.__log_extensions()
+
         if self.__is_structure_changed:
             self.structure_changed.emit()
             self.__is_structure_changed = False
@@ -705,6 +1665,24 @@ class DetachedLayer(QObject):
                 self.error_occurred.emit(ng_error)
             self.__errors.clear()
 
+    def __attachment_path(
+        self, attachment: AttachmentMetadata
+    ) -> Optional[Path]:
+        if is_attachment_new(attachment.aid):
+            return attachment.file_path
+
+        assert self.__container.metadata.instance_id
+
+        cache_manager = NgConnectCacheManager()
+        return cache_manager.attachment_path(
+            self.__container.metadata.instance_id,
+            self.__container.metadata.resource_id,
+            attachment.aid,
+            file_name=attachment.name,
+            mime_type=attachment.mime_type,
+            fileobj=attachment.fileobj,
+        )
+
     def __fix_source_if_needed(self) -> None:
         if self.qgs_layer.isValid():
             return
@@ -716,3 +1694,19 @@ class DetachedLayer(QObject):
             self.qgs_layer.name(),
             "ogr",
         )
+
+    def __assert_edit_buffer_initialized(self) -> None:
+        if self.__edit_buffer is None:
+            raise DetachedEditingError(
+                "Cannot modify feature when edit buffer is not initialized.",
+                code=ErrorCode.LayerEditError,
+            )
+
+    def __assert_existed_feature(self, feature_id: QgsFeatureId) -> None:
+        feature = self.qgs_layer.getFeature(feature_id)
+        if not feature.isValid():
+            message = f"Feature {feature_id} does not exist in detached layer."
+            raise DetachedEditingError(
+                message,
+                code=ErrorCode.FeatureNotFound,
+            )

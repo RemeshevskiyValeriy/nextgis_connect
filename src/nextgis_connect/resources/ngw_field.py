@@ -63,12 +63,6 @@ class NgwField:
                 # GPKG does not have Time type
                 datatype = FieldType.QString
 
-            if self.keyname == "fid":
-                # Workaround for NGW-1326
-                return (
-                    datatype == rhs.type() or FieldType.LongLong == rhs.type()
-                )
-
             return datatype == rhs.type() and self.keyname == rhs.name()
 
     def to_qgs_field(self) -> QgsField:

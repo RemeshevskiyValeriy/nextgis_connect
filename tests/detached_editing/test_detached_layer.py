@@ -18,16 +18,18 @@ from nextgis_connect.compat import (
     QgsGeometryMap,
 )
 from nextgis_connect.detached_editing.detached_layer import DetachedLayer
-from nextgis_connect.detached_editing.serialization import (
+from nextgis_connect.detached_editing.sync.common.serialization import (
     deserialize_geometry,
     deserialize_value,
     serialize_value,
     simplify_value,
 )
 from nextgis_connect.detached_editing.utils import (
+    AttachmentMetadata,
     make_connection,
 )
 from nextgis_connect.exceptions import ContainerError, DetachedEditingError
+from nextgis_connect.settings.ng_connect_settings import NgConnectSettings
 from tests.detached_editing.utils import mock_container
 from tests.ng_connect_testcase import (
     NgConnectTestCase,
@@ -460,6 +462,44 @@ class TestDetachedLayer(NgConnectTestCase):
         self.assertIsInstance(before_desc, dict)
         self.assertEqual("<TEST_AFTER>", before_desc.get("value"))
         self.assertEqual(12345, before_desc.get("version"))
+
+    @mock_container(TestData.Points, descriptions={1: "<TEST_DESCRIPTION>"})
+    def test_deletes_feature_and_stores_existing_description_backup(
+        self, container_mock: MagicMock, qgs_layer: QgsVectorLayer
+    ) -> None:
+        feature_id = 1
+
+        _layer = DetachedLayer(container_mock, qgs_layer)
+
+        with edit(qgs_layer):
+            is_removed = qgs_layer.deleteFeature(feature_id)
+            self.assertTrue(is_removed)
+
+        with closing(
+            make_connection(container_mock.path)
+        ) as connection, closing(connection.cursor()) as cursor:
+            deleted_features = list(
+                cursor.execute(
+                    "SELECT fid, backup FROM ngw_removed_features WHERE fid = ?",
+                    (feature_id,),
+                )
+            )
+
+        self.assertEqual(len(deleted_features), 1)
+
+        backup = json.loads(deleted_features[0][1])
+
+        after_desc = backup["after_sync"]["description"]
+        before_desc = backup["before_deletion"]["description"]
+
+        self.assertEqual(
+            after_desc,
+            {"value": "<TEST_DESCRIPTION>", "version": 12345},
+        )
+        self.assertEqual(
+            before_desc,
+            {"value": "<TEST_DESCRIPTION>", "version": 12345},
+        )
 
     @mock_container(
         TestData.Points,
@@ -1005,11 +1045,10 @@ class TestDetachedLayerDescriptions(NgConnectTestCase):
         self, container_mock: MagicMock, qgs_layer: QgsVectorLayer
     ) -> None:
         layer = DetachedLayer(container_mock, qgs_layer)
-        set_layer_error_assert(layer)
 
         with self.subTest("Get description"):
             with self.assertRaises(DetachedEditingError):
-                self.assertEqual(layer.feature_description(999), None)
+                layer.feature_description(999)
 
         with self.subTest("Set description"):
             with self.assertRaises(DetachedEditingError):
@@ -1592,6 +1631,246 @@ class TestDetachedLayerDescriptions(NgConnectTestCase):
                 layer.feature_description(feature_1_fid),
                 self.TEST_DESCRIPTION_TEXT_1,
             )
+
+
+class TestDetachedLayerAttachments(NgConnectTestCase):
+    FEATURE_1 = 1
+    FEATURE_2 = 2
+
+    ATTACHMENT_1 = 1
+    ATTACHMENT_2 = 2
+    ATTACHMENT_3 = 3
+    ATTACHMENT_4 = 4
+
+    TEST_ATTACHMENT_1_CONTENT = "<TEST_1>"
+    TEST_ATTACHMENT_2_CONTENT = "<TEST_2>"
+    TEST_ATTACHMENT_3_CONTENT = "<TEST_3>"
+    TEST_ATTACHMENT_4_CONTENT = "<TEST_4>"
+
+    @mock_container(TestData.Points)
+    def test_attachments_change_in_readmode_raises_error(
+        self, container_mock: MagicMock, qgs_layer: QgsVectorLayer
+    ) -> None:
+        layer = DetachedLayer(container_mock, qgs_layer)
+
+        with self.assertRaises(DetachedEditingError):
+            layer.add_attachment(self.FEATURE_1, Path("attachment.txt"))
+
+        with self.assertRaises(DetachedEditingError):
+            layer.update_attachment(
+                AttachmentMetadata(self.FEATURE_1, self.ATTACHMENT_1)
+            )
+
+        with self.assertRaises(DetachedEditingError):
+            layer.remove_attachment(self.FEATURE_1, self.ATTACHMENT_1)
+
+    @mock_container(TestData.Points)
+    def test_access_attachments_of_nonexistent_feature(
+        self, container_mock: MagicMock, qgs_layer: QgsVectorLayer
+    ) -> None:
+        layer = DetachedLayer(container_mock, qgs_layer)
+
+        with self.subTest("Get attachment"):
+            with self.assertRaises(DetachedEditingError):
+                layer.feature_attachment(999, self.ATTACHMENT_1)
+
+        with self.subTest("Get attachments"):
+            self.assertEqual(len(layer.feature_attachments(999)), 0)
+
+        with self.subTest("Get attachments count"):
+            self.assertEqual(layer.feature_attachments_count(999), 0)
+
+        with self.subTest("Add attachment"):
+            with self.assertRaises(DetachedEditingError):
+                layer.add_attachment(999, Path("attachment.txt"))
+
+        with self.subTest("Update attachment"):
+            with self.assertRaises(DetachedEditingError):
+                layer.update_attachment(
+                    AttachmentMetadata(999, self.ATTACHMENT_1)
+                )
+
+        with self.subTest("Remove attachment"):
+            with self.assertRaises(DetachedEditingError):
+                layer.remove_attachment(999, self.ATTACHMENT_1)
+
+    @mock_container(TestData.Points)
+    def test_access_nonexistent_feature_attachments(
+        self, container_mock: MagicMock, qgs_layer: QgsVectorLayer
+    ) -> None:
+        layer = DetachedLayer(container_mock, qgs_layer)
+
+        with self.subTest("Get nonexistent attachment"):
+            with self.assertRaises(DetachedEditingError):
+                layer.feature_attachment(self.FEATURE_1, self.ATTACHMENT_1)
+
+        with self.subTest(
+            "Get attachments list for feature without attachments"
+        ):
+            attachments = layer.feature_attachments(self.FEATURE_1)
+            self.assertEqual(attachments, [])
+
+        with self.subTest(
+            "Get attachments count for feature without attachments"
+        ):
+            count = layer.feature_attachments_count(self.FEATURE_1)
+            self.assertEqual(count, 0)
+
+        with self.subTest("Update nonexistent attachment"):
+            with self.assertRaises(DetachedEditingError):
+                layer.update_attachment(
+                    AttachmentMetadata(self.FEATURE_1, self.ATTACHMENT_1)
+                )
+
+        with self.subTest("Remove attachment"):
+            with self.assertRaises(DetachedEditingError):
+                layer.remove_attachment(self.FEATURE_1, self.ATTACHMENT_1)
+
+    @mock_container(
+        TestData.Points,
+        attachments=[AttachmentMetadata(fid=FEATURE_1, aid=ATTACHMENT_1)],
+    )
+    def test_read_attachments(
+        self, container_mock: MagicMock, qgs_layer: QgsVectorLayer
+    ) -> None:
+        layer = DetachedLayer(container_mock, qgs_layer)
+
+        attachments = layer.feature_attachments(self.FEATURE_1)
+        attachment = layer.feature_attachment(
+            self.FEATURE_1, self.ATTACHMENT_1
+        )
+        self.assertTrue(
+            len(attachments)
+            == layer.feature_attachments_count(self.FEATURE_1)
+            == 1
+        )
+        self.assertIsInstance(attachment, AttachmentMetadata)
+        self.assertEqual(attachments[0], attachment)
+
+    @mock_container(
+        TestData.Points,
+        descriptions={1: "initial-description"},
+        attachments=[
+            AttachmentMetadata(
+                fid=FEATURE_1,
+                aid=ATTACHMENT_1,
+                ngw_aid=ATTACHMENT_1,
+                version=11,
+                name="initial-name-1",
+                description="initial-description-1",
+                mime_type="text/plain",
+            ),
+            AttachmentMetadata(
+                fid=FEATURE_1,
+                aid=ATTACHMENT_2,
+                ngw_aid=ATTACHMENT_2,
+                version=12,
+                name="initial-name-2",
+                description="initial-description-2",
+                mime_type="text/plain",
+            ),
+        ],
+    )
+    def test_delete_feature_removes_attachment_and_description_storage(
+        self, container_mock: MagicMock, qgs_layer: QgsVectorLayer
+    ) -> None:
+        layer = DetachedLayer(container_mock, qgs_layer)
+        set_layer_error_assert(layer)
+
+        with edit(layer.qgs_layer):
+            layer.set_feature_description(
+                self.FEATURE_1,
+                "updated-description",
+            )
+            attachment = layer.feature_attachment(
+                self.FEATURE_1,
+                self.ATTACHMENT_1,
+            )
+            assert attachment is not None
+            layer.update_attachment(replace(attachment, name="updated-name-1"))
+            layer.remove_attachment(self.FEATURE_1, self.ATTACHMENT_2)
+
+        with closing(
+            make_connection(container_mock.path)
+        ) as connection, closing(connection.cursor()) as cursor:
+            feature_attachments = list(
+                cursor.execute(
+                    "SELECT aid FROM ngw_features_attachments WHERE fid = ?",
+                    (self.FEATURE_1,),
+                )
+            )
+            updated_attachments = list(
+                cursor.execute("SELECT aid FROM ngw_updated_attachments")
+            )
+            removed_attachments = list(
+                cursor.execute("SELECT aid FROM ngw_removed_attachments")
+            )
+            descriptions = list(
+                cursor.execute(
+                    "SELECT fid FROM ngw_features_descriptions WHERE fid = ?",
+                    (self.FEATURE_1,),
+                )
+            )
+            updated_descriptions = list(
+                cursor.execute(
+                    "SELECT fid FROM ngw_updated_descriptions WHERE fid = ?",
+                    (self.FEATURE_1,),
+                )
+            )
+
+        self.assertEqual(
+            feature_attachments,
+            [(self.ATTACHMENT_1,), (self.ATTACHMENT_2,)],
+        )
+        self.assertEqual(updated_attachments, [(self.ATTACHMENT_1,)])
+        self.assertEqual(removed_attachments, [(self.ATTACHMENT_2,)])
+        self.assertEqual(descriptions, [(self.FEATURE_1,)])
+        self.assertEqual(updated_descriptions, [(self.FEATURE_1,)])
+
+        settings = NgConnectSettings()
+        should_notify = settings.notify_when_deleting_features_with_attachments
+        settings.notify_when_deleting_features_with_attachments = False
+        try:
+            with edit(layer.qgs_layer):
+                self.assertTrue(layer.qgs_layer.deleteFeature(self.FEATURE_1))
+        finally:
+            settings.notify_when_deleting_features_with_attachments = (
+                should_notify
+            )
+
+        with closing(
+            make_connection(container_mock.path)
+        ) as connection, closing(connection.cursor()) as cursor:
+            feature_attachments = list(
+                cursor.execute(
+                    "SELECT aid FROM ngw_features_attachments WHERE fid = ?",
+                    (self.FEATURE_1,),
+                )
+            )
+            updated_attachments = list(
+                cursor.execute("SELECT aid FROM ngw_updated_attachments")
+            )
+            removed_attachments = list(
+                cursor.execute("SELECT aid FROM ngw_removed_attachments")
+            )
+            descriptions = list(
+                cursor.execute(
+                    "SELECT fid FROM ngw_features_descriptions WHERE fid = ?",
+                    (self.FEATURE_1,),
+                )
+            )
+            updated_descriptions = list(
+                cursor.execute(
+                    "SELECT fid FROM ngw_updated_descriptions WHERE fid = ?",
+                    (self.FEATURE_1,),
+                )
+            )
+
+        self.assertEqual(feature_attachments, [])
+        self.assertEqual(updated_attachments, [])
+        self.assertEqual(removed_attachments, [])
+        self.assertEqual(descriptions, [])
+        self.assertEqual(updated_descriptions, [])
 
 
 if __name__ == "__main__":
