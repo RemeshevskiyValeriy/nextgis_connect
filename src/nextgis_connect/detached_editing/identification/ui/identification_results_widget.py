@@ -734,7 +734,13 @@ class IdentificationResultsWidget(QgsDockWidget, ResultsDialogBase):
         layer = cast(QgsVectorLayer, selected_result.mLayer)
         refreshed_feature = layer.getFeature(selected_result.mFeature.id())
         if not refreshed_feature.isValid():
-            self.__on_feature_changed(self.features_combobox.currentIndex())
+            feature_key = self.__current_feature_key()
+            if feature_key is not None:
+                self.__remove_feature_keys({feature_key})
+            else:
+                self.__on_feature_changed(
+                    self.features_combobox.currentIndex()
+                )
             return
 
         if self.__is_feature_changed(
