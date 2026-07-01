@@ -24,12 +24,14 @@ from nextgis_connect.tree_widget.overlay.widgets.surface import (
 class LoadingOverlayWidget(OverlaySurfaceWidget):
     """Overlay card for long-running loading and cancellation states."""
 
-    _NORMAL_CARD_PADDING = 20
-    _COMPACT_CARD_PADDING = 16
-    _MINIMUM_CARD_PADDING = 12
-    _NORMAL_CONTENT_SPACING = 8
-    _COMPACT_CONTENT_SPACING = 6
-    _MINIMUM_CONTENT_SPACING = 4
+    _NORMAL_CARD_PADDING = 16
+    _COMPACT_CARD_PADDING = 12
+    _MINIMUM_CARD_PADDING = 10
+    _NORMAL_CONTENT_SPACING = 4
+    _COMPACT_CONTENT_SPACING = 3
+    _MINIMUM_CONTENT_SPACING = 2
+    _MAXIMUM_TOP_CARD_PADDING = 10
+    _MAXIMUM_BOTTOM_CARD_PADDING = 12
     _PROGRESS_CANCEL_SPACING = 6
     _MINIMUM_PROGRESS_CANCEL_SPACING = 2
     _LAYOUT_RESERVE = 24
@@ -141,6 +143,33 @@ class LoadingOverlayWidget(OverlaySurfaceWidget):
 
         self._title_label.setFixedHeight(self._title_height_anchor)
         self._progress_bar.setFixedHeight(self._progress_height_anchor)
+
+    def _set_content_metrics(
+        self,
+        padding: int,
+        spacing: int,
+    ) -> None:
+        top_padding = min(padding, self._MAXIMUM_TOP_CARD_PADDING)
+        bottom_padding = min(padding, self._MAXIMUM_BOTTOM_CARD_PADDING)
+        margins = self._content_layout.contentsMargins()
+        if (
+            margins.left() != padding
+            or margins.top() != top_padding
+            or margins.right() != padding
+            or margins.bottom() != bottom_padding
+        ):
+            self._content_layout.setContentsMargins(
+                padding,
+                top_padding,
+                padding,
+                bottom_padding,
+            )
+
+        if self._content_layout.spacing() != spacing:
+            self._content_layout.setSpacing(spacing)
+
+        if self._compact_label.margin() != padding:
+            self._compact_label.setMargin(padding)
 
     def _horizontal_content_width_for_preferred_layout(self) -> int:
         if self._cancel_button.isHidden():
