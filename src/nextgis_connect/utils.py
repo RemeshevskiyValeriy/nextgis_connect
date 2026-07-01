@@ -89,17 +89,19 @@ def open_plugin_help():
 def set_clipboard_data(
     mime_type: str, data: Union[QByteArray, bytes, bytearray], text: str
 ):
-    mime_data = QMimeData()
-    mime_data.setData(mime_type, data)
-    if len(text) > 0:
-        mime_data.setText(text)
+    def create_mime_data() -> QMimeData:
+        mime_data = QMimeData()
+        mime_data.setData(mime_type, data)
+        if len(text) > 0:
+            mime_data.setText(text)
+        return mime_data
 
     clipboard = QgsApplication.clipboard()
     assert clipboard is not None
     if platform.system() == "Linux":
         selection_mode = QClipboard.Mode.Selection
-        clipboard.setMimeData(mime_data, selection_mode)
-    clipboard.setMimeData(mime_data, QClipboard.Mode.Clipboard)
+        clipboard.setMimeData(create_mime_data(), selection_mode)
+    clipboard.setMimeData(create_mime_data(), QClipboard.Mode.Clipboard)
 
 
 def is_version_supported(current_version_string: str) -> SupportStatus:
