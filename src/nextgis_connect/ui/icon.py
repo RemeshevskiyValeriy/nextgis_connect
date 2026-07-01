@@ -134,10 +134,12 @@ def render_svg_icon(
     """
     svg_content = svg_path.read_text(encoding="utf-8")
 
-    # Replace only pure white fills to preserve multi-colored icons
+    # Replace only pure white fills to preserve multi-colored icons.
     if color:
         modified_svg = svg_content.replace('fill="#ffffff"', f'fill="{color}"')
+        modified_svg = modified_svg.replace('fill="#fff"', f'fill="{color}"')
         modified_svg = modified_svg.replace("fill:#ffffff", f"fill:{color}")
+        modified_svg = modified_svg.replace("fill:#fff", f"fill:{color}")
     else:
         modified_svg = svg_content
 
