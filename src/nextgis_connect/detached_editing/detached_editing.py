@@ -196,6 +196,34 @@ class DetachedEditing(QObject):
             return None
         return container.layer(layer)
 
+    def unregister_layer(self, layer: QgsMapLayer) -> None:
+        container = self.__containers_by_layer_id.pop(layer.id(), None)
+        if container is None:
+            return
+
+        root = QgsProject.instance().layerTreeRoot()
+        node = root.findLayer(layer)
+        if node is not None:
+            container.remove_indicator(node)
+
+        container.delete_layer(layer.id())
+
+        if (
+            container.is_empty
+            and container.state != utils.DetachedLayerState.Synchronization
+        ):
+            self.__containers.pop(container.path, None)
+            container.deleteLater()
+
+    def setup_existing_layer(self, layer: QgsMapLayer) -> bool:
+        is_added = self.__setup_layer(layer)
+        if not is_added:
+            return False
+
+        self.__add_indicator_if_needed(layer)
+        self.synchronize_layers()
+        return True
+
     @pyqtSlot(str, object)
     def on_connection_updated(
         self,
