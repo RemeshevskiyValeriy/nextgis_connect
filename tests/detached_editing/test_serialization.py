@@ -118,7 +118,11 @@ class TestSerialization(NgConnectTestCase):
             ),
             # With timezones
             AttributeDateValuesTestData(
-                QDateTime(*VALID_DATETIME_PARTS, 0, Qt.TimeSpec.UTC),
+                QDateTime(
+                    QDate(*VALID_DATE_PARTS),
+                    QTime(*VALID_TIME_PARTS),
+                    Qt.TimeSpec.UTC,
+                ),
                 dict(zip(DATETIME_KEYS, VALID_DATETIME_PARTS)),
                 f'"{VALID_DATETIME_STR}"',
                 VALID_DATETIME_STR,
