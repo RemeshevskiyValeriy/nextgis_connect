@@ -479,6 +479,8 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
         self.toolbuttonUpload.setToolTip(self.menuUpload.title())
         self.main_tool_bar.addWidget(self.toolbuttonUpload)
 
+        self.main_tool_bar.addSeparator()
+
         self.actionIdentify = NgConnectInterface.instance().detached_editing.identification_action
         self.main_tool_bar.addAction(self.actionIdentify)
 
