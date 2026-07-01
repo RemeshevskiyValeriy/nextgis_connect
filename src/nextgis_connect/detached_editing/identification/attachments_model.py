@@ -16,12 +16,13 @@ from qgis.PyQt.QtCore import (
     QByteArray,
     QModelIndex,
     QObject,
+    QRect,
     Qt,
     QVariant,
     pyqtSignal,
     pyqtSlot,
 )
-from qgis.PyQt.QtGui import QColor, QPainter, QPixmap
+from qgis.PyQt.QtGui import QColor, QIcon, QPainter, QPixmap
 
 from nextgis_connect.detached_editing.identification.settings import (
     IdentificationSettings,
@@ -30,6 +31,7 @@ from nextgis_connect.detached_editing.utils import AttachmentMetadata
 from nextgis_connect.logging import logger
 from nextgis_connect.types import AttachmentId
 from nextgis_connect.ui.icon import (
+    material_icon,
     plugin_icon,
 )
 from nextgis_connect.utils import human_readable_size
@@ -395,6 +397,8 @@ class AttachmentsModel(QAbstractListModel):
             "{UNIT}": unit,
         }
         icon = plugin_icon(icon_name, replacements=replacements)
+        if not is_cached:
+            icon = self._with_download_overlay(icon)
 
         self._ICONS_CACHE[aid] = icon
         return icon
@@ -424,8 +428,32 @@ class AttachmentsModel(QAbstractListModel):
         result = QPixmap(pixmap)
         painter = QPainter(result)
         painter.fillRect(result.rect(), QColor(0, 0, 0, 56))
+        self._paint_download_overlay(painter, result.rect())
         painter.end()
         return result
+
+    def _with_download_overlay(self, icon: QIcon) -> QIcon:
+        size = IdentificationSettings().attachment_thumbnail_size
+        pixmap = QPixmap(size, size)
+        pixmap.fill(Qt.GlobalColor.transparent)
+
+        painter = QPainter(pixmap)
+        icon.paint(painter, pixmap.rect(), Qt.AlignmentFlag.AlignCenter)
+        self._paint_download_overlay(painter, pixmap.rect())
+        painter.end()
+
+        return QIcon(pixmap)
+
+    def _paint_download_overlay(self, painter: QPainter, rect: QRect) -> None:
+        icon_size = max(18, min(rect.width(), rect.height()) // 2)
+        overlay_rect = QRect(0, 0, icon_size, icon_size)
+        overlay_rect.moveCenter(rect.center())
+        icon = material_icon(
+            "download_for_offline",
+            color="#ffffff",
+            size=icon_size,
+        )
+        icon.paint(painter, overlay_rect, Qt.AlignmentFlag.AlignCenter)
 
     def _is_image(self, attachment: AttachmentMetadata) -> bool:
         mime_type = attachment.mime_type or ""
