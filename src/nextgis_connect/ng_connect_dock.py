@@ -587,7 +587,7 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
         # update state
         QTimer.singleShot(0, lambda: self.reinit_tree(force=True))
 
-        self.main_tool_bar.setIconSize(QSize(24, 24))
+        self.main_tool_bar.fix_icons_size()
 
         if HAS_NGSTD:
             self.__ngstd_connection = (
@@ -3384,12 +3384,13 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
 
 
 class NGWPanelToolBar(QToolBar):
-    SIZE = 20
+    ICON_SIZE = 24
+    BUTTON_SIZE = 32
 
     def __init__(self):
         super().__init__(None)
 
-        self.setIconSize(QSize(self.SIZE, self.SIZE))
+        self.setIconSize(QSize(self.ICON_SIZE, self.ICON_SIZE))
         self.setSizePolicy(
             QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed
         )
@@ -3402,8 +3403,11 @@ class NGWPanelToolBar(QToolBar):
         a0.accept()
 
     def fix_icons_size(self) -> None:
-        self.setIconSize(QSize(self.SIZE, self.SIZE))
+        icon_size = QSize(self.ICON_SIZE, self.ICON_SIZE)
+        button_size = QSize(self.BUTTON_SIZE, self.BUTTON_SIZE)
+        self.setIconSize(icon_size)
 
         for button in self.findChildren(QToolButton):
-            button.setIconSize(QSize(self.SIZE, self.SIZE))
-            button.setFixedSize(button.sizeHint())
+            button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonIconOnly)
+            button.setIconSize(icon_size)
+            button.setFixedSize(button_size)
