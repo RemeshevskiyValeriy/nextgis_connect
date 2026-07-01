@@ -247,6 +247,7 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
         self.__is_tree_overlay_visible = False
         self.__promo_banner_container: Optional[QFrame] = None
         self.__search_menu = None
+        self.__is_closed = False
 
         self.actionOpenInNGW = QAction(self.tr("Open in Web GIS"), self)
         self.actionOpenInNGW.setIcon(QIcon(plugin_icon("ngw_logo.svg")))
@@ -566,9 +567,7 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
         self.resources_tree_view = QNGWResourceTreeView(self)
         self.resources_tree_view.setModel(self.proxy_model)
         self.resource_model.found_resources_changed.connect(
-            lambda resources: self.resources_tree_view.set_search_empty(
-                -1 in resources
-            )
+            self.__set_search_empty
         )
 
         self.resources_tree_view.customContextMenuRequested.connect(
@@ -639,51 +638,129 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
         self.checkImportActionsAvailability()
 
     def close(self) -> bool:
-        self.resources_tree_view.customContextMenuRequested.disconnect(
-            self.slotCustomContextMenu
+        if self.__is_closed:
+            return super().close()
+
+        self.__is_closed = True
+
+        if Qgis.versionInt() >= QGIS_3_32:
+            self.__safe_disconnect(
+                self.iface.layerTreeView().contextMenuAboutToShow,
+                self.__add_upload_selected_action_to_export_menu,
+            )
+
+        self.__safe_disconnect(
+            NgConnectInterface.instance().settings_changed,
+            self.search_panel.on_settings_changed,
         )
-        self.resources_tree_view.itemDoubleClicked.disconnect(
-            self.trvDoubleClickProcess
+        self.__safe_disconnect(
+            self.search_panel.search_requested,
+            self.__on_search_requested,
         )
-        self.resources_tree_view.overlay_visibility_changed.disconnect(
-            self.__handle_tree_overlay_visibility_changed
+        self.__safe_disconnect(
+            self.search_panel.reset_requested,
+            self.__on_search_reset,
+        )
+
+        self.__safe_disconnect(
+            self.resources_tree_view.customContextMenuRequested,
+            self.slotCustomContextMenu,
+        )
+        self.__safe_disconnect(
+            self.resources_tree_view.itemDoubleClicked,
+            self.trvDoubleClickProcess,
+        )
+        self.__safe_disconnect(
+            self.resources_tree_view.overlay_action_requested,
+            self.__handle_tree_overlay_action,
+        )
+        self.__safe_disconnect(
+            self.resources_tree_view.overlay_visibility_changed,
+            self.__handle_tree_overlay_visibility_changed,
         )
 
         layer_tree_view = self.iface.layerTreeView()
         assert layer_tree_view is not None
-        layer_tree_view.selectionModel().selectionChanged.disconnect(
-            self.checkImportActionsAvailability
+        self.__safe_disconnect(
+            layer_tree_view.selectionModel().selectionChanged,
+            self.checkImportActionsAvailability,
         )
 
         selection_model = self.resources_tree_view.selectionModel()
         assert selection_model is not None
-        selection_model.currentChanged.disconnect(
-            self.checkImportActionsAvailability
+        self.__safe_disconnect(
+            selection_model.selectionChanged,
+            self.checkImportActionsAvailability,
+        )
+
+        project = QgsProject.instance()
+        assert project is not None
+        self.__safe_disconnect(
+            project.layersRemoved,
+            self.checkImportActionsAvailability,
+        )
+
+        if HAS_NGSTD and self.__ngstd_connection is not None:
+            self.__safe_disconnect(
+                NGAccess.instance().userInfoUpdated,
+                self.__on_ngstd_user_info_updated,
+            )
+            self.__ngstd_connection = None
+
+        self.__safe_disconnect(
+            self.resource_model.errorOccurred,
+            self.__model_error_process,
+        )
+        self.__safe_disconnect(
+            self.resource_model.warningOccurred,
+            self.__model_warning_process,
+        )
+        self.__safe_disconnect(
+            self.resource_model.jobStarted,
+            self.__modelJobStarted,
+        )
+        self.__safe_disconnect(
+            self.resource_model.jobStatusChanged,
+            self.__modelJobStatusChanged,
+        )
+        self.__safe_disconnect(
+            self.resource_model.jobFinished,
+            self.__modelJobFinished,
+        )
+        self.__safe_disconnect(
+            self.resource_model.indexesLocked,
+            self.__onModelBlockIndexes,
+        )
+        self.__safe_disconnect(
+            self.resource_model.indexesUnlocked,
+            self.__onModelReleaseIndexes,
+        )
+        self.__safe_disconnect(
+            self.resource_model.connection_id_changed,
+            self.search_panel.set_connection_id,
+        )
+        self.__safe_disconnect(
+            self.resource_model.found_resources_changed,
+            self.proxy_model.set_resources_id,
+        )
+        self.__safe_disconnect(
+            self.resource_model.found_resources_changed,
+            self.__set_search_empty,
         )
 
         self.resources_tree_view.deleteLater()
-
-        self.resource_model.errorOccurred.disconnect(
-            self.__model_error_process
-        )
-        self.resource_model.warningOccurred.disconnect(
-            self.__model_warning_process
-        )
-        self.resource_model.jobStarted.disconnect(self.__modelJobStarted)
-        self.resource_model.jobStatusChanged.disconnect(
-            self.__modelJobStatusChanged
-        )
-        self.resource_model.jobFinished.disconnect(self.__modelJobFinished)
-        self.resource_model.indexesLocked.disconnect(
-            self.__onModelBlockIndexes
-        )
-        self.resource_model.indexesUnlocked.disconnect(
-            self.__onModelReleaseIndexes
-        )
-
         self.resource_model.deleteLater()
 
         return super().close()
+
+    def __safe_disconnect(self, signal, slot) -> None:
+        try:
+            signal.disconnect(slot)
+        except (RuntimeError, TypeError):
+            pass
+
+    def __set_search_empty(self, resources) -> None:
+        self.resources_tree_view.set_search_empty(-1 in resources)
 
     @pyqtSlot()
     def checkImportActionsAvailability(self):
