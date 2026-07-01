@@ -24,6 +24,12 @@ from nextgis_connect.tree_widget.overlay.widgets.surface import (
 class LoadingOverlayWidget(OverlaySurfaceWidget):
     """Overlay card for long-running loading and cancellation states."""
 
+    _NORMAL_CARD_PADDING = 20
+    _COMPACT_CARD_PADDING = 16
+    _MINIMUM_CARD_PADDING = 12
+    _NORMAL_CONTENT_SPACING = 8
+    _COMPACT_CONTENT_SPACING = 6
+    _MINIMUM_CONTENT_SPACING = 4
     _PROGRESS_CANCEL_SPACING = 6
     _MINIMUM_PROGRESS_CANCEL_SPACING = 2
     _LAYOUT_RESERVE = 24
