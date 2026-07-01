@@ -104,6 +104,7 @@ class TestNgwConnectionsManager(NgConnectTestCase):
     ) -> None:
         guest_connection = self.connection(TestConnection.SandboxGuest)
         login_connection = self.connection(TestConnection.SandboxWithLogin)
+        demo_connection = self.connection(TestConnection.DemoGuest)
         connection = replace(
             guest_connection,
             url="https://changed-sandbox.nextgis.com/",
@@ -117,6 +118,7 @@ class TestNgwConnectionsManager(NgConnectTestCase):
             [
                 connection,
                 login_connection,
+                demo_connection,
             ]
         )
         self.manager.save()
@@ -155,7 +157,12 @@ class TestNgwConnectionsManager(NgConnectTestCase):
         )
 
     def test_auth_config_ids_for_guest_connection_ignores_guest(self) -> None:
-        connection = self.connection(TestConnection.SandboxGuest)
+        connection = replace(
+            self.connection(TestConnection.SandboxGuest),
+            id="guest-only-connection-id",
+            url="https://guest-only.nextgis.com/",
+        )
+        self.manager.upsert(connection)
 
         self.assertEqual(
             self.manager.auth_config_ids_for_connection(connection.id),

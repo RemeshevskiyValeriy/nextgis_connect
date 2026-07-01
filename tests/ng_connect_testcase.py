@@ -189,56 +189,78 @@ class NgConnectTestCase(QgisTestCase):
     @classmethod
     def _init_connections(cls) -> None:
         connections_manager = NgwConnectionsManager()
-        if len(connections_manager.connections) > 0:
-            return
-
-        cls._connections_id = {}
-
         auth_manager = QgsApplication.authManager()
 
-        # Create guest connection
-        guest_connection_id = str(uuid.uuid4())
-        guest_connection = NgwConnection(
-            guest_connection_id,
+        def upsert_test_connection(
+            test_connection: TestConnection,
+            name: str,
+            url: str,
+            auth_config_id: Optional[str],
+        ) -> None:
+            connection_id = cls._connections_id.get(
+                test_connection, str(uuid.uuid4())
+            )
+            expected_connection = NgwConnection(
+                connection_id,
+                name,
+                url,
+                auth_config_id,
+            )
+            if (
+                connections_manager.connection(connection_id)
+                != expected_connection
+            ):
+                connections_manager.upsert(expected_connection)
+
+            cls._connections_id[test_connection] = connection_id
+
+        upsert_test_connection(
+            TestConnection.SandboxGuest,
             "TEST_SANDBOX_GUEST_CONNECTION",
             "https://sandbox.nextgis.com/",
             None,
         )
-        connections_manager.upsert(guest_connection)
-        cls._connections_id[TestConnection.SandboxGuest] = guest_connection_id
 
-        # Create basic connection
-        auth_config = QgsAuthMethodConfig("Basic")
-        auth_config.setName("test_auth_config")
-        auth_config.setConfig("username", "administrator")
-        auth_config.setConfig("password", "demodemo")
-        assert auth_manager.storeAuthenticationConfig(auth_config)[0]
+        basic_connection_id = cls._connections_id.get(
+            TestConnection.SandboxWithLogin
+        )
+        basic_connection = (
+            connections_manager.connection(basic_connection_id)
+            if basic_connection_id is not None
+            else None
+        )
+        basic_auth_config_id = (
+            basic_connection.auth_config_id
+            if basic_connection is not None
+            else None
+        )
+        if (
+            basic_auth_config_id is None
+            or basic_auth_config_id
+            not in auth_manager.availableAuthMethodConfigs()
+        ):
+            auth_config = QgsAuthMethodConfig("Basic")
+            auth_config.setName("test_auth_config")
+            auth_config.setConfig("username", "administrator")
+            auth_config.setConfig("password", "demodemo")
+            assert auth_manager.storeAuthenticationConfig(auth_config)[0]
+            basic_auth_config_id = auth_config.id()
 
-        basic_connection_id = str(uuid.uuid4())
-        basic_connection = NgwConnection(
-            basic_connection_id,
+        upsert_test_connection(
+            TestConnection.SandboxWithLogin,
             "TEST_SANDBOX_LOGIN_CONNECTION",
-            "https://sandbox.nextgis.com/",
-            auth_config.id(),
-        )
-        connections_manager.upsert(basic_connection)
-        cls._connections_id[TestConnection.SandboxWithLogin] = (
-            basic_connection_id
+            "https://sandbox-login.nextgis.com/",
+            basic_auth_config_id,
         )
 
-        # Create demo guest connection
-        demo_guest_connection_id = str(uuid.uuid4())
-        demo_guest_connection = NgwConnection(
-            demo_guest_connection_id,
+        upsert_test_connection(
+            TestConnection.DemoGuest,
             "TEST_DEMO_GUEST_CONNECTION",
             "https://demo.nextgis.com/",
             None,
         )
-        connections_manager.upsert(demo_guest_connection)
+
         connections_manager.save()
-        cls._connections_id[TestConnection.DemoGuest] = (
-            demo_guest_connection_id
-        )
 
 
 def start_qgis() -> None:
