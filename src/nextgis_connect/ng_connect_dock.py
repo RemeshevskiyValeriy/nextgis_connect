@@ -3652,7 +3652,7 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
 
 
 class NGWPanelToolBar(QToolBar):
-    ICON_SIZE = 24
+    ICON_SIZE = 20
     BUTTON_SIZE = 32
     MENU_BUTTON_WIDTH = 44
 
