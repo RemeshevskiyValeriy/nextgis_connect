@@ -30,7 +30,7 @@ import uuid
 from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import List, Optional, Set, cast
+from typing import List, Optional, Set, Tuple, cast
 
 from qgis import utils as qgis_utils
 from qgis.core import (
@@ -222,6 +222,7 @@ class AddLayersCommand:
     job_uuid: str
     insertion_point: QgsLayerTreeRegistryBridge.InsertionPoint
     ngw_indexes: List[QModelIndex]
+    allow_demo_project_prompt: bool = True
 
 
 class NgConnectDock(QgsDockWidget, FORM_CLASS):
@@ -2145,10 +2146,17 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
         self.__download_indices(selected_indexes)
 
     def __download_indices(self, indices: List[QModelIndex]) -> None:
+        allow_demo_project_prompt = True
+
         def save_command(job) -> None:
             insertion_point = self.iface.layerTreeInsertionPoint()
             self._queue_to_add.append(
-                AddLayersCommand(job.job_uuid, insertion_point, indices)
+                AddLayersCommand(
+                    job.job_uuid,
+                    insertion_point,
+                    indices,
+                    allow_demo_project_prompt,
+                )
             )
 
         adder = NgwResourcesAdder(
@@ -2168,6 +2176,28 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
             return
 
         # Fetch group tree if group resource is selected
+        job = self.resource_model.fetch_missing(missing_ids)
+        if job is not None:
+            save_command(job)
+            return
+
+        resolved = self.__resolve_demo_project_indices(
+            indices, allow_demo_project_prompt
+        )
+        if resolved is None:
+            return
+
+        indices, allow_demo_project_prompt = resolved
+        adder = NgwResourcesAdder(
+            self.resource_model,
+            indices,
+            self.iface.layerTreeInsertionPoint(),
+        )
+
+        is_success, missing_ids = adder.missing_resources()
+        if not is_success:
+            return
+
         job = self.resource_model.fetch_missing(missing_ids)
         if job is not None:
             save_command(job)
@@ -2222,6 +2252,84 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
 
             tree_rigistry_bridge.setLayerInsertionPoint(backup_point)
             plugin.enable_synchronization()
+
+    def __resolve_demo_project_indices(
+        self,
+        indices: List[QModelIndex],
+        allow_prompt: bool,
+    ) -> Optional[Tuple[List[QModelIndex], bool]]:
+        if not allow_prompt or len(indices) != 1:
+            return indices, allow_prompt
+
+        demo_project_index = indices[0]
+        demo_project = demo_project_index.data(
+            QNGWResourceItem.NGWResourceRole
+        )
+        if not self.__is_demo_project(demo_project):
+            return indices, allow_prompt
+
+        webmap_indices = self.__demo_project_webmap_indices(demo_project_index)
+        if len(webmap_indices) != 1:
+            return indices, allow_prompt
+
+        webmap_index = webmap_indices[0]
+        webmap = webmap_index.data(QNGWResourceItem.NGWResourceRole)
+        assert isinstance(webmap, NGWWebMap)
+
+        add_webmap = self.__ask_demo_project_add_mode(demo_project, webmap)
+        if add_webmap:
+            return [webmap_index], False
+
+        return indices, False
+
+    def __is_demo_project(self, resource: Optional[NGWResource]) -> bool:
+        return (
+            isinstance(resource, NGWGroupResource)
+            and getattr(resource.common, "cls", None) == "demo_project"
+        )
+
+    def __demo_project_webmap_indices(
+        self, parent_index: QModelIndex
+    ) -> List[QModelIndex]:
+        webmap_indices = []
+
+        for row in range(self.resource_model.rowCount(parent_index)):
+            child_index = self.resource_model.index(row, 0, parent_index)
+            child = child_index.data(QNGWResourceItem.NGWResourceRole)
+            if isinstance(child, NGWWebMap):
+                webmap_indices.append(child_index)
+            elif isinstance(child, NGWGroupResource):
+                webmap_indices.extend(
+                    self.__demo_project_webmap_indices(child_index)
+                )
+
+        return webmap_indices
+
+    def __ask_demo_project_add_mode(
+        self, demo_project: NGWResource, webmap: NGWWebMap
+    ) -> bool:
+        box = QMessageBox(self)
+        box.setIcon(QMessageBox.Icon.Question)
+        box.setWindowTitle(self.tr("Add demo project"))
+        box.setText(
+            self.tr('Demo project "{}" contains one web map.').format(
+                demo_project.display_name
+            )
+        )
+        box.setInformativeText(self.tr("How should it be added to the map?"))
+
+        add_webmap_button = box.addButton(
+            self.tr('Add web map "{}"').format(webmap.display_name),
+            QMessageBox.ButtonRole.AcceptRole,
+        )
+        box.addButton(
+            self.tr("Add as group"),
+            QMessageBox.ButtonRole.RejectRole,
+        )
+        box.setDefaultButton(add_webmap_button)
+        box.exec()
+
+        return box.clickedButton() is add_webmap_button
 
     @pyqtSlot()
     def create_group(self) -> None:
@@ -3374,6 +3482,28 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
             return
 
         # Fetch group tree if group resource is selected
+        job = self.resource_model.fetch_missing(missing_ids)
+        if job is not None:
+            command.job_uuid = job.job_uuid
+            self._queue_to_add.append(command)
+            return
+
+        resolved = self.__resolve_demo_project_indices(
+            command.ngw_indexes,
+            command.allow_demo_project_prompt,
+        )
+        if resolved is None:
+            return
+
+        command.ngw_indexes, command.allow_demo_project_prompt = resolved
+        adder = NgwResourcesAdder(
+            self.resource_model, command.ngw_indexes, command.insertion_point
+        )
+
+        is_success, missing_ids = adder.missing_resources()
+        if not is_success:
+            return
+
         job = self.resource_model.fetch_missing(missing_ids)
         if job is not None:
             command.job_uuid = job.job_uuid
