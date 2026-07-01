@@ -3,7 +3,7 @@ from typing import TYPE_CHECKING, Optional
 
 from qgis.core import QgsApplication, QgsAuthMethodConfig, QgsFeedback
 
-from nextgis_connect.exceptions import NgConnectError, NgwError
+from nextgis_connect.exceptions import ErrorCode, NgConnectError, NgwError
 from nextgis_connect.ngw_connection.application.diagnostics.checks.base import (
     BaseConnectionCheck,
     UpdateReporter,
@@ -53,10 +53,7 @@ class CurrentUserExpectation:
         if self.expects_guest:
             return keyname == "guest"
 
-        if self.expected_keyname is None:
-            return keyname != "guest"
-
-        return keyname == self.expected_keyname
+        return keyname != "guest"
 
 
 class CurrentUserCheck(BaseConnectionCheck):
@@ -92,6 +89,22 @@ class CurrentUserCheck(BaseConnectionCheck):
                 return self._failure(
                     self.tr("Unable to read the current user."),
                     issue=self._network_issue(error, resolution),
+                )
+
+            if error.code == ErrorCode.AuthorizationError:
+                return self._failure(
+                    self.tr(
+                        "The current user endpoint rejected authentication."
+                    ),
+                    issue=self._client_issue(
+                        self.tr(
+                            "The selected sign-in settings were rejected by the Web GIS."
+                        ),
+                        self.tr(
+                            "Check the username and password or choose another saved user."
+                        ),
+                        technical_details=error.detail,
+                    ),
                 )
 
             issue_resolution = self.tr(
@@ -173,10 +186,10 @@ class CurrentUserCheck(BaseConnectionCheck):
             else:
                 issue = self._client_issue(
                     self.tr(
-                        "The selected authentication configuration resolved to an unexpected user."
+                        "The selected authentication configuration resolved to guest access."
                     ),
                     self.tr(
-                        "Check the selected authentication configuration and make sure it belongs to the expected account."
+                        "Check the selected authentication configuration or choose another saved user."
                     ),
                 )
 

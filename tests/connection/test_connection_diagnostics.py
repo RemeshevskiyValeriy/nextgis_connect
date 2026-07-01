@@ -122,6 +122,18 @@ class TestConnectionDiagnosticsHelpers(unittest.TestCase):
         self.assertTrue(expectation.matches("guest"))
         self.assertFalse(expectation.matches("admin"))
 
+    def test_current_user_expectation_requires_non_guest_with_auth(
+        self,
+    ) -> None:
+        expectation = CurrentUserExpectation(
+            expects_guest=False,
+            expected_keyname="administrator",
+        )
+
+        self.assertFalse(expectation.matches("guest"))
+        self.assertTrue(expectation.matches("administrator"))
+        self.assertTrue(expectation.matches("another_user"))
+
     def test_qgs_ngw_connection_accepts_connection_object(self) -> None:
         try:
             from nextgis_connect.ngw_api.qgis.qgis_ngw_connection import (
