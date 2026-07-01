@@ -77,6 +77,7 @@ from nextgis_connect.ngw_api.qt.qt_ngw_resource_model_job import (
     NGWResourceUpdater,
     NGWRootResourcesLoader,
     NgwStylesDownloader,
+    UploadedLayerResource,
 )
 from nextgis_connect.ngw_api.qt.qt_ngw_resource_model_job_error import (
     NGWResourceModelJobError,
@@ -102,6 +103,7 @@ class NGWResourceModelResponse(QObject):
         self.job_uuid = ""
         self.__errors = {}
         self.warnings = []
+        self.uploaded_layers: List[UploadedLayerResource] = []
 
     def errors(self):
         return self.__errors
@@ -1010,6 +1012,11 @@ class QNGWResourceTreeModelBase(QAbstractItemModel):
         if job_result is None:
             # TODO Exception
             return
+
+        if job.model_response is not None:
+            job.model_response.uploaded_layers = list(
+                job_result.uploaded_layer_resources
+            )
 
         if (
             job_result.is_empty()

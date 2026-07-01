@@ -1446,6 +1446,10 @@ class QGISResourcesUploader(QGISResourceJob):
                         layer_tree_item.layer(), ngw_resource
                     )
 
+                self.putUploadedLayerResourceToResult(
+                    qgs_map_layer, ngw_resource
+                )
+
             elif ngw_resource.type_id == NGWWmsLayer.type_id:
                 transparency = None
                 if layer_tree_item.layer().type() == LayerType.Raster:

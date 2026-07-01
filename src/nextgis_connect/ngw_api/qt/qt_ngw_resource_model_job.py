@@ -19,9 +19,10 @@
 """
 
 from copy import deepcopy
+from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Union, cast
 
-from qgis.core import QgsFeedback
+from qgis.core import QgsFeedback, QgsMapLayer
 from qgis.PyQt.QtCore import QObject, pyqtSignal
 
 from nextgis_connect.exceptions import NgConnectError
@@ -52,6 +53,12 @@ from .qt_ngw_resource_model_job_error import (
 )
 
 
+@dataclass(frozen=True)
+class UploadedLayerResource:
+    qgs_map_layer: QgsMapLayer
+    ngw_resource: Union[NGWVectorLayer, NGWRasterLayer]
+
+
 class NGWResourceModelJobResult:
     added_resources: List[NGWResource]
     deleted_resources: List[NGWResource]
@@ -59,6 +66,7 @@ class NGWResourceModelJobResult:
     dangling_resources: List[NGWResource]
     found_resources: Optional[List[int]]
     not_permitted_resources: List[int]
+    uploaded_layer_resources: List[UploadedLayerResource]
     main_resource_id: int
 
     def __init__(self):
@@ -68,6 +76,7 @@ class NGWResourceModelJobResult:
         self.dangling_resources = []
         self.found_resources = None
         self.not_permitted_resources = []
+        self.uploaded_layer_resources = []
 
         self.main_resource_id = -1
 
@@ -87,6 +96,15 @@ class NGWResourceModelJobResult:
 
     def putDeletedResource(self, ngw_resource: NGWResource) -> None:
         self.deleted_resources.append(ngw_resource)
+
+    def putUploadedLayerResource(
+        self,
+        qgs_map_layer: QgsMapLayer,
+        ngw_resource: Union[NGWVectorLayer, NGWRasterLayer],
+    ) -> None:
+        self.uploaded_layer_resources.append(
+            UploadedLayerResource(qgs_map_layer, ngw_resource)
+        )
 
     def is_empty(self):
         return (
@@ -145,6 +163,13 @@ class NGWResourceModelJob(QObject):
 
     def putDeletedResourceToResult(self, ngw_resource: NGWResource):
         self.result.putDeletedResource(ngw_resource)
+
+    def putUploadedLayerResourceToResult(
+        self,
+        qgs_map_layer: QgsMapLayer,
+        ngw_resource: Union[NGWVectorLayer, NGWRasterLayer],
+    ) -> None:
+        self.result.putUploadedLayerResource(qgs_map_layer, ngw_resource)
 
     def run(self):
         if NgConnectSettings().is_developer_mode:
