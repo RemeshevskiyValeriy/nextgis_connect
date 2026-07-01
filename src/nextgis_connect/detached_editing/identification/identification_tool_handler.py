@@ -3,6 +3,7 @@ from typing import Optional
 from qgis.core import QgsMapLayer
 from qgis.gui import QgsAbstractMapToolHandler, QgsMapTool
 from qgis.PyQt.QtWidgets import QAction
+from qgis.utils import iface
 
 from nextgis_connect.detached_editing.utils import is_ngw_container
 
@@ -41,4 +42,14 @@ class IdentificationToolHandler(QgsAbstractMapToolHandler):
         :param context: Context of the map tool handler.
         :return: Return True when the layer is an NGW container.
         """
-        return layer is not None and is_ngw_container(layer)
+        if layer is not None and is_ngw_container(layer):
+            return True
+
+        layer_tree_view = iface.layerTreeView()
+        if layer_tree_view is None:
+            return False
+
+        return any(
+            is_ngw_container(selected_layer)
+            for selected_layer in layer_tree_view.selectedLayersRecursive()
+        )

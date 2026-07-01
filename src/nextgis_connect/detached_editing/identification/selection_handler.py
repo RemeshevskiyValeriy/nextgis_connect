@@ -9,7 +9,6 @@ from qgis.PyQt.QtCore import (
     Qt,
     QVariantAnimation,
     pyqtSignal,
-    pyqtSlot,
 )
 from qgis.PyQt.QtGui import QColor, QKeyEvent
 
@@ -87,18 +86,18 @@ class IdentificationSelectionHandler(QObject):
         """
         self.cancel()
 
-    @pyqtSlot()
-    def cancel(self) -> None:
+    def cancel(self, emit_clear: bool = True) -> None:
         """Cancel the current selection interaction.
 
         Reset temporary canvas feedback, stop the point fade animation,
-        mark the handler as inactive, and emit ``clear`` without
+        mark the handler as inactive, and optionally emit ``clear`` without
         emitting ``geometry_changed``.
         """
         self._reset_visual_state()
         self._is_selection_active = False
         self._is_current_cancelled = True
-        self.clear.emit()
+        if emit_clear:
+            self.clear.emit()
 
     def process_press_event(self, event: QgsMapMouseEvent) -> None:
         """Start tracking a new selection interaction.

@@ -2,7 +2,7 @@ from typing import Optional
 
 from qgis.core import QgsGeometry
 from qgis.gui import QgsMapCanvas, QgsMapMouseEvent, QgsMapToolIdentify
-from qgis.PyQt.QtCore import Qt, pyqtSignal
+from qgis.PyQt.QtCore import Qt, pyqtSignal, pyqtSlot
 from qgis.PyQt.QtGui import QKeyEvent
 
 from nextgis_connect.detached_editing.identification.selection_handler import (
@@ -46,7 +46,7 @@ class IdentificationTool(QgsMapToolIdentify):
         self._selection_handler = IdentificationSelectionHandler(canvas, self)
         self._selection_handler.geometry_changed.connect(self.geometry_changed)
         self._selection_handler.clear.connect(self.clear)
-        self.deactivated.connect(self._selection_handler.cancel)
+        self.deactivated.connect(self._cancel_selection_on_deactivate)
 
     def canvasPressEvent(self, e: Optional[QgsMapMouseEvent]) -> None:
         """Forward canvas press events to the selection handler.
@@ -86,3 +86,7 @@ class IdentificationTool(QgsMapToolIdentify):
             return
 
         super().keyReleaseEvent(e)
+
+    @pyqtSlot()
+    def _cancel_selection_on_deactivate(self) -> None:
+        self._selection_handler.cancel(emit_clear=False)
