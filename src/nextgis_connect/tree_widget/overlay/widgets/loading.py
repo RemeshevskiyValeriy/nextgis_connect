@@ -27,6 +27,7 @@ class LoadingOverlayWidget(OverlaySurfaceWidget):
     _PROGRESS_CANCEL_SPACING = 6
     _MINIMUM_PROGRESS_CANCEL_SPACING = 2
     _LAYOUT_RESERVE = 24
+    _UNBOUNDED_WIDGET_HEIGHT = 16777215
 
     action_requested = pyqtSignal(object)
 
@@ -82,10 +83,18 @@ class LoadingOverlayWidget(OverlaySurfaceWidget):
         self._progress_direction = QBoxLayout.Direction.LeftToRight
         self._card_top_anchor: Optional[int] = None
         self._card_top_anchor_size: Optional[QSize] = None
+        self._title_height_anchor: Optional[int] = None
+        self._progress_height_anchor: Optional[int] = None
 
     def reset_card_growth(self) -> None:
         self._card_top_anchor = None
         self._card_top_anchor_size = None
+        self._title_height_anchor = None
+        self._progress_height_anchor = None
+        self._title_label.setMinimumHeight(0)
+        self._title_label.setMaximumHeight(self._UNBOUNDED_WIDGET_HEIGHT)
+        self._progress_bar.setMinimumHeight(0)
+        self._progress_bar.setMaximumHeight(self._UNBOUNDED_WIDGET_HEIGHT)
         super().reset_card_growth()
 
     def set_state(self, state: OverlayState) -> None:
@@ -113,7 +122,19 @@ class LoadingOverlayWidget(OverlaySurfaceWidget):
         else:
             self._cancel_button.setToolTip("")
 
+        self._freeze_header_heights()
         self.sync_layout()
+
+    def _freeze_header_heights(self) -> None:
+        title_height = self._title_label.sizeHint().height()
+        progress_height = self._progress_bar.sizeHint().height()
+        if self._title_height_anchor is None:
+            self._title_height_anchor = title_height
+        if self._progress_height_anchor is None:
+            self._progress_height_anchor = progress_height
+
+        self._title_label.setFixedHeight(self._title_height_anchor)
+        self._progress_bar.setFixedHeight(self._progress_height_anchor)
 
     def _horizontal_content_width_for_preferred_layout(self) -> int:
         if self._cancel_button.isHidden():
