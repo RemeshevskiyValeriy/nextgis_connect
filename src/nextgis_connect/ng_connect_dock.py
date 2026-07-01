@@ -50,6 +50,7 @@ from qgis.gui import QgisInterface, QgsDockWidget, QgsNewNameDialog
 from qgis.PyQt import uic
 from qgis.PyQt.QtCore import (
     QDir,
+    QEvent,
     QEventLoop,
     QFile,
     QFileInfo,
@@ -3732,10 +3733,18 @@ class NGWPanelToolBar(QToolBar):
     ICON_SIZE = 20
     BUTTON_SIZE = 28
     MENU_BUTTON_WIDTH = 40
+    _GEOMETRY_RESET_EVENT_TYPES = (
+        QEvent.Type.StyleChange,
+        QEvent.Type.FontChange,
+        QEvent.Type.LayoutRequest,
+        QEvent.Type.Polish,
+        QEvent.Type.PolishRequest,
+    )
 
     def __init__(self):
         super().__init__(None)
 
+        self.__is_fix_icons_size_scheduled = False
         self.setIconSize(QSize(self.ICON_SIZE, self.ICON_SIZE))
         self.setSizePolicy(
             QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed
@@ -3748,11 +3757,45 @@ class NGWPanelToolBar(QToolBar):
         self.fix_icons_size()
         a0.accept()
 
+    def actionEvent(self, event) -> None:
+        super().actionEvent(event)
+        self.__schedule_fix_icons_size()
+
+    def event(self, event) -> bool:
+        result = super().event(event)
+        if event.type() in self._GEOMETRY_RESET_EVENT_TYPES:
+            self.__schedule_fix_icons_size()
+        return result
+
+    def eventFilter(self, watched, event) -> bool:
+        result = super().eventFilter(watched, event)
+        if (
+            isinstance(watched, QToolButton)
+            and event.type() in self._GEOMETRY_RESET_EVENT_TYPES
+        ):
+            self.__schedule_fix_icons_size()
+        return result
+
+    def __schedule_fix_icons_size(self) -> None:
+        if self.__is_fix_icons_size_scheduled:
+            return
+
+        self.__is_fix_icons_size_scheduled = True
+        QTimer.singleShot(0, self.__apply_scheduled_fix_icons_size)
+
+    def __apply_scheduled_fix_icons_size(self) -> None:
+        self.__is_fix_icons_size_scheduled = False
+        self.fix_icons_size()
+
     def fix_icons_size(self) -> None:
         icon_size = QSize(self.ICON_SIZE, self.ICON_SIZE)
         self.setIconSize(icon_size)
 
         for button in self.findChildren(QToolButton):
+            if button.property("NgConnectPanelToolBarEventFilter") is not True:
+                button.installEventFilter(self)
+                button.setProperty("NgConnectPanelToolBarEventFilter", True)
+
             button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonIconOnly)
             button.setIconSize(icon_size)
             width = (
