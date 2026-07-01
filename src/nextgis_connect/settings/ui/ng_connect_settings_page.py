@@ -162,7 +162,6 @@ class NgConnectOptionsPageWidget(QgsOptionsPageWidget):
         self.__widget.openWebMapAfterCreationCheckBox.setChecked(
             settings.open_web_map_after_creation
         )
-        self.__widget.cogCheckBox.setChecked(settings.upload_raster_as_cog)
         self.__widget.versioningCheckBox.setChecked(
             settings.upload_vector_with_versioning
         )
@@ -370,7 +369,6 @@ class NgConnectOptionsPageWidget(QgsOptionsPageWidget):
             self.__widget.fixGeometryCheckBox.isChecked()
         )
 
-        settings.upload_raster_as_cog = self.__widget.cogCheckBox.isChecked()
         settings.upload_vector_with_versioning = (
             self.__widget.versioningCheckBox.isChecked()
         )

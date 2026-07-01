@@ -104,7 +104,6 @@ from nextgis_connect.ngw_api.qt.qt_ngw_resource_model_job_error import (
     JobWarning,
 )
 from nextgis_connect.resources.ngw_data_type import NgwDataType
-from nextgis_connect.settings import NgConnectSettings
 
 from .compat_qgis import CompatQt
 
@@ -407,7 +406,7 @@ class QGISResourceJob(NGWResourceModelJob):
             ngw_parent_resource,
             filepath,
             new_layer_name,
-            NgConnectSettings().upload_raster_as_cog,
+            True,
             uploadFileCallback,
             createLayerCallback,
         )

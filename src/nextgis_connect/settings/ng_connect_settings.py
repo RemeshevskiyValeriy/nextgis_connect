@@ -76,21 +76,6 @@ class NgConnectSettings:
         self.__settings.endGroup()
 
     @property
-    def upload_raster_as_cog(self) -> bool:
-        self.__settings.beginGroup(self.__plugin_group)
-        result = self.__settings.value(
-            "uploading/rasterAsCog", defaultValue=True, type=bool
-        )
-        self.__settings.endGroup()
-        return result
-
-    @upload_raster_as_cog.setter
-    def upload_raster_as_cog(self, value: bool) -> None:
-        self.__settings.beginGroup(self.__plugin_group)
-        self.__settings.setValue("uploading/rasterAsCog", value)
-        self.__settings.endGroup()
-
-    @property
     def upload_vector_with_versioning(self) -> bool:
         self.__settings.beginGroup(self.__plugin_group)
         result = self.__settings.value(
@@ -423,7 +408,6 @@ class NgConnectSettings:
         mapping = {
             "sanitize_rename_fields": "uploading/renameForbiddenFields",
             "sanitize_fix_geometry": "uploading/fixIncorrectGeometries",
-            "upload_cog_rasters": "uploading/rasterAsCog",
         }
 
         if any(
@@ -442,6 +426,11 @@ class NgConnectSettings:
         self.__settings.endGroup()
 
     def __remove_old_settings(self) -> None:
+        self.__settings.remove(f"{self.__plugin_group}/uploading/rasterAsCog")
+
+        old_settings = QSettings("NextGIS", "NextGIS WEB API")
+        old_settings.remove("upload_cog_rasters")
+
         self.__settings.value(
             f"{self.__plugin_group}/uploading/renameForbiddenFields"
         )

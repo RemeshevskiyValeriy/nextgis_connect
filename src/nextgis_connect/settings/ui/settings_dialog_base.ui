@@ -70,16 +70,6 @@
        </widget>
       </item>
       <item>
-       <widget class="QCheckBox" name="cogCheckBox">
-        <property name="text">
-         <string>Upload rasters as Cloud Optimized GeoTIFF (COG)</string>
-        </property>
-        <property name="checked">
-         <bool>true</bool>
-        </property>
-       </widget>
-      </item>
-      <item>
        <layout class="QHBoxLayout" name="horizontalLayout_2">
         <property name="spacing">
          <number>0</number>
