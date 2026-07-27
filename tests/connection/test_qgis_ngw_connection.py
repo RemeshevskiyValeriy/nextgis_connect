@@ -9,9 +9,11 @@ class TestQgsNgwConnection(NgConnectTestCase):
         super().setUp()
 
         from nextgis_connect.ngw_api.qgis.qgis_ngw_connection import (
+            NgwServerFeature,
             QgsNgwConnection,
         )
 
+        self.ngw_feature_class = NgwServerFeature
         self.qgs_ngw_connection_class = QgsNgwConnection
         self.qgs_ngw_connection_class.clear_cached_ngw_components()
 
@@ -83,6 +85,32 @@ class TestQgsNgwConnection(NgConnectTestCase):
             model.resetModel(self.qgs_ngw_connection_class(connection_id))
 
         self.assertEqual(mock_invalidate.call_count, 1)
+
+    def test_has_support_for_no_geometry_layers_requires_dev6(self) -> None:
+        connection_id = self.connection_id(TestConnection.SandboxGuest)
+
+        versions = {
+            "5.4.9": False,
+            "5.5.0": True,
+        }
+
+        for version, expected in versions.items():
+            with self.subTest(version=version), patch.object(
+                self.qgs_ngw_connection_class,
+                "get",
+                autospec=True,
+                return_value={"nextgisweb": version},
+            ):
+                connection = self.qgs_ngw_connection_class(connection_id)
+
+                self.assertEqual(
+                    connection.has_support_for_feature(
+                        self.ngw_feature_class.NO_GEOMETRY_LAYERS
+                    ),
+                    expected,
+                )
+
+                connection.invalidate_cached_ngw_components()
 
 
 if __name__ == "__main__":

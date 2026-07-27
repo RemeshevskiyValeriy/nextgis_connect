@@ -146,7 +146,7 @@ from nextgis_connect.ngw_api.qgis.ngw_resource_model_4qgis import (
     QGISResourceJob,
 )
 from nextgis_connect.ngw_api.qgis.qgis_ngw_connection import (
-    NgwFeature,
+    NgwServerFeature,
     QgsNgwConnection,
 )
 from nextgis_connect.ngw_api.qt.qt_ngw_resource_model_job import (
@@ -2385,7 +2385,7 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
         dialog = VectorLayerCreationDialog(
             self.resource_model, parent_resource_index, self
         )
-        if connection.has_support_for_feature(NgwFeature.BOOLEAN_TYPE):
+        if connection.has_support_for_feature(NgwServerFeature.BOOLEAN_TYPE):
             dialog.enable_boolean_field_type()
         result = dialog.exec()
         if result != VectorLayerCreationDialog.DialogCode.Accepted:

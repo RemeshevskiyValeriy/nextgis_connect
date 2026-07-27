@@ -30,6 +30,9 @@ from nextgis_connect.exceptions import (
 )
 from nextgis_connect.logging import logger
 from nextgis_connect.ngw_api.core.ngw_vector_layer import NGWVectorLayer
+from nextgis_connect.ngw_api.qgis.qgis_ngw_connection import (
+    NgwServerFeature,
+)
 from nextgis_connect.ngw_connection import NgwConnectionsManager
 from nextgis_connect.settings import NgConnectSettings
 from nextgis_connect.utils import wrap_sql_table_name, wrap_sql_value
@@ -50,6 +53,7 @@ class DetachedContainerFactory:
             + f' "{ngw_layer.display_name}" (id={ngw_layer.resource_id})'
         )
         try:
+            self.__ensure_no_geometry_supported(ngw_layer)
             self.__create_container(ngw_layer, container_path)
             self.__check_fields(ngw_layer, container_path)
 
@@ -75,6 +79,36 @@ class DetachedContainerFactory:
             logger.debug(
                 "Container successfully created and filled with metadata"
             )
+
+    def __ensure_no_geometry_supported(
+        self, ngw_layer: NGWVectorLayer
+    ) -> None:
+        if ngw_layer.geom_name != "NONE":
+            return
+
+        connection = ngw_layer.res_factory.connection
+        if connection.has_support_for_feature(
+            NgwServerFeature.NO_GEOMETRY_LAYERS
+        ):
+            return
+
+        required_version = NgwServerFeature.NO_GEOMETRY_LAYERS.required_version
+        message = (
+            f'Layer "{ngw_layer.display_name}" without geometry '
+            f"requires NextGIS Web {required_version} or newer"
+        )
+        raise ContainerError(
+            message,
+            user_message=(
+                "The connected NextGIS Web version does not support "
+                "layers without geometry."
+            ),
+            detail=(
+                f'Layer "{ngw_layer.display_name}" requires '
+                f"NextGIS Web {required_version} or newer."
+            ),
+            code=ErrorCode.ContainerCreationError,
+        )
 
     def fill_container(
         self,

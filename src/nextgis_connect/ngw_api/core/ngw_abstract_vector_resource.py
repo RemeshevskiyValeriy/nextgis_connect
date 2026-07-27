@@ -132,7 +132,11 @@ class NGWAbstractVectorResource(ABC, NGWResource):
         return QgsWkbTypes.hasZ(self.wkb_geom_type)
 
     def srs(self):
-        return self._json.get(self.type_id, {}).get("srs", {}).get("id")
+        srs = self._json.get(self.type_id, {}).get("srs")
+        if srs is None:
+            return None
+
+        return srs.get("id")
 
     @property
     def qgs_srs(self) -> QgsCoordinateReferenceSystem:

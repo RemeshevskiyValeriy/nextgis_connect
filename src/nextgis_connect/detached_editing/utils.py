@@ -76,7 +76,7 @@ class DetachedContainerMetaData:
     is_auto_sync_enabled: bool
     fields: NgwFields
     fid_field: str
-    geom_field: str
+    geom_field: Optional[str]
     features_count: int
     has_changes: bool
     srs_id: int
@@ -186,7 +186,13 @@ def detached_layer_uri(
             cursor.execute(
                 """
                 SELECT table_name FROM gpkg_contents
-                WHERE data_type='features'
+                WHERE data_type IN ('features', 'attributes')
+                ORDER BY CASE data_type
+                    WHEN 'features' THEN 0
+                    WHEN 'attributes' THEN 1
+                    ELSE 2
+                END
+                LIMIT 1
                 """
             )
             layer_name = cursor.fetchone()[0]
@@ -296,7 +302,13 @@ def _(cursor: sqlite3.Cursor) -> DetachedContainerMetaData:
     cursor.execute(
         """
         SELECT table_name, srs_id FROM gpkg_contents
-        WHERE data_type='features'
+        WHERE data_type IN ('features', 'attributes')
+        ORDER BY CASE data_type
+            WHEN 'features' THEN 0
+            WHEN 'attributes' THEN 1
+            ELSE 2
+        END
+        LIMIT 1
         """
     )
     table_name, srs_id = cursor.fetchone()
@@ -333,8 +345,15 @@ def _(cursor: sqlite3.Cursor) -> DetachedContainerMetaData:
     )
     fid_field = cursor.fetchone()[0]
 
-    cursor.execute("SELECT column_name FROM gpkg_geometry_columns")
-    geom_field = cursor.fetchone()[0]
+    cursor.execute(
+        """
+        SELECT column_name FROM gpkg_geometry_columns
+        WHERE table_name = ?
+        """,
+        (table_name,),
+    )
+    row = cursor.fetchone()
+    geom_field = row[0] if row is not None else None
 
     cursor.execute(
         f"SELECT COUNT(*) FROM {wrap_sql_table_name(table_name)}",  # nosec B608

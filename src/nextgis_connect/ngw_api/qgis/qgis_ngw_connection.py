@@ -83,8 +83,13 @@ def is_lunkwill_reply(reply: QNetworkReply) -> bool:
     return header.startswith(lunkwill_type)
 
 
-class NgwFeature(Enum):
-    BOOLEAN_TYPE = ("nextgisweb", parse_version("5.5.0.dev1"))
+class NgwServerFeature(Enum):
+    BOOLEAN_TYPE = ("nextgisweb", parse_version("5.5.0"))
+    NO_GEOMETRY_LAYERS = ("nextgisweb", parse_version("5.5.0"))
+
+    @property
+    def required_version(self):
+        return self.value[1]
 
 
 class QgsNgwConnection(QObject):
@@ -157,7 +162,7 @@ class QgsNgwConnection(QObject):
         self.__ngw_components = None
         self.clear_cached_ngw_components(self.connection_id)
 
-    def has_support_for_feature(self, feature: NgwFeature) -> bool:
+    def has_support_for_feature(self, feature: NgwServerFeature) -> bool:
         ngw_components = self.get_ngw_components()
         component_version = ngw_components.get(feature.value[0])
         if not component_version:
@@ -170,7 +175,7 @@ class QgsNgwConnection(QObject):
         )
 
         ngw_version = parse_version(component_version)
-        required_version = feature.value[1]
+        required_version = feature.required_version
         result = ngw_version >= required_version
         if not result:
             logger.debug(

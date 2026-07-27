@@ -92,7 +92,10 @@ from nextgis_connect.ngw_api.core.ngw_webmap import (
 from nextgis_connect.ngw_api.core.ngw_wms_connection import NGWWmsConnection
 from nextgis_connect.ngw_api.core.ngw_wms_layer import NGWWmsLayer
 from nextgis_connect.ngw_api.core.ngw_wms_service import NGWWmsService
-from nextgis_connect.ngw_api.qgis.qgis_ngw_connection import QgsNgwConnection
+from nextgis_connect.ngw_api.qgis.qgis_ngw_connection import (
+    NgwServerFeature,
+    QgsNgwConnection,
+)
 from nextgis_connect.ngw_api.qgis.raster_upload_preparer import (
     RasterUploadPreparer,
 )
@@ -228,13 +231,32 @@ class QGISResourceJob(NGWResourceModelJob):
     def isSuitableLayer(self, qgs_map_layer: QgsVectorLayer):
         layer_type = qgs_map_layer.type()
 
-        if layer_type == LayerType.Vector and qgs_map_layer.geometryType() in [
-            GeometryType.Unknown,
-            GeometryType.Null,
-        ]:
+        if (
+            layer_type == LayerType.Vector
+            and qgs_map_layer.geometryType() == GeometryType.Unknown
+        ):
             return self.SUITABLE_LAYER_BAD_GEOMETRY
 
         return self.SUITABLE_LAYER
+
+    def _ensure_no_geometry_supported(
+        self,
+        qgs_vector_layer: QgsVectorLayer,
+        connection: QgsNgwConnection,
+    ) -> None:
+        if qgs_vector_layer.geometryType() != GeometryType.Null:
+            return
+
+        if connection.has_support_for_feature(
+            NgwServerFeature.NO_GEOMETRY_LAYERS
+        ):
+            return
+
+        required_version = NgwServerFeature.NO_GEOMETRY_LAYERS.required_version
+        raise JobError(
+            f'Layer "{qgs_vector_layer.name()}" without geometry '
+            f"requires NextGIS Web {required_version} or newer"
+        )
 
     def importQGISMapLayer(self, qgs_map_layer, ngw_parent_resource):
         ngw_parent_resource.update()
@@ -425,6 +447,11 @@ class QGISResourceJob(NGWResourceModelJob):
         qgs_vector_layer: QgsVectorLayer,
         ngw_parent_resource: NGWGroupResource,
     ) -> Optional[NGWVectorLayer]:
+        self._ensure_no_geometry_supported(
+            qgs_vector_layer,
+            ngw_parent_resource.connection,
+        )
+
         new_layer_name = self.unique_resource_name(
             qgs_vector_layer.name(), ngw_parent_resource
         )
@@ -1777,6 +1804,11 @@ class NGWUpdateVectorLayer(QGISResourceJob):
                     )
                 ),
             )
+
+        self._ensure_no_geometry_supported(
+            self.qgis_layer,
+            self.ngw_layer.res_factory.connection,
+        )
 
         if (
             self.isSuitableLayer(self.qgis_layer)
