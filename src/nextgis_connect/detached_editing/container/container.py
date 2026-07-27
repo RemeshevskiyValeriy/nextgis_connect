@@ -338,14 +338,6 @@ class DetachedContainer(QObject):
         for layer_id in layer_ids:
             self.delete_layer(layer_id)
 
-    def layer(self, layer: QgsVectorLayer) -> Optional[DetachedLayer]:
-        """Return detached layer for QGIS layer.
-
-        :param layer: Vector layer.
-        :return: Detached layer or ``None`` if layer is not detached.
-        """
-        return self.__detached_layers.get(layer.id())
-
     def add_indicator(self, node: QgsLayerTreeLayer) -> None:
         assert isinstance(iface, QgisInterface)
         view = iface.layerTreeView()
@@ -738,8 +730,10 @@ class DetachedContainer(QObject):
         if result:
             self.__additional_data_fetch_date = datetime.now()
             self.__is_edit_allowed = self.__sync_task.is_edit_allowed
+            self.__update_state()
             self.__apply_label_attribute()
             self.__apply_aliases()
+            self.__apply_required_constraints()
             self.__apply_lookup_tables()
             self.__fix_fid_widget()
             self.__state = DetachedLayerState.Synchronized
@@ -956,6 +950,10 @@ class DetachedContainer(QObject):
                 detached_layer.qgs_layer.setFieldAlias(
                     field.attribute, field.display_name
                 )
+
+    def __apply_required_constraints(self) -> None:
+        for detached_layer in self.__detached_layers.values():
+            detached_layer.update_required_constraints()
 
     def __fix_fid_widget(self) -> None:
         for detached_layer in self.__detached_layers.values():

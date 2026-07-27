@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from typing import Any, Dict, Optional, Union
 
-from qgis.core import QgsField, QgsFieldConstraints
+from qgis.core import QgsField, QgsFieldConstraints, QgsVectorLayer
 
 from nextgis_connect.compat import FieldType
 from nextgis_connect.resources.ngw_data_type import NgwDataType
@@ -67,13 +67,22 @@ class NgwField:
         super().__setattr__("lookup_table", lookup_table)
         super().__setattr__("attribute", attribute)
 
-    def is_compatible(self, rhs: Union["NgwField", QgsField]) -> bool:
+    def is_compatible(
+        self,
+        rhs: Union["NgwField", QgsField],
+        *,
+        layer: Optional[QgsVectorLayer] = None,
+        compare_required: bool = True,
+    ) -> bool:
         if isinstance(rhs, NgwField):
+            is_required_compatible = (
+                not compare_required or self.is_required == rhs.is_required
+            )
             return (
                 self.ngw_id == rhs.ngw_id
                 and self.datatype == rhs.datatype
                 and self.keyname == rhs.keyname
-                and self.is_required == rhs.is_required
+                and is_required_compatible
             )
         else:
             datatype = self.datatype.qt_value
@@ -87,10 +96,16 @@ class NgwField:
             else:
                 is_same_datatype = datatype == rhs.type()
 
+            is_required_compatible = (
+                not compare_required
+                or self.is_required
+                == self.is_qgs_field_required(rhs, layer=layer)
+            )
+
             return (
                 is_same_datatype
                 and self.keyname == rhs.name()
-                and self.is_required == self.is_qgs_field_required(rhs)
+                and is_required_compatible
             )
 
     def to_qgs_field(self) -> QgsField:
@@ -105,8 +120,15 @@ class NgwField:
         return field
 
     @staticmethod
-    def is_qgs_field_required(field: QgsField) -> bool:
+    def is_qgs_field_required(
+        field: QgsField, *, layer: Optional[QgsVectorLayer] = None
+    ) -> bool:
         constraints = field.constraints().constraints()
+        if layer is not None:
+            field_index = layer.fields().indexFromName(field.name())
+            if field_index != -1:
+                constraints |= layer.fieldConstraints(field_index)
+
         return bool(
             constraints & QgsFieldConstraints.Constraint.ConstraintNotNull
         )
@@ -127,8 +149,7 @@ class NgwField:
         )
 
     def to_json(self) -> Dict[str, Any]:
-        return {
-            "id": self.ngw_id if self.ngw_id != -1 else None,
+        result = {
             "datatype": self.datatype.name,
             "keyname": self.keyname,
             "display_name": self.display_name,
@@ -140,6 +161,10 @@ class NgwField:
             if self.lookup_table
             else None,
         }
+        if self.ngw_id != -1:
+            result["id"] = self.ngw_id
+
+        return result
 
     @staticmethod
     def from_json(json: Dict[str, Any], *, index: int = -1) -> "NgwField":

@@ -152,6 +152,8 @@ class NgwFields(Sequence):
         rhs: Union["NgwFields", QgsFields, List[NgwField], List[QgsField]],
         *,
         skip_fields: Union[str, List[str], None] = None,
+        layer: Optional[QgsVectorLayer] = None,
+        compare_required: bool = True,
     ) -> bool:
         if skip_fields is None:
             skip_fields = []
@@ -169,7 +171,11 @@ class NgwFields(Sequence):
             return False
 
         return all(
-            lhs_field.is_compatible(rhs_field)
+            lhs_field.is_compatible(
+                rhs_field,
+                layer=layer,
+                compare_required=compare_required,
+            )
             for lhs_field, rhs_field in zip(self._fields, rhs)
         )
 

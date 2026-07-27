@@ -83,6 +83,27 @@ class TestNgwField(NgConnectTestCase):
         )
         self.assertFalse(field1.is_compatible(field2))
 
+        field1 = NgwField(
+            attribute=0,
+            ngw_id=1,
+            datatype="STRING",
+            keyname="name",
+            display_name="Name",
+            is_label=False,
+            is_required=False,
+        )
+        field2 = NgwField(
+            attribute=0,
+            ngw_id=1,
+            datatype="STRING",
+            keyname="name",
+            display_name="Name",
+            is_label=False,
+            is_required=True,
+        )
+        self.assertFalse(field1.is_compatible(field2))
+        self.assertTrue(field1.is_compatible(field2, compare_required=False))
+
     def test_is_compatible_with_qgsfield(self):
         field = NgwField(
             attribute=0,
@@ -150,6 +171,23 @@ class TestNgwField(NgConnectTestCase):
         self.assertTrue(field.is_label)
         self.assertTrue(field.is_required)
         self.assertEqual(field.lookup_table, 10)
+
+    def test_to_json_includes_required(self):
+        field = NgwField.from_json(self.field_json)
+
+        self.assertTrue(field.to_json()["required"])
+
+    def test_to_json_omits_missing_id(self):
+        field = NgwField(
+            attribute=0,
+            ngw_id=-1,
+            datatype="STRING",
+            keyname="name",
+            display_name="Name",
+            is_label=False,
+        )
+
+        self.assertNotIn("id", field.to_json())
 
     def test_from_json_json_type_uses_qvariant_map(self):
         field = NgwField.from_json({**self.field_json, "datatype": "JSON"})

@@ -517,7 +517,10 @@ class DetachedContainerFactory:
         ]
 
         if not ngw_layer.fields.is_compatible(
-            layer.fields(), skip_fields=skip_fields
+            layer.fields(),
+            skip_fields=skip_fields,
+            layer=layer,
+            compare_required=False,
         ):
             code = ErrorCode.ContainerFieldsMismatch
             raise ContainerError(code=code)

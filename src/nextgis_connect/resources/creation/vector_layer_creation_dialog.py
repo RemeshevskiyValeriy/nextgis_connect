@@ -93,11 +93,14 @@ class VectorLayerCreationDialog(QDialog, VectorLayerCreationDialogBase):
                 parent=dict(id=parent_id),
                 display_name=display_name,
             ),
-            feature_layer=dict(versioning=dict(enabled=is_versioning_enabled)),
+            feature_layer=dict(
+                fields=fields,
+                versioning=dict(enabled=is_versioning_enabled),
+            ),
             vector_layer=dict(
                 srs=dict(id=3857),
                 geometry_type=geometry_type,
-                fields=fields,
+                fields=[],
             ),
         )
 

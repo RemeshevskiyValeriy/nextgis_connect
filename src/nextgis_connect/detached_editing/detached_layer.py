@@ -202,6 +202,9 @@ class DetachedLayer(QObject):
             self.__on_custom_property_changed
         )
 
+    def update_required_constraints(self) -> None:
+        self.__apply_required_constraints()
+
     @pyqtSlot()
     def enable_fake(self) -> None:
         memory_layer = QgsMemoryProviderUtils.createMemoryLayer(

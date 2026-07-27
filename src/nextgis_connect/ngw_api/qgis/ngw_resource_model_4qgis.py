@@ -519,7 +519,9 @@ class QGISResourceJob(NGWResourceModelJob):
             alias = field.alias()
             lookup_table = None
             is_json_field = NgwField.is_qgs_field_json(field)
-            is_required_field = NgwField.is_qgs_field_required(field)
+            is_required_field = NgwField.is_qgs_field_required(
+                field, layer=qgs_vector_layer
+            )
             editor_widget_setup = field.editorWidgetSetup()
             if editor_widget_setup.type() == "ValueRelation":
                 config = editor_widget_setup.config().copy()

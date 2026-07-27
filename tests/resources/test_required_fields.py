@@ -6,6 +6,9 @@ from unittest import mock
 from qgis.core import QgsFieldConstraints, QgsVectorLayer
 
 from nextgis_connect.detached_editing.detached_layer import DetachedLayer
+from nextgis_connect.detached_editing.sync.common.fetch_additional_data_task import (
+    FetchAdditionalDataTask,
+)
 from nextgis_connect.detached_editing.utils import (
     container_metadata,
     detached_layer_uri,
@@ -18,6 +21,7 @@ from nextgis_connect.ngw_api.qgis.ngw_resource_model_4qgis import (
 from nextgis_connect.ngw_api.qgis.qgis_ngw_connection import (
     NgwServerFeature,
 )
+from nextgis_connect.resources.ngw_fields import NgwFields
 from tests.magic_qobject_mock import MagicQObjectMock
 from tests.ng_connect_testcase import NgConnectTestCase, TestData
 
@@ -111,4 +115,80 @@ class TestRequiredFields(NgConnectTestCase):
         self.assertTrue(
             qgs_layer.fieldConstraints(field_index)
             & QgsFieldConstraints.Constraint.ConstraintNotNull
+        )
+
+    def test_detached_layer_updates_not_null_after_metadata_change(
+        self,
+    ) -> None:
+        layer_without_required = cast(
+            NGWVectorLayer,
+            self.resource(deepcopy(self.resource_json(TestData.Points))),
+        )
+        layer_with_required = self._make_ngw_layer_with_required_field()
+        container_path = self.create_temp_file(".gpkg")
+
+        from nextgis_connect.detached_editing.container.container_factory import (
+            DetachedContainerFactory,
+        )
+
+        DetachedContainerFactory().create_initial_container(
+            layer_without_required, container_path
+        )
+
+        metadata = container_metadata(container_path)
+        qgs_layer = QgsVectorLayer(
+            detached_layer_uri(container_path, metadata),
+            metadata.layer_name,
+            "ogr",
+        )
+        self.assertTrue(qgs_layer.isValid())
+
+        container_mock = MagicQObjectMock()
+        container_mock.metadata = metadata
+        container_mock.path = Path(container_path)
+
+        detached_layer = DetachedLayer(container_mock, qgs_layer)
+        field_index = qgs_layer.fields().indexOf(metadata.fields[0].keyname)
+        self.assertFalse(
+            qgs_layer.fieldConstraints(field_index)
+            & QgsFieldConstraints.Constraint.ConstraintNotNull
+        )
+
+        container_mock.metadata.fields = NgwFields(layer_with_required.fields)
+        detached_layer.update_required_constraints()
+
+        self.assertTrue(
+            qgs_layer.fieldConstraints(field_index)
+            & QgsFieldConstraints.Constraint.ConstraintNotNull
+        )
+
+    def test_additional_structure_refresh_updates_required_metadata(
+        self,
+    ) -> None:
+        layer_without_required = cast(
+            NGWVectorLayer,
+            self.resource(deepcopy(self.resource_json(TestData.Points))),
+        )
+        layer_with_required = self._make_ngw_layer_with_required_field()
+        container_path = self.create_temp_file(".gpkg")
+
+        from nextgis_connect.detached_editing.container.container_factory import (
+            DetachedContainerFactory,
+        )
+
+        DetachedContainerFactory().create_initial_container(
+            layer_without_required, container_path
+        )
+        self.assertFalse(
+            container_metadata(container_path).fields[0].is_required
+        )
+
+        task = FetchAdditionalDataTask(container_path)
+        with mock.patch.object(
+            task, "_get_layer", return_value=layer_with_required
+        ):
+            task._FetchAdditionalDataTask__update_structure(mock.Mock())
+
+        self.assertTrue(
+            container_metadata(container_path).fields[0].is_required
         )
