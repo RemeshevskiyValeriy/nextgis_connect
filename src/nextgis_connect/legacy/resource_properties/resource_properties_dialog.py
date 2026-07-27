@@ -1,6 +1,7 @@
 import json
 from pathlib import Path
 
+from nextgis_connect.settings.ng_connect_settings import NgConnectSettings
 from qgis.gui import QgsCodeEditorJson
 from qgis.PyQt import uic
 from qgis.PyQt.QtCore import QSize, Qt
@@ -14,7 +15,6 @@ from qgis.PyQt.QtWidgets import (
 )
 
 from nextgis_connect.ngw.core.ngw_resource import NGWResource
-from nextgis_connect.settings.ng_connect_settings import NgConnectSettings
 
 
 class ResourcePropertiesDialog(QDialog):

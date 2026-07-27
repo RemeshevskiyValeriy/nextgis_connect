@@ -1,15 +1,9 @@
 import re
 from typing import Optional
 
-from qgis.core import QgsApplication
-from qgis.PyQt.QtCore import Qt, QUrl, pyqtSlot
-from qgis.PyQt.QtGui import QDesktopServices, QIcon, QMovie
-from qgis.PyQt.QtWidgets import QAction, QLineEdit, QWidget
-
 from nextgis_connect.ngw_connection.application.connections_manager import (
     NgwConnectionsManager,
 )
-from nextgis_connect.platform.qgis.utils import nextgis_domain, utm_tags
 from nextgis_connect.search.abstract_search_line_edit import (
     AbstractSearchLineEdit,
 )
@@ -17,6 +11,12 @@ from nextgis_connect.search.search_settings import SearchSettings
 from nextgis_connect.search.text_search_completer_model import (
     TextSearchCompleterModel,
 )
+from qgis.core import QgsApplication
+from qgis.PyQt.QtCore import Qt, QUrl, pyqtSlot
+from qgis.PyQt.QtGui import QDesktopServices, QIcon, QMovie
+from qgis.PyQt.QtWidgets import QAction, QLineEdit, QWidget
+
+from nextgis_connect.platform.qgis.utils import nextgis_domain, utm_tags
 
 
 class TextSearchLineEdit(AbstractSearchLineEdit):

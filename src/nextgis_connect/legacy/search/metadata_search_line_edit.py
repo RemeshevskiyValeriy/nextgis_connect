@@ -1,12 +1,11 @@
 from typing import Optional
 
-from qgis.PyQt.QtCore import QStringListModel, Qt, pyqtSlot
-from qgis.PyQt.QtWidgets import QWidget
-
 from nextgis_connect.search.abstract_search_line_edit import (
     AbstractSearchLineEdit,
 )
 from nextgis_connect.search.search_settings import SearchSettings
+from qgis.PyQt.QtCore import QStringListModel, Qt, pyqtSlot
+from qgis.PyQt.QtWidgets import QWidget
 
 
 class MetadataSearchLineEdit(AbstractSearchLineEdit):

@@ -32,6 +32,52 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import List, Optional, Set, Tuple, cast
 
+from nextgis_connect.detached_editing.container.container_factory import (
+    DetachedContainerFactory,
+)
+from nextgis_connect.detached_editing.utils import (
+    detached_layer_uri,
+)
+from nextgis_connect.detached_editing.utils import (
+    is_ngw_container as is_detached_ngw_container,
+)
+from nextgis_connect.ngw_connection.application.connections_manager import (
+    NgwConnectionsManager,
+)
+from nextgis_connect.ngw_connection.domain.connection import NgwConnection
+from nextgis_connect.ngw_connection.presentation.connection_edit_dialog import (
+    NgwConnectionEditDialog,
+)
+from nextgis_connect.ngw_connection.presentation.diagnostics.dialog import (
+    NgwConnectionDiagnosticsDialog,
+)
+from nextgis_connect.platform.qgis.errors_list_dialog import (
+    ExceptionsListDialog,
+)
+from nextgis_connect.resource_properties.resource_properties_dialog import (
+    ResourcePropertiesDialog,
+)
+from nextgis_connect.resources.creation.vector_layer_creation_dialog import (
+    VectorLayerCreationDialog,
+)
+from nextgis_connect.search.search_panel import SearchPanel
+from nextgis_connect.search.search_settings import SearchSettings
+from nextgis_connect.search.utils import SearchType
+from nextgis_connect.settings import NgConnectSettings
+from nextgis_connect.settings.ng_connect_cache_manager import (
+    NgConnectCacheManager,
+)
+from nextgis_connect.tree_widget import (
+    QNGWResourceItem,
+    QNGWResourceTreeModel,
+    QNGWResourceTreeView,
+)
+from nextgis_connect.tree_widget.model import NGWResourceModelResponse
+from nextgis_connect.tree_widget.overlay import (
+    OverlayAction,
+    OverlayButtonState,
+)
+from nextgis_connect.tree_widget.proxy_model import NgConnectProxyModel
 from qgis import utils as qgis_utils
 from qgis.core import (
     Qgis,
@@ -95,15 +141,6 @@ from qgis.PyQt.QtXml import QDomDocument
 
 from nextgis_connect import utils
 from nextgis_connect.bootstrap.plugin_interface import NgConnectInterface
-from nextgis_connect.detached_editing.container.container_factory import (
-    DetachedContainerFactory,
-)
-from nextgis_connect.detached_editing.utils import (
-    detached_layer_uri,
-)
-from nextgis_connect.detached_editing.utils import (
-    is_ngw_container as is_detached_ngw_container,
-)
 from nextgis_connect.legacy.action_style_import_or_update import (
     ActionStyleImportUpdate,
 )
@@ -152,16 +189,6 @@ from nextgis_connect.ngw.qt.qt_ngw_resource_model_job_error import (
     JobServerRequestError,
     JobWarning,
 )
-from nextgis_connect.ngw_connection.application.connections_manager import (
-    NgwConnectionsManager,
-)
-from nextgis_connect.ngw_connection.domain.connection import NgwConnection
-from nextgis_connect.ngw_connection.presentation.connection_edit_dialog import (
-    NgwConnectionEditDialog,
-)
-from nextgis_connect.ngw_connection.presentation.diagnostics.dialog import (
-    NgwConnectionDiagnosticsDialog,
-)
 from nextgis_connect.platform.logging import logger
 from nextgis_connect.platform.qgis.compat import QGIS_3_32, parse_version
 from nextgis_connect.platform.qgis.errors import (
@@ -169,34 +196,7 @@ from nextgis_connect.platform.qgis.errors import (
     NgConnectError,
     NgwError,
 )
-from nextgis_connect.platform.qgis.errors_list_dialog import (
-    ExceptionsListDialog,
-)
-from nextgis_connect.resource_properties.resource_properties_dialog import (
-    ResourcePropertiesDialog,
-)
-from nextgis_connect.resources.creation.vector_layer_creation_dialog import (
-    VectorLayerCreationDialog,
-)
-from nextgis_connect.search.search_panel import SearchPanel
-from nextgis_connect.search.search_settings import SearchSettings
-from nextgis_connect.search.utils import SearchType
-from nextgis_connect.settings import NgConnectSettings
-from nextgis_connect.settings.ng_connect_cache_manager import (
-    NgConnectCacheManager,
-)
 from nextgis_connect.shared.constants import PACKAGE_NAME, PLUGIN_NAME
-from nextgis_connect.tree_widget import (
-    QNGWResourceItem,
-    QNGWResourceTreeModel,
-    QNGWResourceTreeView,
-)
-from nextgis_connect.tree_widget.model import NGWResourceModelResponse
-from nextgis_connect.tree_widget.overlay import (
-    OverlayAction,
-    OverlayButtonState,
-)
-from nextgis_connect.tree_widget.proxy_model import NgConnectProxyModel
 from nextgis_connect.ui_kit.icons.icon import (
     icon_to_base64,
     material_icon,

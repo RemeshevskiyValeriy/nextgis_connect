@@ -1,12 +1,11 @@
 from typing import Optional
 
-from qgis.PyQt.QtCore import pyqtSignal, pyqtSlot
-from qgis.PyQt.QtWidgets import QHBoxLayout, QLabel, QSizePolicy, QWidget
-
 from nextgis_connect.search.metadata_key_combo_box import MetadataKeyComboBox
 from nextgis_connect.search.metadata_search_line_edit import (
     MetadataSearchLineEdit,
 )
+from qgis.PyQt.QtCore import pyqtSignal, pyqtSlot
+from qgis.PyQt.QtWidgets import QHBoxLayout, QLabel, QSizePolicy, QWidget
 
 
 class MetadataSearchWidget(QWidget):

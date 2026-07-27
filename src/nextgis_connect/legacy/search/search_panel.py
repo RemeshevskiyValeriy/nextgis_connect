@@ -1,5 +1,9 @@
 from typing import Optional
 
+from nextgis_connect.search.metadata_search_widget import MetadataSearchWidget
+from nextgis_connect.search.search_settings import SearchSettings
+from nextgis_connect.search.text_search_line_edit import TextSearchLineEdit
+from nextgis_connect.search.utils import SearchType
 from qgis.core import QgsApplication
 from qgis.PyQt.QtCore import Qt, pyqtSignal, pyqtSlot
 from qgis.PyQt.QtWidgets import (
@@ -11,10 +15,6 @@ from qgis.PyQt.QtWidgets import (
 )
 
 from nextgis_connect.platform.logging import logger
-from nextgis_connect.search.metadata_search_widget import MetadataSearchWidget
-from nextgis_connect.search.search_settings import SearchSettings
-from nextgis_connect.search.text_search_line_edit import TextSearchLineEdit
-from nextgis_connect.search.utils import SearchType
 
 
 class SearchPanel(QWidget):
