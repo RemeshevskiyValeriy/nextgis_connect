@@ -1,5 +1,7 @@
-PACKAGE_NAME = "nextgis_connect"
-PLUGIN_NAME = "NextGIS Connect"
-PLUGIN_SETTINGS_GROUP = "NextGIS/Connect"
-
-NEXTGIS_COLOR = "#176fc1"
+# ruff: noqa: F401
+from nextgis_connect.shared.constants import (
+    NEXTGIS_COLOR,
+    PACKAGE_NAME,
+    PLUGIN_NAME,
+    PLUGIN_SETTINGS_GROUP,
+)

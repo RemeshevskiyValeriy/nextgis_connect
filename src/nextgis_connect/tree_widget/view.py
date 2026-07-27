@@ -20,6 +20,7 @@ from qgis.PyQt.QtWidgets import (
 )
 from qgis.utils import iface
 
+from nextgis_connect.platform.qgis.utils import SupportStatus
 from nextgis_connect.tree_widget.item import QNGWResourceItem
 from nextgis_connect.tree_widget.model import QNGWResourceTreeModel
 from nextgis_connect.tree_widget.overlay import (
@@ -30,7 +31,6 @@ from nextgis_connect.tree_widget.overlay import (
     PluginOverlayController,
     PluginOverlayStateModel,
 )
-from nextgis_connect.utils import SupportStatus
 
 if TYPE_CHECKING:
     from qgis.gui import QgisInterface

@@ -40,7 +40,7 @@ from qgis.PyQt.QtWidgets import (
     QWidget,
 )
 
-from nextgis_connect.ng_connect_interface import NgConnectInterface
+from nextgis_connect.bootstrap.plugin_interface import NgConnectInterface
 from nextgis_connect.ngw_connection.application.connections_manager import (
     NgwConnectionsManager,
 )
@@ -62,8 +62,8 @@ from nextgis_connect.ngw_connection.presentation.auth_config_edit_dialog import 
 from nextgis_connect.ngw_connection.presentation.dialog_header_widget import (
     NextgisDialogHeaderWidget,
 )
-from nextgis_connect.shared.buttons.loading import LoadingToolButton
-from nextgis_connect.utils import nextgis_domain
+from nextgis_connect.platform.qgis.utils import nextgis_domain
+from nextgis_connect.ui_kit.widgets.buttons.loading import LoadingToolButton
 
 HAS_NGSTD = importlib.util.find_spec("ngstd") is not None
 NGAccess = None

@@ -3,7 +3,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from qgis.core import QgsGeometry
 
-from nextgis_connect.types import (
+from nextgis_connect.shared.types import (
     AttachmentId,
     FeatureId,
     FieldId,

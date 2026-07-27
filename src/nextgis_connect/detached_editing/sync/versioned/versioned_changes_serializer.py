@@ -19,10 +19,10 @@ from nextgis_connect.detached_editing.sync.common.serialization import (
 )
 from nextgis_connect.detached_editing.sync.versioned.actions import ActionType
 from nextgis_connect.detached_editing.utils import DetachedContainerMetaData
-from nextgis_connect.exceptions import (
+from nextgis_connect.platform.qgis.errors import (
     SynchronizationError,
 )
-from nextgis_connect.types import UnsetType
+from nextgis_connect.shared.types import UnsetType
 
 
 class VersionedChangesSerializer:

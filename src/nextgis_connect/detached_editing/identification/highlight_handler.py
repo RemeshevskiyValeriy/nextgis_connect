@@ -5,7 +5,7 @@ from qgis.gui import QgsHighlight, QgsMapCanvas, QgsMapToolIdentify
 from qgis.PyQt.QtCore import QObject
 
 from nextgis_connect.detached_editing.identification.types import FeatureKey
-from nextgis_connect.logging import logger
+from nextgis_connect.platform.logging import logger
 
 
 class HighlightHandler(QObject):

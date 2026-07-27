@@ -30,28 +30,21 @@ from qgis.PyQt.QtCore import (
 from qgis.PyQt.QtGui import QFont
 
 from nextgis_connect import utils
+from nextgis_connect.bootstrap.plugin_interface import NgConnectInterface
 from nextgis_connect.detached_editing.container.container_factory import (
     DetachedContainerFactory,
 )
-from nextgis_connect.exceptions import (
-    ErrorCode,
-    NgConnectError,
-    NgwConnectionError,
-    NgwError,
-)
-from nextgis_connect.logging import logger
-from nextgis_connect.ng_connect_interface import NgConnectInterface
-from nextgis_connect.ngw_api.core import (
+from nextgis_connect.ngw.core import (
     NGWGroupResource,
     NGWResource,
     NGWVectorLayer,
 )
-from nextgis_connect.ngw_api.core.ngw_qgis_style import NGWQGISVectorStyle
-from nextgis_connect.ngw_api.core.ngw_resource_factory import (
+from nextgis_connect.ngw.core.ngw_qgis_style import NGWQGISVectorStyle
+from nextgis_connect.ngw.core.ngw_resource_factory import (
     NGWResourceFactory,
 )
-from nextgis_connect.ngw_api.core.ngw_webmap import NGWWebMap
-from nextgis_connect.ngw_api.qgis.ngw_resource_model_4qgis import (
+from nextgis_connect.ngw.core.ngw_webmap import NGWWebMap
+from nextgis_connect.ngw.qgis.ngw_resource_model_4qgis import (
     MapForLayerCreater,
     NGWCreateWMSService,
     NGWUpdateRasterLayer,
@@ -62,8 +55,8 @@ from nextgis_connect.ngw_api.qgis.ngw_resource_model_4qgis import (
     QGISStyleUpdater,
     ResourcesDownloader,
 )
-from nextgis_connect.ngw_api.qgis.qgis_ngw_connection import QgsNgwConnection
-from nextgis_connect.ngw_api.qt.qt_ngw_resource_model_job import (
+from nextgis_connect.ngw.qgis.qgis_ngw_connection import QgsNgwConnection
+from nextgis_connect.ngw.qt.qt_ngw_resource_model_job import (
     NGWCreateMapForStyle,
     NGWCreateOgcfService,
     NGWCreateVectorLayer,
@@ -79,10 +72,17 @@ from nextgis_connect.ngw_api.qt.qt_ngw_resource_model_job import (
     NgwStylesDownloader,
     UploadedLayerResource,
 )
-from nextgis_connect.ngw_api.qt.qt_ngw_resource_model_job_error import (
+from nextgis_connect.ngw.qt.qt_ngw_resource_model_job_error import (
     NGWResourceModelJobError,
 )
 from nextgis_connect.ngw_connection import NgwConnectionsManager
+from nextgis_connect.platform.logging import logger
+from nextgis_connect.platform.qgis.errors import (
+    ErrorCode,
+    NgConnectError,
+    NgwConnectionError,
+    NgwError,
+)
 from nextgis_connect.settings.ng_connect_cache_manager import (
     NgConnectCacheManager,
 )

@@ -16,11 +16,11 @@ from nextgis_connect.detached_editing.conflicts.conflict_resolving_item import (
 from nextgis_connect.detached_editing.conflicts.ui.base_feature_conflict_tab import (
     ConflictTabBase,
 )
-from nextgis_connect.shared.ui.description_text_editor import (
+from nextgis_connect.shared.types import UnsetType
+from nextgis_connect.ui_kit.icons.icon import draw_icon, material_icon
+from nextgis_connect.ui_kit.widgets.description_text_editor import (
     DescriptionTextEditor,
 )
-from nextgis_connect.types import UnsetType
-from nextgis_connect.ui.icon import draw_icon, material_icon
 
 
 class DescriptionConflictTab(

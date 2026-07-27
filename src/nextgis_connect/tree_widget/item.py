@@ -1,15 +1,13 @@
 from typing import cast
-from urllib.parse import urlparse
 
 from qgis.PyQt.QtCore import Qt, QVariant
 from qgis.PyQt.QtGui import QIcon
 from qgis.PyQt.QtWidgets import QTreeWidgetItem
 
-from nextgis_connect.ngw_api.core import (
+from nextgis_connect.ngw.core import (
     NGWGroupResource,
     NGWResource,
 )
-from nextgis_connect.settings.ng_connect_settings import NgConnectSettings
 
 
 # TODO: remove QTreeWidgetItem inheritance

@@ -8,7 +8,7 @@ from qgis.PyQt.QtGui import QKeyEvent
 from nextgis_connect.detached_editing.identification.selection_handler import (
     IdentificationSelectionHandler,
 )
-from nextgis_connect.ui.cursor import NgConnectCursor, create_cursor
+from nextgis_connect.ui_kit.icons.cursor import NgConnectCursor, create_cursor
 
 
 class IdentificationTool(QgsMapToolIdentify):

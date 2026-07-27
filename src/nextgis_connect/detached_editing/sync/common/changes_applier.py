@@ -21,7 +21,7 @@ from nextgis_connect.detached_editing.utils import (
 from nextgis_connect.settings.ng_connect_cache_manager import (
     NgConnectCacheManager,
 )
-from nextgis_connect.types import FeatureId, NgwFeatureId
+from nextgis_connect.shared.types import FeatureId, NgwFeatureId
 
 
 class ChangesApplier(ABC):

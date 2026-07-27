@@ -14,9 +14,9 @@ from nextgis_connect.detached_editing.sync.versioned.actions_serializer import (
 from nextgis_connect.detached_editing.utils import (
     make_connection,
 )
-from nextgis_connect.exceptions import SynchronizationError
-from nextgis_connect.logging import logger
-from nextgis_connect.ngw_api.qgis.qgis_ngw_connection import QgsNgwConnection
+from nextgis_connect.ngw.qgis.qgis_ngw_connection import QgsNgwConnection
+from nextgis_connect.platform.logging import logger
+from nextgis_connect.platform.qgis.errors import SynchronizationError
 
 
 class FillLayerWithVersioningTask(DetachedEditingTask):

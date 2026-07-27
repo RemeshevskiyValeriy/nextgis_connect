@@ -19,7 +19,7 @@ from nextgis_connect.ngw_connection.domain.diagnostics import (
 from nextgis_connect.ngw_connection.presentation.diagnostics.ui import (
     NgwConnectionDiagnosticsWidget,
 )
-from nextgis_connect.utils import set_clipboard_data
+from nextgis_connect.platform.qgis.utils import set_clipboard_data
 
 
 class NgwConnectionDiagnosticsDialog(QDialog):

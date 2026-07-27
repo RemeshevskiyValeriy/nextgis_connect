@@ -16,7 +16,7 @@ from qgis.PyQt.QtWidgets import (
 from qgis.core import QgsFeature
 from qgis.gui import QgsFilterLineEdit
 
-from nextgis_connect.compat import GeometryType
+from nextgis_connect.platform.qgis.compat import GeometryType
 from nextgis_connect.detached_editing.conflicts.ui.base_feature_conflict_tab import (
     FeatureConflictBaseTab,
 )
@@ -28,8 +28,8 @@ from nextgis_connect.detached_editing.sync.common.serialization import (
 )
 from nextgis_connect.resources.ngw_data_type import NgwDataType
 from nextgis_connect.resources.ngw_field import NgwField
-from nextgis_connect.types import UnsetType
-from nextgis_connect.ui.icon import draw_icon, material_icon
+from nextgis_connect.shared.types import UnsetType
+from nextgis_connect.ui_kit.icons.icon import draw_icon, material_icon
 
 
 class FeatureDataConflictTab(

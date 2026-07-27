@@ -5,7 +5,7 @@ from typing import Any, Dict, Optional, Tuple
 from qgis.core import QgsSettings
 
 from nextgis_connect.ngw_connection.domain.connection import NgwConnection
-from nextgis_connect.utils import SupportStatus
+from nextgis_connect.platform.qgis.utils import SupportStatus
 
 
 class ConnectionIssueSource(Enum):

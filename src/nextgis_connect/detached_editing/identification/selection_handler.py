@@ -12,8 +12,8 @@ from qgis.PyQt.QtCore import (
 )
 from qgis.PyQt.QtGui import QColor, QKeyEvent
 
-from nextgis_connect.compat import GeometryType
-from nextgis_connect.core.constants import NEXTGIS_COLOR
+from nextgis_connect.platform.qgis.compat import GeometryType
+from nextgis_connect.shared.constants import NEXTGIS_COLOR
 
 
 class IdentificationSelectionHandler(QObject):

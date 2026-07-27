@@ -25,7 +25,7 @@ from nextgis_connect.detached_editing.sync.versioned.actions import (
     FeatureUpdateAction,
 )
 from nextgis_connect.resources.ngw_field import FieldId
-from nextgis_connect.types import (
+from nextgis_connect.shared.types import (
     AttachmentId,
     FeatureId,
     NgwAttachmentId,

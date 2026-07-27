@@ -12,13 +12,13 @@ from nextgis_connect.detached_editing.utils import (
     detached_layer_uri,
     is_ngw_container,
 )
-from nextgis_connect.logging import logger
-from nextgis_connect.ngw_api.core.ngw_resource_factory import (
+from nextgis_connect.ngw.core.ngw_resource_factory import (
     NGWResourceFactory,
 )
-from nextgis_connect.ngw_api.core.ngw_vector_layer import NGWVectorLayer
-from nextgis_connect.ngw_api.qgis.qgis_ngw_connection import QgsNgwConnection
+from nextgis_connect.ngw.core.ngw_vector_layer import NGWVectorLayer
+from nextgis_connect.ngw.qgis.qgis_ngw_connection import QgsNgwConnection
 from nextgis_connect.ngw_connection import NgwConnectionsManager
+from nextgis_connect.platform.logging import logger
 from nextgis_connect.settings.ng_connect_cache_manager import (
     NgConnectCacheManager,
 )

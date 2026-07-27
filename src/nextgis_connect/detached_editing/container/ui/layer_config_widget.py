@@ -14,15 +14,15 @@ from qgis.PyQt.QtGui import QIcon
 from qgis.PyQt.QtWidgets import QHBoxLayout, QLabel, QVBoxLayout, QWidget
 
 from nextgis_connect.detached_editing import utils
-from nextgis_connect.exceptions import NgConnectError
-from nextgis_connect.logging import logger
 from nextgis_connect.ngw_connection.application.connections_manager import (
     NgwConnectionsManager,
 )
 from nextgis_connect.ngw_connection.presentation.connections_widget import (
     NgwConnectionsWidget,
 )
-from nextgis_connect.utils import wrap_sql_value
+from nextgis_connect.platform.logging import logger
+from nextgis_connect.platform.qgis.errors import NgConnectError
+from nextgis_connect.platform.qgis.utils import wrap_sql_value
 
 
 class DetachedLayerConfigPage(QgsMapLayerConfigWidget):

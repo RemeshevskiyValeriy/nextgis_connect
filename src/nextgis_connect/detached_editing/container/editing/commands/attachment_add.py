@@ -1,14 +1,14 @@
 from pathlib import Path
 from typing import TYPE_CHECKING, Optional
 
-from nextgis_connect.compat import QgsFeatureId, UndoCommand
 from nextgis_connect.detached_editing.container.editing.commands.base import (
     DetachedLayerBaseCommand,
 )
 from nextgis_connect.detached_editing.utils import (
     AttachmentMetadata,
 )
-from nextgis_connect.logging import logger
+from nextgis_connect.platform.logging import logger
+from nextgis_connect.platform.qgis.compat import QgsFeatureId, UndoCommand
 
 if TYPE_CHECKING:
     from nextgis_connect.detached_editing.detached_layer import DetachedLayer

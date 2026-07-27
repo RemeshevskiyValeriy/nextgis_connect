@@ -20,7 +20,7 @@ from nextgis_connect.detached_editing.sync.common.serialization import (
 from nextgis_connect.detached_editing.utils import (
     DetachedContainerContext,
 )
-from nextgis_connect.types import UnsetType
+from nextgis_connect.shared.types import UnsetType
 
 
 class ItemToResolutionConverter:

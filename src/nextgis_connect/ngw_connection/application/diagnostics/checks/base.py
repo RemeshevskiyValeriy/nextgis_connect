@@ -4,8 +4,6 @@ from typing import TYPE_CHECKING, Any, Callable, Optional, Tuple
 from qgis.core import QgsFeedback
 from qgis.PyQt.QtCore import QByteArray, QCoreApplication
 
-from nextgis_connect.exceptions import ErrorCode, NgConnectException
-from nextgis_connect.logging import logger
 from nextgis_connect.ngw_connection.domain.connection import NgwConnection
 from nextgis_connect.ngw_connection.domain.diagnostics import (
     ConnectionCheckId,
@@ -16,9 +14,11 @@ from nextgis_connect.ngw_connection.domain.diagnostics import (
     ConnectionIssue,
     ConnectionIssueSource,
 )
+from nextgis_connect.platform.logging import logger
+from nextgis_connect.platform.qgis.errors import ErrorCode, NgConnectException
 
 if TYPE_CHECKING:
-    from nextgis_connect.ngw_api.qgis.qgis_ngw_connection import (
+    from nextgis_connect.ngw.qgis.qgis_ngw_connection import (
         QgsNgwConnection,
     )
 

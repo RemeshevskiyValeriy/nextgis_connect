@@ -40,8 +40,10 @@ from nextgis_connect.detached_editing.identification.attachments_model import (
 from nextgis_connect.detached_editing.identification.settings import (
     IdentificationSettings,
 )
-from nextgis_connect.shared.mvc.widget_item_delegate import WidgetItemDelegate
-from nextgis_connect.ui.icon import material_icon, qgis_icon
+from nextgis_connect.ui_kit.delegates.widget_item_delegate import (
+    WidgetItemDelegate,
+)
+from nextgis_connect.ui_kit.icons.icon import material_icon, qgis_icon
 
 
 class AttachmentDelegate(WidgetItemDelegate):

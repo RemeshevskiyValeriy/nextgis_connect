@@ -32,8 +32,7 @@ from qgis.PyQt.QtGui import QDesktopServices
 from qgis.PyQt.QtWidgets import QAction
 from qgis.utils import iface
 
-from nextgis_connect import NgConnectInterface
-from nextgis_connect.compat import QT_VERSION_MAJOR, GeometryType, LayerType
+from nextgis_connect.bootstrap.plugin_interface import NgConnectInterface
 from nextgis_connect.detached_editing.identification.identification_tool import (
     IdentificationTool,
 )
@@ -47,9 +46,14 @@ from nextgis_connect.detached_editing.identification.ui.identification_results_w
     IdentificationResultsWidget,
 )
 from nextgis_connect.detached_editing.utils import is_ngw_container
-from nextgis_connect.logging import logger
 from nextgis_connect.ngw_connection import NgwConnectionsManager
-from nextgis_connect.ui.icon import plugin_icon, qgis_icon
+from nextgis_connect.platform.logging import logger
+from nextgis_connect.platform.qgis.compat import (
+    QT_VERSION_MAJOR,
+    GeometryType,
+    LayerType,
+)
+from nextgis_connect.ui_kit.icons.icon import plugin_icon, qgis_icon
 
 if TYPE_CHECKING:
     from qgis.gui import QgisInterface

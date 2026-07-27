@@ -1,6 +1,2 @@
-from .ngw_resource import NGWResource
-
-
-class NGWRasterMosaic(NGWResource):
-    type_id = "raster_mosaic"
-    type_title = "NGW Raster Mosaic"
+# ruff: noqa: F403
+from nextgis_connect.ngw.core.ngw_raster_mosaic import *

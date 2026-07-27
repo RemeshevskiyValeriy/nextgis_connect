@@ -28,13 +28,13 @@ from nextgis_connect.detached_editing.identification.settings import (
     IdentificationSettings,
 )
 from nextgis_connect.detached_editing.utils import AttachmentMetadata
-from nextgis_connect.logging import logger
-from nextgis_connect.types import AttachmentId
-from nextgis_connect.ui.icon import (
+from nextgis_connect.platform.logging import logger
+from nextgis_connect.platform.qgis.utils import human_readable_size
+from nextgis_connect.shared.types import AttachmentId
+from nextgis_connect.ui_kit.icons.icon import (
     material_icon,
     plugin_icon,
 )
-from nextgis_connect.utils import human_readable_size
 
 
 class AttachmentsModel(QAbstractListModel):

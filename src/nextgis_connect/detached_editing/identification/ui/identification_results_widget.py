@@ -48,8 +48,7 @@ from qgis.PyQt.QtWidgets import (
 )
 from qgis.utils import iface
 
-from nextgis_connect.compat import GeometryType, QgsFeatureId
-from nextgis_connect.core.constants import PLUGIN_NAME
+from nextgis_connect.bootstrap.plugin_interface import NgConnectInterface
 from nextgis_connect.detached_editing.identification.highlight_handler import (
     HighlightHandler,
 )
@@ -70,8 +69,13 @@ from nextgis_connect.detached_editing.identification.ui.no_features_widget impor
     NoFeaturesWidget,
 )
 from nextgis_connect.detached_editing.utils import DetachedLayerState
-from nextgis_connect.ng_connect_interface import NgConnectInterface
-from nextgis_connect.ui.icon import material_icon, plugin_icon, qgis_icon
+from nextgis_connect.platform.qgis.compat import GeometryType, QgsFeatureId
+from nextgis_connect.shared.constants import PLUGIN_NAME
+from nextgis_connect.ui_kit.icons.icon import (
+    material_icon,
+    plugin_icon,
+    qgis_icon,
+)
 
 if TYPE_CHECKING:
     from qgis.gui import QgisInterface

@@ -1,7 +1,7 @@
 import logging
 from typing import List, cast
 
-from nextgis_connect.logging import logger
+from nextgis_connect.platform.logging import logger
 
 
 class DiagnosticLogHandler(logging.Handler):

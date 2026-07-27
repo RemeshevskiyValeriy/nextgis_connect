@@ -5,7 +5,6 @@ from typing import TYPE_CHECKING
 
 from qgis.core import QgsFeedback
 
-from nextgis_connect.exceptions import NgConnectError, NgwError
 from nextgis_connect.ngw_connection.domain.diagnostics import (
     ConnectionCheckId,
     ConnectionCheckResult,
@@ -15,11 +14,12 @@ from nextgis_connect.ngw_connection.domain.diagnostics import (
     ConnectionIssueSource,
     UploadDiagnosticInfo,
 )
+from nextgis_connect.platform.qgis.errors import NgConnectError, NgwError
 
 from .base import BaseConnectionCheck, UpdateReporter
 
 if TYPE_CHECKING:
-    from nextgis_connect.ngw_api.qgis.qgis_ngw_connection import (
+    from nextgis_connect.ngw.qgis.qgis_ngw_connection import (
         QgsNgwConnection,
     )
 

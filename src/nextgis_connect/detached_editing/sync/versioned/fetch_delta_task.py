@@ -16,13 +16,13 @@ from nextgis_connect.detached_editing.sync.versioned.actions_filter import (
 from nextgis_connect.detached_editing.sync.versioned.actions_serializer import (
     ActionSerializer,
 )
-from nextgis_connect.exceptions import (
+from nextgis_connect.ngw.qgis.qgis_ngw_connection import QgsNgwConnection
+from nextgis_connect.platform.logging import logger
+from nextgis_connect.platform.qgis.errors import (
     ErrorCode,
     NgwError,
     SynchronizationError,
 )
-from nextgis_connect.logging import logger
-from nextgis_connect.ngw_api.qgis.qgis_ngw_connection import QgsNgwConnection
 from nextgis_connect.resources.ngw_fields import NgwFields
 
 

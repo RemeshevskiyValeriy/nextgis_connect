@@ -1,0 +1,262 @@
+# NextGIS Toolbox
+# Copyright (C) 2026  NextGIS
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 2 of the License, or any
+# later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License along
+# with this program; if not, see <https://www.gnu.org/licenses/>.
+
+from typing import Optional
+
+from qgis.PyQt.QtCore import (
+    QCoreApplication,
+    QEvent,
+    QRect,
+    QSize,
+    Qt,
+    pyqtSignal,
+)
+from qgis.PyQt.QtGui import QEnterEvent, QIcon, QMouseEvent, QMovie
+from qgis.PyQt.QtWidgets import QPushButton, QToolButton, QWidget
+
+
+class LoadingButtonMixin:
+    DEFAULT_ANIMATION_PATH = ":images/themes/default/mIconLoading.gif"
+
+    def _initialize_loading_button(
+        self,
+        icon: Optional[QIcon] = None,
+        cancel_icon: Optional[QIcon] = None,
+        animation_path: Optional[str] = None,
+    ) -> None:
+        self._default_icon = QIcon() if icon is None else QIcon(icon)
+        self._set_icon(self._default_icon)
+        self._cancel_icon = (
+            QIcon() if cancel_icon is None else QIcon(cancel_icon)
+        )
+        self._default_tooltip = self._tool_tip()
+        self._enabled_before_loading = self._is_enabled()
+        self._is_hovered = False
+        self._is_loading = False
+        self._movie = QMovie(animation_path or self.DEFAULT_ANIMATION_PATH)
+        self._movie.frameChanged.connect(self._update_loading_icon)
+
+    def is_loading(self) -> bool:
+        return self._is_loading
+
+    def cancel_icon(self) -> QIcon:
+        return QIcon(self._cancel_icon)
+
+    def set_cancel_icon(self, icon: QIcon) -> None:
+        self._cancel_icon = QIcon(icon)
+
+    def _start_loading(self) -> None:
+        if self._is_loading:
+            return
+
+        self._default_icon = self._icon()
+        self._default_tooltip = self._tool_tip()
+        self._enabled_before_loading = self._is_enabled()
+        self._is_loading = True
+
+        if self._cancel_icon.isNull():
+            self._set_enabled(False)
+        else:
+            self._set_tool_tip(
+                QCoreApplication.translate("LoadingButton", "Cancel")
+            )
+
+        if self._movie.fileName() == "":
+            return
+
+        if not self._movie.isValid():
+            return
+
+        if self._movie.state() == QMovie.MovieState.Running:
+            return
+
+        icon_size = self._icon_size()
+        if not icon_size.isValid():
+            icon_size = QSize(16, 16)
+
+        self._movie.setScaledSize(icon_size)
+        self._movie.start()
+        self._update_loading_icon()
+
+    def _stop_loading(self) -> None:
+        if self._movie.state() != QMovie.MovieState.NotRunning:
+            self._movie.stop()
+
+        self._is_loading = False
+        self._set_icon(self._default_icon)
+        self._set_tool_tip(self._default_tooltip)
+        if self._cancel_icon.isNull():
+            self._set_enabled(self._enabled_before_loading)
+
+    def _handle_enter_event(self) -> None:
+        self._is_hovered = True
+        if self._is_loading and not self._cancel_icon.isNull():
+            self._set_icon(self._cancel_icon)
+
+    def _handle_leave_event(self) -> None:
+        self._is_hovered = False
+        if self._is_loading:
+            self._update_loading_icon()
+
+    def _handle_mouse_release_event(
+        self,
+        event: Optional[QMouseEvent],
+    ) -> bool:
+        if event is None:
+            return False
+
+        if not self._is_loading:
+            return False
+
+        if event.button() != Qt.MouseButton.LeftButton:
+            return False
+
+        if self._cancel_icon.isNull():
+            return False
+
+        event.accept()
+
+        if not self._is_enabled() or not self._rect().contains(event.pos()):
+            return True
+
+        self._cancel_requested_signal().emit()
+        return True
+
+    def _handle_icon_size_change(self, size: QSize) -> None:
+        if size.isValid():
+            self._movie.setScaledSize(size)
+
+    def _update_loading_icon(self) -> None:
+        if self._is_hovered and not self._cancel_icon.isNull():
+            self._set_icon(self._cancel_icon)
+            return
+
+        current_pixmap = self._movie.currentPixmap()
+        if current_pixmap.isNull():
+            return
+
+        self._set_icon(QIcon(current_pixmap))
+
+    def _set_icon(self, icon: QIcon) -> None:
+        self.setIcon(icon)
+
+    def _icon(self) -> QIcon:
+        return self.icon()
+
+    def _tool_tip(self) -> str:
+        return self.toolTip()
+
+    def _set_tool_tip(self, tooltip: str) -> None:
+        self.setToolTip(tooltip)
+
+    def _icon_size(self) -> QSize:
+        return self.iconSize()
+
+    def _is_enabled(self) -> bool:
+        return self.isEnabled()
+
+    def _set_enabled(self, is_enabled: bool) -> None:
+        self.setEnabled(is_enabled)
+
+    def _rect(self) -> QRect:
+        return self.rect()
+
+    def _cancel_requested_signal(self) -> pyqtSignal:
+        return self.cancelRequested
+
+
+class LoadingPushButton(LoadingButtonMixin, QPushButton):
+    cancel_requested = pyqtSignal()
+
+    def __init__(
+        self,
+        icon: Optional[QIcon] = None,
+        cancel_icon: Optional[QIcon] = None,
+        animation_path: Optional[str] = None,
+        parent: Optional[QWidget] = None,
+    ) -> None:
+        super().__init__(parent)
+        self._initialize_loading_button(
+            icon=icon,
+            cancel_icon=cancel_icon,
+            animation_path=animation_path,
+        )
+
+    def start(self) -> None:
+        self._start_loading()
+
+    def stop(self) -> None:
+        self._stop_loading()
+
+    def enterEvent(self, event: Optional[QEnterEvent]) -> None:
+        self._handle_enter_event()
+        super().enterEvent(event)
+
+    def leaveEvent(self, a0: Optional[QEvent]) -> None:
+        self._handle_leave_event()
+        super().leaveEvent(a0)
+
+    def mouseReleaseEvent(self, e: Optional[QMouseEvent]) -> None:
+        if self._handle_mouse_release_event(e):
+            return
+
+        super().mouseReleaseEvent(e)
+
+    def setIconSize(self, size: QSize) -> None:
+        super().setIconSize(size)
+        self._handle_icon_size_change(size)
+
+
+class LoadingToolButton(LoadingButtonMixin, QToolButton):
+    cancel_requested = pyqtSignal()
+
+    def __init__(
+        self,
+        icon: Optional[QIcon] = None,
+        cancel_icon: Optional[QIcon] = None,
+        animation_path: Optional[str] = None,
+        parent: Optional[QWidget] = None,
+    ) -> None:
+        super().__init__(parent)
+        self._initialize_loading_button(
+            icon=icon,
+            cancel_icon=cancel_icon,
+            animation_path=animation_path,
+        )
+
+    def start(self) -> None:
+        self._start_loading()
+
+    def stop(self) -> None:
+        self._stop_loading()
+
+    def enterEvent(self, a0: Optional[QEnterEvent]) -> None:
+        self._handle_enter_event()
+        super().enterEvent(a0)
+
+    def leaveEvent(self, a0: Optional[QEvent]) -> None:
+        self._handle_leave_event()
+        super().leaveEvent(a0)
+
+    def mouseReleaseEvent(self, a0: Optional[QMouseEvent]) -> None:
+        if self._handle_mouse_release_event(a0):
+            return
+
+        super().mouseReleaseEvent(a0)
+
+    def setIconSize(self, size: QSize) -> None:
+        super().setIconSize(size)
+        self._handle_icon_size_change(size)

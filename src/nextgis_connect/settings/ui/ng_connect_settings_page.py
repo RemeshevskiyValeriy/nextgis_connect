@@ -23,10 +23,7 @@ from qgis.PyQt.QtWidgets import (
 )
 from qgis.utils import iface
 
-from nextgis_connect import NgConnectInterface
-from nextgis_connect.core.ui.labeled_slider import LabeledSlider
-from nextgis_connect.logging import logger, update_logging_level
-from nextgis_connect.ng_connect_dock import NgConnectDock
+from nextgis_connect.bootstrap.plugin_interface import NgConnectInterface
 from nextgis_connect.ngw_connection.application.connections_manager import (
     NgwConnectionsManager,
 )
@@ -34,6 +31,8 @@ from nextgis_connect.ngw_connection.domain.connection import NgwConnection
 from nextgis_connect.ngw_connection.presentation.connections_widget import (
     NgwConnectionsWidget,
 )
+from nextgis_connect.platform.logging import logger, update_logging_level
+from nextgis_connect.platform.qgis.utils import human_readable_size
 from nextgis_connect.settings import NgConnectSettings
 from nextgis_connect.settings.ng_connect_cache_manager import (
     NgConnectCacheManager,
@@ -41,7 +40,10 @@ from nextgis_connect.settings.ng_connect_cache_manager import (
 from nextgis_connect.settings.tasks.clear_ng_connect_cache_task import (
     ClearNgConnectCacheTask,
 )
-from nextgis_connect.utils import human_readable_size
+from nextgis_connect.shell.presentation.dock.ng_connect_dock import (
+    NgConnectDock,
+)
+from nextgis_connect.ui_kit.widgets.labeled_slider import LabeledSlider
 
 
 class NgConnectOptionsPageWidget(QgsOptionsPageWidget):

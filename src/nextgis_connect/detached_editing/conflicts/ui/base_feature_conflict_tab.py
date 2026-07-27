@@ -33,7 +33,7 @@ from qgis.PyQt.QtWidgets import (
     QWidget,
 )
 
-from nextgis_connect.compat import GeometryType
+from nextgis_connect.platform.qgis.compat import GeometryType
 from nextgis_connect.detached_editing.conflicts.conflict_resolving_item import (
     BaseConflictResolvingItem,
 )

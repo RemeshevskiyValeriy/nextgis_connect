@@ -4,12 +4,6 @@ from qgis.PyQt.QtCore import QEvent, Qt, pyqtSignal
 from qgis.PyQt.QtGui import QPalette
 from qgis.PyQt.QtWidgets import QBoxLayout, QLabel, QSizePolicy, QWidget
 
-from nextgis_connect.shared.buttons import (
-    PrimaryButton,
-    SecondaryButton,
-    ShiningButton,
-)
-from nextgis_connect.shared.graphics.decorator import NextgisDecorator
 from nextgis_connect.tree_widget.overlay.state import (
     OverlayAction,
     OverlayButtonState,
@@ -20,6 +14,14 @@ from nextgis_connect.tree_widget.overlay.widgets.surface import (
     FooterLinkLabel,
     MaterialIllustrationWidget,
     OverlaySurfaceWidget,
+)
+from nextgis_connect.ui_kit.rendering.graphics.decorator import (
+    NextgisDecorator,
+)
+from nextgis_connect.ui_kit.widgets.buttons import (
+    PrimaryButton,
+    SecondaryButton,
+    ShiningButton,
 )
 
 

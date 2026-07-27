@@ -1,5 +1,5 @@
-from nextgis_connect.core.tasks.ng_connect_task import NgConnectTask
-from nextgis_connect.logging import logger
+from nextgis_connect.platform.logging import logger
+from nextgis_connect.platform.tasks.ng_connect_task import NgConnectTask
 from nextgis_connect.settings.ng_connect_cache_manager import (
     NgConnectCacheManager,
 )

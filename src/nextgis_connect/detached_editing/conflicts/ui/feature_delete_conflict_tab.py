@@ -29,7 +29,6 @@ from qgis.PyQt.QtWidgets import (
     QWidget,
 )
 
-from nextgis_connect.compat import GeometryType
 from nextgis_connect.detached_editing.conflicts.conflict_resolution import (
     ResolutionType,
 )
@@ -60,9 +59,14 @@ from nextgis_connect.detached_editing.sync.versioned.actions import (
     VersioningAction,
 )
 from nextgis_connect.detached_editing.utils import AttachmentMetadata
-from nextgis_connect.logging import logger
-from nextgis_connect.types import AttachmentId, NgwAttachmentId, UnsetType
-from nextgis_connect.ui.icon import draw_icon, plugin_icon
+from nextgis_connect.platform.logging import logger
+from nextgis_connect.platform.qgis.compat import GeometryType
+from nextgis_connect.shared.types import (
+    AttachmentId,
+    NgwAttachmentId,
+    UnsetType,
+)
+from nextgis_connect.ui_kit.icons.icon import draw_icon, plugin_icon
 
 
 class _Side(str, Enum):

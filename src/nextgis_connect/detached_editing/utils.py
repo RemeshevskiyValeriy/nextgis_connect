@@ -15,17 +15,21 @@ from qgis.core import (
     qgsfunction,
 )
 
-from nextgis_connect.compat import QgsFeatureId
-from nextgis_connect.exceptions import (
+from nextgis_connect.bootstrap.plugin_interface import NgConnectInterface
+from nextgis_connect.platform.logging import logger
+from nextgis_connect.platform.qgis.compat import QgsFeatureId
+from nextgis_connect.platform.qgis.errors import (
     ContainerError,
     ErrorCode,
     NgConnectError,
 )
-from nextgis_connect.logging import logger
-from nextgis_connect.ng_connect_interface import NgConnectInterface
+from nextgis_connect.platform.qgis.utils import (
+    wrap_sql_table_name,
+    wrap_sql_value,
+)
 from nextgis_connect.resources.ngw_field import NgwField
 from nextgis_connect.resources.ngw_fields import NgwFields
-from nextgis_connect.types import (
+from nextgis_connect.shared.types import (
     AttachmentId,
     FeatureId,
     FileObjectId,
@@ -35,7 +39,6 @@ from nextgis_connect.types import (
     UnsetType,
     VersionId,
 )
-from nextgis_connect.utils import wrap_sql_table_name, wrap_sql_value
 
 
 def has_required_fields_metadata(cursor: sqlite3.Cursor) -> bool:

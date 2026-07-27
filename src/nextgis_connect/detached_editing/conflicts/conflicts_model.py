@@ -23,8 +23,8 @@ from nextgis_connect.detached_editing.conflicts.conflicts import (
 from nextgis_connect.detached_editing.utils import (
     DetachedContainerContext,
 )
-from nextgis_connect.types import UnsetType
-from nextgis_connect.ui.icon import material_icon
+from nextgis_connect.shared.types import UnsetType
+from nextgis_connect.ui_kit.icons.icon import material_icon
 
 
 class ConflictsResolvingModel(QAbstractListModel):

@@ -4,11 +4,11 @@ from qgis.core import QgsSettings
 from qgis.gui import QgsMapToolIdentify
 from qgis.PyQt.QtCore import Qt
 
-from nextgis_connect.core.constants import PLUGIN_SETTINGS_GROUP
 from nextgis_connect.detached_editing.identification.types import (
     AttachmentsSortMode,
     IdentificationTab,
 )
+from nextgis_connect.shared.constants import PLUGIN_SETTINGS_GROUP
 
 
 class IdentificationSettings:

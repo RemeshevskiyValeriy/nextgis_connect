@@ -1,0 +1,1 @@
+"""Shell-level menu registration."""

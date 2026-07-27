@@ -19,7 +19,7 @@ from nextgis_connect.detached_editing.sync.versioned.actions import (
     VersioningAction,
 )
 from nextgis_connect.detached_editing.utils import DetachedContainerMetaData
-from nextgis_connect.exceptions import SerializationError
+from nextgis_connect.platform.qgis.errors import SerializationError
 
 
 class ActionSerializer:

@@ -48,7 +48,7 @@ from nextgis_connect.detached_editing.sync.versioned.actions import (
     FeatureUpdateAction,
     VersioningAction,
 )
-from nextgis_connect.types import NgwFeatureId, UnsetType
+from nextgis_connect.shared.types import NgwFeatureId, UnsetType
 
 
 class ConflictsDetector:

@@ -24,6 +24,7 @@ from qgis.gui import QgisInterface
 from qgis.PyQt.QtCore import QObject, Qt, pyqtSignal, pyqtSlot
 from qgis.utils import iface
 
+from nextgis_connect.bootstrap.plugin_interface import NgConnectInterface
 from nextgis_connect.detached_editing import utils
 from nextgis_connect.detached_editing.conflicts.auto_resolver import (
     ConflictsAutoResolver,
@@ -71,7 +72,17 @@ from nextgis_connect.detached_editing.utils import (
     VersioningSynchronizationState,
     make_connection,
 )
-from nextgis_connect.exceptions import (
+from nextgis_connect.ngw.core import NGWVectorLayer
+from nextgis_connect.ngw.core.ngw_error import NGWError
+from nextgis_connect.ngw.core.ngw_resource_factory import (
+    NGWResourceFactory,
+)
+from nextgis_connect.ngw.qgis.qgis_ngw_connection import QgsNgwConnection
+from nextgis_connect.ngw_connection.application.connections_manager import (
+    NgwConnectionsManager,
+)
+from nextgis_connect.platform.logging import logger
+from nextgis_connect.platform.qgis.errors import (
     ContainerError,
     ErrorCode,
     NgConnectError,
@@ -79,19 +90,8 @@ from nextgis_connect.exceptions import (
     NgwError,
     SynchronizationError,
 )
-from nextgis_connect.logging import logger
-from nextgis_connect.ng_connect_interface import NgConnectInterface
-from nextgis_connect.ngw_api.core import NGWVectorLayer
-from nextgis_connect.ngw_api.core.ngw_error import NGWError
-from nextgis_connect.ngw_api.core.ngw_resource_factory import (
-    NGWResourceFactory,
-)
-from nextgis_connect.ngw_api.qgis.qgis_ngw_connection import QgsNgwConnection
-from nextgis_connect.ngw_connection.application.connections_manager import (
-    NgwConnectionsManager,
-)
+from nextgis_connect.platform.qgis.utils import wrap_sql_value
 from nextgis_connect.settings import NgConnectSettings
-from nextgis_connect.utils import wrap_sql_value
 
 if TYPE_CHECKING:
     assert isinstance(iface, QgisInterface)

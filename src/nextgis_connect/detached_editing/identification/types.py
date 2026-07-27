@@ -1,7 +1,7 @@
 from enum import IntEnum
 from typing import Tuple
 
-from nextgis_connect.compat import QgsFeatureId
+from nextgis_connect.platform.qgis.compat import QgsFeatureId
 
 LayerId = str
 FeatureKey = Tuple[LayerId, QgsFeatureId]

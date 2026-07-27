@@ -3,7 +3,6 @@ from typing import TYPE_CHECKING, Optional
 
 from qgis.core import QgsApplication, QgsAuthMethodConfig, QgsFeedback
 
-from nextgis_connect.exceptions import ErrorCode, NgConnectError, NgwError
 from nextgis_connect.ngw_connection.application.diagnostics.checks.base import (
     BaseConnectionCheck,
     UpdateReporter,
@@ -15,9 +14,14 @@ from nextgis_connect.ngw_connection.domain.diagnostics import (
     ConnectionDiagnosticContext,
     CurrentUserInfo,
 )
+from nextgis_connect.platform.qgis.errors import (
+    ErrorCode,
+    NgConnectError,
+    NgwError,
+)
 
 if TYPE_CHECKING:
-    from nextgis_connect.ngw_api.qgis.qgis_ngw_connection import (
+    from nextgis_connect.ngw.qgis.qgis_ngw_connection import (
         QgsNgwConnection,
     )
 

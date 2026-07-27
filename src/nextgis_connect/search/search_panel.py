@@ -10,7 +10,7 @@ from qgis.PyQt.QtWidgets import (
     QWidget,
 )
 
-from nextgis_connect.logging import logger
+from nextgis_connect.platform.logging import logger
 from nextgis_connect.search.metadata_search_widget import MetadataSearchWidget
 from nextgis_connect.search.search_settings import SearchSettings
 from nextgis_connect.search.text_search_line_edit import TextSearchLineEdit

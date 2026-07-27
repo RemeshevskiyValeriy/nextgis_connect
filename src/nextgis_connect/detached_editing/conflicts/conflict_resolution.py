@@ -7,7 +7,7 @@ from nextgis_connect.detached_editing.conflicts.conflicts import (
 )
 from nextgis_connect.detached_editing.utils import AttachmentMetadata
 from nextgis_connect.resources.ngw_field import FieldId
-from nextgis_connect.types import FileObjectId, UnsetType
+from nextgis_connect.shared.types import FileObjectId, UnsetType
 
 
 class ResolutionType(Enum):

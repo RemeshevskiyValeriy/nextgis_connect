@@ -4,7 +4,7 @@ from typing import cast
 from qgis.core import QgsFields
 from qgis.PyQt.QtGui import QIcon
 
-from nextgis_connect.compat import FieldType
+from nextgis_connect.platform.qgis.compat import FieldType
 
 
 class NgwDataType(IntEnum):

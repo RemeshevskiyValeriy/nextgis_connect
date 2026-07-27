@@ -18,11 +18,13 @@ from qgis.PyQt.QtWidgets import (
     QWidget,
 )
 
-from nextgis_connect.shared.graphics import (
+from nextgis_connect.ui_kit.rendering.graphics import (
     NextgisBackgroundPainter,
     NextgisDecorator,
 )
-from nextgis_connect.shared.graphics.svg_renderer import CustomSvgRenderer
+from nextgis_connect.ui_kit.rendering.graphics.svg_renderer import (
+    CustomSvgRenderer,
+)
 
 
 class ClickableLabel(QLabel):

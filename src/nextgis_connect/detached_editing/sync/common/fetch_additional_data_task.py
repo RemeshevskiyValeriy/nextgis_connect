@@ -8,11 +8,11 @@ from nextgis_connect.detached_editing.utils import (
     ensure_required_fields_metadata,
     make_connection,
 )
-from nextgis_connect.exceptions import (
+from nextgis_connect.ngw.qgis.qgis_ngw_connection import QgsNgwConnection
+from nextgis_connect.platform.logging import logger
+from nextgis_connect.platform.qgis.errors import (
     SynchronizationError,
 )
-from nextgis_connect.logging import logger
-from nextgis_connect.ngw_api.qgis.qgis_ngw_connection import QgsNgwConnection
 from nextgis_connect.resources.ngw_field import FieldId
 
 

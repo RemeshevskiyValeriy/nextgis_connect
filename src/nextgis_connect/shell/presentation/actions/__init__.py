@@ -1,0 +1,1 @@
+"""Shell-level QGIS actions."""

@@ -28,14 +28,6 @@ from qgis.core import (
 from qgis.PyQt.QtCore import QObject, pyqtSignal, pyqtSlot
 from qgis.PyQt.QtWidgets import QMessageBox
 
-from nextgis_connect.compat import (
-    QgsAttributeList,
-    QgsChangedAttributesMap,
-    QgsFeatureId,
-    QgsFeatureIds,
-    QgsFeatureList,
-    QgsGeometryMap,
-)
 from nextgis_connect.detached_editing.container.editing.commands.attachment_add import (
     AttachmentAddCommand,
 )
@@ -65,20 +57,29 @@ from nextgis_connect.detached_editing.utils import (
     is_feature_new,
     make_connection,
 )
-from nextgis_connect.exceptions import (
+from nextgis_connect.ngw.qgis.qgis_ngw_connection import (
+    QgsNgwConnection,
+)
+from nextgis_connect.platform.logging import logger
+from nextgis_connect.platform.qgis.compat import (
+    QgsAttributeList,
+    QgsChangedAttributesMap,
+    QgsFeatureId,
+    QgsFeatureIds,
+    QgsFeatureList,
+    QgsGeometryMap,
+)
+from nextgis_connect.platform.qgis.errors import (
     ContainerError,
     DetachedEditingError,
     ErrorCode,
 )
-from nextgis_connect.logging import logger
-from nextgis_connect.ngw_api.qgis.qgis_ngw_connection import (
-    QgsNgwConnection,
-)
+from nextgis_connect.platform.qgis.utils import wrap_sql_value
 from nextgis_connect.resources.ngw_field import FieldId
 from nextgis_connect.settings.ng_connect_cache_manager import (
     NgConnectCacheManager,
 )
-from nextgis_connect.types import (
+from nextgis_connect.shared.types import (
     AttachmentId,
     FileObjectId,
     NgwAttachmentId,
@@ -86,7 +87,6 @@ from nextgis_connect.types import (
     Unset,
     UnsetType,
 )
-from nextgis_connect.utils import wrap_sql_value
 
 if TYPE_CHECKING:
     from .container.container import DetachedContainer

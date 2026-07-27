@@ -25,16 +25,16 @@ from qgis.PyQt.QtWidgets import (
     QWidget,
 )
 
-from nextgis_connect.ng_connect_interface import NgConnectInterface
-from nextgis_connect.shared.graphics import (
+from nextgis_connect.bootstrap.plugin_interface import NgConnectInterface
+from nextgis_connect.tree_widget.overlay.state import (
+    OverlayAction,
+    OverlayButtonState,
+)
+from nextgis_connect.ui_kit.rendering.graphics import (
     CustomSvgRenderer,
     NextgisBackgroundPainter,
     NextgisColor,
     NextgisDecorator,
-)
-from nextgis_connect.tree_widget.overlay.state import (
-    OverlayAction,
-    OverlayButtonState,
 )
 
 

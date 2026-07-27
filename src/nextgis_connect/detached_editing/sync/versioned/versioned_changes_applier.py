@@ -20,12 +20,15 @@ from nextgis_connect.detached_editing.utils import (
     DetachedContainerContext,
     FeatureMetadata,
 )
-from nextgis_connect.exceptions import ContainerError, SynchronizationError
-from nextgis_connect.logging import logger
+from nextgis_connect.platform.logging import logger
+from nextgis_connect.platform.qgis.errors import (
+    ContainerError,
+    SynchronizationError,
+)
 from nextgis_connect.settings.ng_connect_cache_manager import (
     NgConnectCacheManager,
 )
-from nextgis_connect.types import AttachmentId, FileObjectId, Unset
+from nextgis_connect.shared.types import AttachmentId, FileObjectId, Unset
 
 
 class VersionedChangesApplier(ChangesApplier):

@@ -20,7 +20,6 @@ from qgis.PyQt.QtWidgets import (
     QWidget,
 )
 
-from nextgis_connect.compat import GeometryType
 from nextgis_connect.detached_editing.conflicts.conflict_resolution import (
     ConflictResolution,
 )
@@ -64,8 +63,9 @@ from nextgis_connect.detached_editing.utils import (
     detached_layer_uri,
 )
 from nextgis_connect.ngw_connection import NgwConnectionsManager
-from nextgis_connect.types import NgwFeatureId
-from nextgis_connect.ui.icon import material_icon
+from nextgis_connect.platform.qgis.compat import GeometryType
+from nextgis_connect.shared.types import NgwFeatureId
+from nextgis_connect.ui_kit.icons.icon import material_icon
 
 WIDGET, _ = uic.loadUiType(
     str(Path(__file__).parent / "resolving_dialog_base.ui")

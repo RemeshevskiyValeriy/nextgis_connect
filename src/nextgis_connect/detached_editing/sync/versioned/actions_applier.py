@@ -31,13 +31,13 @@ from nextgis_connect.detached_editing.utils import (
     detached_layer_uri,
     make_connection,
 )
-from nextgis_connect.exceptions import (
+from nextgis_connect.platform.qgis.errors import (
     ContainerError,
     LayerEditError,
     NgConnectError,
     SynchronizationError,
 )
-from nextgis_connect.types import AttachmentId, FeatureId, UnsetType
+from nextgis_connect.shared.types import AttachmentId, FeatureId, UnsetType
 
 
 class ActionApplier(QObject):

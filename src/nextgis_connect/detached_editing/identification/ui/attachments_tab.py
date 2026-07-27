@@ -35,8 +35,7 @@ from qgis.PyQt.QtWidgets import (
     QWidget,
 )
 
-from nextgis_connect.compat import QgsFeatureId
-from nextgis_connect.core.tasks.ng_connect_task import NgConnectTask
+from nextgis_connect.bootstrap.plugin_interface import NgConnectInterface
 from nextgis_connect.detached_editing.detached_layer import DetachedLayer
 from nextgis_connect.detached_editing.identification.attachments_model import (
     AttachmentsModel,
@@ -55,15 +54,16 @@ from nextgis_connect.detached_editing.utils import (
     AttachmentMetadata,
     make_connection,
 )
-from nextgis_connect.logging import logger
-from nextgis_connect.ng_connect_interface import NgConnectInterface
-from nextgis_connect.ngw_api.qgis.qgis_ngw_connection import (
+from nextgis_connect.ngw.qgis.qgis_ngw_connection import (
     QgsNgwConnection,
 )
 from nextgis_connect.ngw_connection import NgwConnection, NgwConnectionsManager
-from nextgis_connect.shared.utils.filesystem import reveal_in_file_manager
-from nextgis_connect.types import AttachmentId
-from nextgis_connect.ui.icon import material_icon, qgis_icon
+from nextgis_connect.platform.filesystem import reveal_in_file_manager
+from nextgis_connect.platform.logging import logger
+from nextgis_connect.platform.qgis.compat import QgsFeatureId
+from nextgis_connect.platform.tasks.ng_connect_task import NgConnectTask
+from nextgis_connect.shared.types import AttachmentId
+from nextgis_connect.ui_kit.icons.icon import material_icon, qgis_icon
 
 AttachmentThumbnailKey = Tuple[
     str,

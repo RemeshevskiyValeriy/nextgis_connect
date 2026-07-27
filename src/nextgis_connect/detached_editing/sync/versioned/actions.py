@@ -6,7 +6,7 @@ from typing import Any, ClassVar, Dict, List, Optional, Tuple
 from qgis.core import QgsGeometry
 
 from nextgis_connect.resources.ngw_field import FieldId
-from nextgis_connect.types import (
+from nextgis_connect.shared.types import (
     FileObjectId,
     NgwAttachmentId,
     NgwFeatureId,

@@ -2,7 +2,7 @@ from typing import Optional
 
 from qgis.PyQt.QtCore import QCoreApplication, QObject, pyqtSignal
 
-from nextgis_connect.utils import utm_tags
+from nextgis_connect.platform.qgis.utils import utm_tags
 
 from .state import (
     OverlayAction,

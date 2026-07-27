@@ -5,7 +5,6 @@ from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple, cast
 
 from qgis.core import QgsFeature, QgsFeatureRequest, QgsVectorLayer
 
-from nextgis_connect.compat import QgsFeatureId
 from nextgis_connect.detached_editing.conflicts.conflict_resolving_item import (
     AttachmentConflictResolvingItem,
     AttachmentDataConflictResolvingItem,
@@ -50,8 +49,14 @@ from nextgis_connect.detached_editing.utils import (
     DetachedContainerContext,
     detached_layer_uri,
 )
+from nextgis_connect.platform.qgis.compat import QgsFeatureId
 from nextgis_connect.resources.ngw_field import FieldId
-from nextgis_connect.types import AttachmentId, FeatureId, Unset, UnsetType
+from nextgis_connect.shared.types import (
+    AttachmentId,
+    FeatureId,
+    Unset,
+    UnsetType,
+)
 
 
 @dataclass

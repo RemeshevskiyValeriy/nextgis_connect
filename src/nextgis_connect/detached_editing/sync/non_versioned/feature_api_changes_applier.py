@@ -18,8 +18,8 @@ from nextgis_connect.detached_editing.utils import (
     DetachedContainerContext,
     FeatureMetadata,
 )
-from nextgis_connect.exceptions import SynchronizationError
-from nextgis_connect.types import Unset
+from nextgis_connect.platform.qgis.errors import SynchronizationError
+from nextgis_connect.shared.types import Unset
 
 
 class FeatureApiChangesApplier(ChangesApplier):

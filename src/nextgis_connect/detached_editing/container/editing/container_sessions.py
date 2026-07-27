@@ -18,7 +18,7 @@ from nextgis_connect.detached_editing.utils import (
     DetachedContainerContext,
     container_path,
 )
-from nextgis_connect.exceptions import (
+from nextgis_connect.platform.qgis.errors import (
     ContainerError,
     DetachedEditingError,
     NgConnectExceptionInfoMixin,

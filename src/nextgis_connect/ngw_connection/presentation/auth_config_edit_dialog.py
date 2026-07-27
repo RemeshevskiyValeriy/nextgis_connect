@@ -28,11 +28,11 @@ from qgis.PyQt.QtWidgets import (
     QWidget,
 )
 
-from nextgis_connect.logging import logger
 from nextgis_connect.ngw_connection.presentation.auth_config_id_edit import (
     AuthConfigIdEdit,
 )
-from nextgis_connect.utils import utm_tags
+from nextgis_connect.platform.logging import logger
+from nextgis_connect.platform.qgis.utils import utm_tags
 
 from .dialog_header_widget import NextgisDialogHeaderWidget
 

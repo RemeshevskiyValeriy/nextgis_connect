@@ -25,8 +25,12 @@ from nextgis_connect.detached_editing.conflicts.ui.base_feature_conflict_tab imp
     ConflictTabBase,
 )
 from nextgis_connect.detached_editing.utils import AttachmentMetadata
-from nextgis_connect.types import Unset, UnsetType
-from nextgis_connect.ui.icon import draw_icon, material_icon, plugin_icon
+from nextgis_connect.shared.types import Unset, UnsetType
+from nextgis_connect.ui_kit.icons.icon import (
+    draw_icon,
+    material_icon,
+    plugin_icon,
+)
 
 
 class _AttachmentField(str, Enum):

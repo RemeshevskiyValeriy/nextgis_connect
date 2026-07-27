@@ -24,7 +24,7 @@ from nextgis_connect.detached_editing.sync.versioned.actions import (
     AttachmentDeleteAction,
     FeatureDeleteAction,
 )
-from nextgis_connect.types import Unset, UnsetType
+from nextgis_connect.shared.types import Unset, UnsetType
 
 
 @dataclass

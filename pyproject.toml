@@ -9,8 +9,8 @@ dev = ["ruff", "pre-commit"]
 
 [tool.qgspb.package-data]
 "nextgis_connect.icons" = ["**/*.svg", "**/*.png"]
-"nextgis_connect.ngw_api.icons" = ["*.svg"]
-"nextgis_connect.ngw_api.qgis.qgis_styles" = ["*.qml"]
+"nextgis_connect.ngw.icons" = ["*.svg"]
+"nextgis_connect.ngw.qgis.qgis_styles" = ["*.qml"]
 
 [tool.qgspb.forms]
 ui-files = ["src/nextgis_connect/**/*.ui"]
@@ -19,7 +19,7 @@ compile = false
 [tool.qgspb.translations]
 ts-files = [
     "src/nextgis_connect/i18n/*.ts",
-    "src/nextgis_connect/ngw_api/qgis/i18n/*.ts",
+    "src/nextgis_connect/ngw/qgis/i18n/*.ts",
 ]
 
 [tool.pyright]

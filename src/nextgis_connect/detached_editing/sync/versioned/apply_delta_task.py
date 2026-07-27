@@ -16,8 +16,8 @@ from nextgis_connect.detached_editing.utils import (
     DetachedContainerMetaData,
     make_connection,
 )
-from nextgis_connect.exceptions import SynchronizationError
-from nextgis_connect.logging import logger
+from nextgis_connect.platform.logging import logger
+from nextgis_connect.platform.qgis.errors import SynchronizationError
 
 
 class ApplyDeltaTask(DetachedEditingTask):

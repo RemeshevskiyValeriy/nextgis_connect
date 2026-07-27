@@ -3,9 +3,9 @@ from typing import Any, Dict, Optional, Union
 
 from qgis.core import QgsField, QgsFieldConstraints, QgsVectorLayer
 
-from nextgis_connect.compat import FieldType
+from nextgis_connect.platform.qgis.compat import FieldType
 from nextgis_connect.resources.ngw_data_type import NgwDataType
-from nextgis_connect.types import FieldId
+from nextgis_connect.shared.types import FieldId
 
 
 @dataclass(frozen=True, init=False)

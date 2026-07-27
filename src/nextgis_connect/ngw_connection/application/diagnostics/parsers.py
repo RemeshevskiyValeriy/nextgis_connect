@@ -3,9 +3,9 @@ import xml.etree.ElementTree as ET
 from pathlib import Path
 from typing import Optional
 
-from nextgis_connect.compat import parse_version
-from nextgis_connect.core.constants import PACKAGE_NAME, PLUGIN_NAME
-from nextgis_connect.ng_connect_interface import NgConnectInterface
+from nextgis_connect.bootstrap.plugin_interface import NgConnectInterface
+from nextgis_connect.platform.qgis.compat import parse_version
+from nextgis_connect.shared.constants import PACKAGE_NAME, PLUGIN_NAME
 
 
 class QgisPluginRepositoryParser:

@@ -24,14 +24,8 @@ from qgis.PyQt.QtWidgets import (
     QWidget,
 )
 
-from nextgis_connect.compat import WkbType
-from nextgis_connect.core.ui.checkbox_delegate import (
-    CheckBoxDelegate,
-)
-from nextgis_connect.core.ui.header_with_cenetered_icon_proxy_style import (
-    HeaderWithCenteredIconProxyStyle,
-)
-from nextgis_connect.ngw_api.core.ngw_vector_layer import NGWVectorLayer
+from nextgis_connect.ngw.core.ngw_vector_layer import NGWVectorLayer
+from nextgis_connect.platform.qgis.compat import WkbType
 from nextgis_connect.resources.ngw_data_type_delegate import (
     NgwDataTypeDelegate,
 )
@@ -40,6 +34,12 @@ from nextgis_connect.resources.ngw_fields_model import NgwFieldsModel
 from nextgis_connect.resources.utils import generate_unique_name
 from nextgis_connect.settings.ng_connect_settings import NgConnectSettings
 from nextgis_connect.tree_widget.item import QNGWResourceItem
+from nextgis_connect.ui_kit.delegates.checkbox_delegate import (
+    CheckBoxDelegate,
+)
+from nextgis_connect.ui_kit.delegates.header_with_cenetered_icon_proxy_style import (
+    HeaderWithCenteredIconProxyStyle,
+)
 
 VectorLayerCreationDialogBase, _ = uic.loadUiType(
     str(Path(__file__).parent / "vector_layer_creation_dialog_base.ui")

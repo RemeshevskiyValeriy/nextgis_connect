@@ -30,13 +30,13 @@ from nextgis_connect.detached_editing.sync.versioned.versioned_changes_applier i
 from nextgis_connect.detached_editing.sync.versioned.versioned_changes_serializer import (
     VersionedChangesSerializer,
 )
-from nextgis_connect.exceptions import SynchronizationError
-from nextgis_connect.logging import logger
-from nextgis_connect.ngw_api.qgis.qgis_ngw_connection import QgsNgwConnection
+from nextgis_connect.ngw.qgis.qgis_ngw_connection import QgsNgwConnection
+from nextgis_connect.platform.logging import logger
+from nextgis_connect.platform.qgis.errors import SynchronizationError
 from nextgis_connect.settings.ng_connect_cache_manager import (
     NgConnectCacheManager,
 )
-from nextgis_connect.types import (
+from nextgis_connect.shared.types import (
     FeatureId,
     NgwAttachmentId,
     NgwFeatureId,

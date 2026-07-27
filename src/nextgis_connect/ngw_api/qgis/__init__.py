@@ -1,3 +1,2 @@
-__author__ = "yellow"
-__license__ = ""
-__date__ = "2015"
+# ruff: noqa: F403
+from nextgis_connect.ngw.qgis import *

@@ -13,7 +13,7 @@ from qgis.PyQt.QtWidgets import (
     QTabWidget,
 )
 
-from nextgis_connect.ngw_api.core.ngw_resource import NGWResource
+from nextgis_connect.ngw.core.ngw_resource import NGWResource
 from nextgis_connect.settings.ng_connect_settings import NgConnectSettings
 
 

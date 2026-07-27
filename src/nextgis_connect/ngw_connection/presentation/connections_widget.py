@@ -21,7 +21,7 @@ from nextgis_connect.ngw_connection.domain.connection import NgwConnection
 from nextgis_connect.ngw_connection.presentation.connection_edit_dialog import (
     NgwConnectionEditDialog,
 )
-from nextgis_connect.shared.graphics.decorator import (
+from nextgis_connect.ui_kit.rendering.graphics.decorator import (
     NextgisColor,
     NextgisDecorator,
 )

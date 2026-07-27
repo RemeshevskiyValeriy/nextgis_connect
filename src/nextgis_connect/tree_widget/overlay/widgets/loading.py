@@ -9,8 +9,6 @@ from qgis.PyQt.QtWidgets import (
     QWidget,
 )
 
-from nextgis_connect.shared.buttons import CancelButton
-from nextgis_connect.shared.graphics.decorator import NextgisDecorator
 from nextgis_connect.tree_widget.overlay.state import (
     OverlayAction,
     OverlayButtonState,
@@ -19,6 +17,10 @@ from nextgis_connect.tree_widget.overlay.state import (
 from nextgis_connect.tree_widget.overlay.widgets.surface import (
     OverlaySurfaceWidget,
 )
+from nextgis_connect.ui_kit.rendering.graphics.decorator import (
+    NextgisDecorator,
+)
+from nextgis_connect.ui_kit.widgets.buttons import CancelButton
 
 
 class LoadingOverlayWidget(OverlaySurfaceWidget):

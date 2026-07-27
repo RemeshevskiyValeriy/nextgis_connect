@@ -9,7 +9,7 @@ from qgis.PyQt.QtWidgets import (
     QWidget,
 )
 
-from nextgis_connect.ui.icon import draw_icon, material_icon
+from nextgis_connect.ui_kit.icons.icon import draw_icon, material_icon
 
 
 class NoFeaturesWidget(QWidget):

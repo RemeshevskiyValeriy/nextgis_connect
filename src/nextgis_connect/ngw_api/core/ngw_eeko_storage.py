@@ -1,5 +1,2 @@
-from .ngw_resource import NGWResource
-
-
-class NGWEekoStorage(NGWResource):
-    type_id = "eeko_storage"
+# ruff: noqa: F403
+from nextgis_connect.ngw.core.ngw_eeko_storage import *

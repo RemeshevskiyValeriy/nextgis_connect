@@ -33,14 +33,14 @@ from nextgis_connect.detached_editing.utils import (
     FeatureMetadata,
     detached_layer_uri,
 )
-from nextgis_connect.exceptions import (
+from nextgis_connect.platform.qgis.errors import (
     ContainerError,
     ErrorCode,
     SynchronizationError,
 )
 from nextgis_connect.resources.ngw_data_type import NgwDataType
 from nextgis_connect.resources.ngw_field import NgwField
-from nextgis_connect.types import FeatureId, FieldId, Unset, UnsetType
+from nextgis_connect.shared.types import FeatureId, FieldId, Unset, UnsetType
 
 
 class ChangesExtractor:

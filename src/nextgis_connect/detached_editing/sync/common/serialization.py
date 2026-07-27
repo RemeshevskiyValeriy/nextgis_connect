@@ -7,9 +7,12 @@ from typing import Any, Dict, Optional, Union
 from qgis.core import QgsApplication, QgsGeometry, QgsWkbTypes
 from qgis.PyQt.QtCore import QDate, QDateTime, Qt, QTime, QVariant
 
-from nextgis_connect.compat import GeometryType
-from nextgis_connect.exceptions import NgConnectError, SerializationError
-from nextgis_connect.types import Wkb64String, WktString
+from nextgis_connect.platform.qgis.compat import GeometryType
+from nextgis_connect.platform.qgis.errors import (
+    NgConnectError,
+    SerializationError,
+)
+from nextgis_connect.shared.types import Wkb64String, WktString
 
 
 def simplify_date_and_time(

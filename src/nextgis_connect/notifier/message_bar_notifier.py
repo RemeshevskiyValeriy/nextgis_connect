@@ -8,16 +8,16 @@ from qgis.PyQt.QtGui import QDesktopServices
 from qgis.PyQt.QtWidgets import QMessageBox, QPushButton, QWidget
 from qgis.utils import iface
 
-from nextgis_connect.core.constants import PLUGIN_NAME
-from nextgis_connect.exceptions import (
+from nextgis_connect.notifier.notifier_interface import NotifierInterface
+from nextgis_connect.platform.logging import logger, open_plugin_logs
+from nextgis_connect.platform.qgis.errors import (
     ErrorCode,
     NgConnectError,
     NgConnectWarning,
 )
-from nextgis_connect.logging import logger, open_plugin_logs
-from nextgis_connect.notifier.notifier_interface import NotifierInterface
-from nextgis_connect.ui.icon import plugin_icon
-from nextgis_connect.utils import nextgis_domain, utm_tags
+from nextgis_connect.platform.qgis.utils import nextgis_domain, utm_tags
+from nextgis_connect.shared.constants import PLUGIN_NAME
+from nextgis_connect.ui_kit.icons.icon import plugin_icon
 
 if TYPE_CHECKING:
     from qgis.gui import QgisInterface

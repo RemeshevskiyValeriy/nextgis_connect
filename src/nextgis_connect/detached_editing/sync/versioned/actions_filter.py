@@ -6,7 +6,7 @@ from nextgis_connect.detached_editing.sync.versioned.actions import (
     FeatureDeleteAction,
     VersioningAction,
 )
-from nextgis_connect.types import NgwFeatureId
+from nextgis_connect.shared.types import NgwFeatureId
 
 
 class ActionsFilter:

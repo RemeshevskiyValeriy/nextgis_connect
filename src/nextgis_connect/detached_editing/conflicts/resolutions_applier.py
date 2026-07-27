@@ -72,10 +72,15 @@ from nextgis_connect.detached_editing.utils import (
     DetachedContainerMetaData,
     detached_layer_uri,
 )
-from nextgis_connect.exceptions import DetachedEditingError
-from nextgis_connect.logging import logger
+from nextgis_connect.platform.logging import logger
+from nextgis_connect.platform.qgis.errors import DetachedEditingError
 from nextgis_connect.resources.ngw_field import FieldId
-from nextgis_connect.types import AttachmentId, FeatureId, Unset, UnsetType
+from nextgis_connect.shared.types import (
+    AttachmentId,
+    FeatureId,
+    Unset,
+    UnsetType,
+)
 
 
 class ConflictsResolutionApplier:

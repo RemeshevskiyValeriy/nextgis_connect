@@ -14,14 +14,14 @@ from qgis.PyQt.QtCore import (
     pyqtSlot,
 )
 
-from nextgis_connect.compat import QgsFeatureId, QgsFeatureList
+from nextgis_connect.bootstrap.plugin_interface import NgConnectInterface
 from nextgis_connect.detached_editing.utils import AttachmentMetadata
-from nextgis_connect.ng_connect_interface import NgConnectInterface
+from nextgis_connect.platform.qgis.compat import QgsFeatureId, QgsFeatureList
 from nextgis_connect.settings.ng_connect_cache_manager import (
     NgConnectCacheManager,
 )
 from nextgis_connect.settings.ng_connect_settings import NgConnectSettings
-from nextgis_connect.types import AttachmentId
+from nextgis_connect.shared.types import AttachmentId
 
 if TYPE_CHECKING:
     from nextgis_connect.detached_editing.detached_layer import DetachedLayer
