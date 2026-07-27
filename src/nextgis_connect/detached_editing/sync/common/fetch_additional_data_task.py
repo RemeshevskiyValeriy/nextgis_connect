@@ -5,6 +5,7 @@ from typing import Dict, List, Set
 from nextgis_connect.detached_editing.sync.common import DetachedEditingTask
 from nextgis_connect.detached_editing.utils import (
     container_metadata,
+    ensure_required_fields_metadata,
     make_connection,
 )
 from nextgis_connect.exceptions import (
@@ -95,12 +96,14 @@ class FetchAdditionalDataTask(DetachedEditingTask):
         with closing(
             make_connection(self._container_path)
         ) as connection, closing(connection.cursor()) as cursor:
+            ensure_required_fields_metadata(cursor)
             cursor.executemany(
                 """
                 UPDATE ngw_fields_metadata
                 SET
                     display_name=?,
                     is_label=?,
+                    is_required=?,
                     lookup_table=?
                 WHERE ngw_id=?
                 """,
@@ -108,6 +111,7 @@ class FetchAdditionalDataTask(DetachedEditingTask):
                     (
                         field.display_name,
                         field.is_label,
+                        field.is_required,
                         field.lookup_table,
                         field.ngw_id,
                     )

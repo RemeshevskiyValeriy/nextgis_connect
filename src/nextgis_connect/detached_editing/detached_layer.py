@@ -135,6 +135,7 @@ class DetachedLayer(QObject):
         self.__errors = []
 
         self.__fix_source_if_needed()
+        self.__apply_required_constraints()
 
         self.__reset_backup()
 
@@ -212,6 +213,7 @@ class DetachedLayer(QObject):
         self.qgs_layer.setDataSource(
             memory_layer.source(), self.qgs_layer.name(), "memory"
         )
+        self.__apply_required_constraints()
         self.qgs_layer.setReadOnly(True)
 
     @pyqtSlot()
@@ -2029,6 +2031,9 @@ class DetachedLayer(QObject):
             self.qgs_layer.name(),
             "ogr",
         )
+
+    def __apply_required_constraints(self) -> None:
+        self.metadata.fields.apply_required_constraints(self.qgs_layer)
 
     def __assert_edit_buffer_initialized(self) -> None:
         if self.__edit_buffer is None:

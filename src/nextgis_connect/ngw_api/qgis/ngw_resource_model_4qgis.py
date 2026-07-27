@@ -107,6 +107,7 @@ from nextgis_connect.ngw_api.qt.qt_ngw_resource_model_job_error import (
     JobWarning,
 )
 from nextgis_connect.resources.ngw_data_type import NgwDataType
+from nextgis_connect.resources.ngw_field import NgwField
 
 from .compat_qgis import CompatQt
 
@@ -512,9 +513,11 @@ class QGISResourceJob(NGWResourceModelJob):
 
         fields_aliases: Dict[str, Dict[str, str]] = {}
         fields_lookup_table: Dict[str, Dict[str, Dict[str, Any]]] = {}
+        fields_required: Dict[str, Dict[str, bool]] = {}
         for field in qgs_vector_layer.fields():
             alias = field.alias()
             lookup_table = None
+            is_required_field = NgwField.is_qgs_field_required(field)
             editor_widget_setup = field.editorWidgetSetup()
             if editor_widget_setup.type() == "ValueRelation":
                 config = editor_widget_setup.config().copy()
@@ -528,7 +531,11 @@ class QGISResourceJob(NGWResourceModelJob):
                 value_relation = ValueRelation.from_config(config)
                 lookup_table = self._lookup_tables_id[value_relation]
 
-            if len(alias) == 0 and lookup_table is None:
+            if (
+                len(alias) == 0
+                and lookup_table is None
+                and not is_required_field
+            ):
                 continue
 
             field_name = field.name()
@@ -539,6 +546,8 @@ class QGISResourceJob(NGWResourceModelJob):
                 fields_lookup_table[field_name] = dict(
                     lookup_table=dict(id=lookup_table)
                 )
+            if is_required_field:
+                fields_required[field_name] = dict(required=True)
 
         if len(fields_aliases) > 0:
             self._layer_status(
@@ -560,6 +569,16 @@ class QGISResourceJob(NGWResourceModelJob):
             )
             try:
                 ngw_vector_layer.update_fields_params(fields_lookup_table)
+            except Exception as error:
+                self.warningOccurred.emit(error)
+
+        if len(
+            fields_required
+        ) > 0 and ngw_parent_resource.connection.has_support_for_feature(
+            NgwServerFeature.REQUIRED_FIELDS
+        ):
+            try:
+                ngw_vector_layer.update_fields_params(fields_required)
             except Exception as error:
                 self.warningOccurred.emit(error)
 

@@ -38,6 +38,23 @@ from nextgis_connect.types import (
 from nextgis_connect.utils import wrap_sql_table_name, wrap_sql_value
 
 
+def has_required_fields_metadata(cursor: sqlite3.Cursor) -> bool:
+    cursor.execute("PRAGMA table_info(ngw_fields_metadata)")
+    return any(row[1] == "is_required" for row in cursor.fetchall())
+
+
+def ensure_required_fields_metadata(cursor: sqlite3.Cursor) -> None:
+    if has_required_fields_metadata(cursor):
+        return
+
+    cursor.execute(
+        """
+        ALTER TABLE ngw_fields_metadata
+        ADD COLUMN is_required BOOLEAN DEFAULT 0
+        """
+    )
+
+
 class DetachedLayerState(Enum):
     NotInitialized = auto()
     Error = auto()
@@ -313,17 +330,24 @@ def _(cursor: sqlite3.Cursor) -> DetachedContainerMetaData:
     )
     table_name, srs_id = cursor.fetchone()
 
+    has_required_metadata = has_required_fields_metadata(cursor)
+    fields_columns = [
+        "attribute",
+        "ngw_id",
+        "datatype_name",
+        "keyname",
+        "display_name",
+        "is_label",
+    ]
+    if has_required_metadata:
+        fields_columns.append("is_required")
+    fields_columns.append("lookup_table")
+
     fields_query = """
         SELECT
-            attribute,
-            ngw_id,
-            datatype_name,
-            keyname,
-            display_name,
-            is_label,
-            lookup_table
+            {fields_columns}
         FROM ngw_fields_metadata
-    """
+    """.format(fields_columns=",\n            ".join(fields_columns))
     fields = NgwFields(
         NgwField(
             attribute=row[0],
@@ -332,7 +356,8 @@ def _(cursor: sqlite3.Cursor) -> DetachedContainerMetaData:
             keyname=row[3],
             display_name=row[4],
             is_label=bool(row[5]),
-            lookup_table=row[6],
+            is_required=bool(row[6]) if has_required_metadata else False,
+            lookup_table=row[7] if has_required_metadata else row[6],
         )
         for row in cursor.execute(fields_query)
     )

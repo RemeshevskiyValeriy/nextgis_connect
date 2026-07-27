@@ -312,6 +312,13 @@
               </widget>
              </item>
              <item>
+              <widget class="QCheckBox" name="required_checkbox">
+               <property name="text">
+                <string>Required</string>
+               </property>
+              </widget>
+             </item>
+             <item>
               <widget class="QCheckBox" name="label_attribute_checkbox">
                <property name="text">
                 <string>Label attribute</string>

@@ -445,6 +445,7 @@ class NgwResourcesAdder(QObject):
             assert isinstance(layer, QgsVectorLayer)
             self.__add_fields_aliases(layer_resource, layer)
             self.__add_edit_widgets(layer_resource, layer)
+            layer_resource.fields.apply_required_constraints(layer)
             self.__set_display_field(layer_resource, layer)
 
         self.__set_ngw_layer_properties(
@@ -503,6 +504,7 @@ class NgwResourcesAdder(QObject):
             self.__add_all_styles_to_layer(layer_resource, layer)
             self.__add_fields_aliases(layer_resource, layer)
             self.__add_edit_widgets(layer_resource, layer)
+            layer_resource.fields.apply_required_constraints(layer)
             self.__set_display_field(layer_resource, layer)
 
         self.__set_ngw_layer_properties(

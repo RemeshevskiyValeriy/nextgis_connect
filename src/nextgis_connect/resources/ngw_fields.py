@@ -3,7 +3,7 @@ from copy import deepcopy
 from dataclasses import replace
 from typing import Any, Dict, Iterable, Iterator, List, Optional, Union, cast
 
-from qgis.core import QgsField, QgsFields
+from qgis.core import QgsField, QgsFieldConstraints, QgsFields, QgsVectorLayer
 
 from nextgis_connect.resources.ngw_field import FieldId, NgwField
 
@@ -194,6 +194,20 @@ class NgwFields(Sequence):
 
     def to_json(self) -> List[Dict[str, Any]]:
         return [field.to_json() for field in self._fields]
+
+    def apply_required_constraints(self, layer: QgsVectorLayer) -> None:
+        qgs_fields = layer.fields()
+        constraint = QgsFieldConstraints.Constraint.ConstraintNotNull
+
+        for field in self._fields:
+            field_index = qgs_fields.indexFromName(field.keyname)
+            if field_index == -1:
+                continue
+
+            if field.is_required:
+                layer.setFieldConstraint(field_index, constraint)
+            else:
+                layer.removeFieldConstraint(field_index, constraint)
 
     @staticmethod
     def from_json(json: List[Dict[str, Any]]) -> "NgwFields":

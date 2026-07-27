@@ -1,7 +1,7 @@
 import unittest
 from dataclasses import FrozenInstanceError
 
-from qgis.core import QgsField
+from qgis.core import QgsField, QgsFieldConstraints
 
 from nextgis_connect.compat import FieldType
 from nextgis_connect.resources.ngw_field import NgwField
@@ -17,6 +17,7 @@ class TestNgwField(NgConnectTestCase):
             "keyname": "name",
             "display_name": "Name",
             "label_field": True,
+            "required": True,
             "lookup_table": {"id": 10},
         }
 
@@ -26,6 +27,7 @@ class TestNgwField(NgConnectTestCase):
             "BIGINT": FieldType.LongLong,
             "REAL": FieldType.Double,
             "STRING": FieldType.QString,
+            "JSON": FieldType.QVariantMap,
             "DATE": FieldType.QDate,
             "TIME": FieldType.QTime,
             "DATETIME": FieldType.QDateTime,
@@ -116,6 +118,28 @@ class TestNgwField(NgConnectTestCase):
         qgs_field = field.to_qgs_field()
         self.assertEqual(qgs_field.name(), "name")
         self.assertEqual(qgs_field.type(), FieldType.QString)
+        self.assertFalse(
+            qgs_field.constraints().constraints()
+            & QgsFieldConstraints.Constraint.ConstraintNotNull
+        )
+
+    def test_to_qgs_field_sets_not_null_for_required_field(self):
+        field = NgwField(
+            attribute=0,
+            ngw_id=1,
+            datatype="STRING",
+            keyname="name",
+            display_name="Name",
+            is_label=True,
+            is_required=True,
+        )
+
+        qgs_field = field.to_qgs_field()
+
+        self.assertTrue(
+            qgs_field.constraints().constraints()
+            & QgsFieldConstraints.Constraint.ConstraintNotNull
+        )
 
     def test_from_json(self):
         field = NgwField.from_json(self.field_json)
@@ -124,7 +148,42 @@ class TestNgwField(NgConnectTestCase):
         self.assertEqual(field.keyname, "name")
         self.assertEqual(field.display_name, "Name")
         self.assertTrue(field.is_label)
+        self.assertTrue(field.is_required)
         self.assertEqual(field.lookup_table, 10)
+
+    def test_from_json_json_type_uses_qvariant_map(self):
+        field = NgwField.from_json({**self.field_json, "datatype": "JSON"})
+
+        self.assertEqual(field.datatype.qt_value, FieldType.QVariantMap)
+
+    def test_from_qt_json_types_map_to_ngw_json(self):
+        for qt_type in (
+            FieldType.QVariantMap,
+            FieldType.QJsonValue,
+            FieldType.QJsonObject,
+            FieldType.QJsonArray,
+        ):
+            with self.subTest(qt_type=qt_type):
+                field = NgwField(
+                    attribute=0,
+                    ngw_id=1,
+                    datatype=qt_type,
+                    keyname="name",
+                    display_name="Name",
+                    is_label=False,
+                )
+
+                self.assertEqual(field.datatype.name, "JSON")
+
+    def test_is_qgs_field_required(self):
+        qgs_field = QgsField("name", FieldType.QString)
+        constraints = qgs_field.constraints()
+        constraints.setConstraint(
+            QgsFieldConstraints.Constraint.ConstraintNotNull
+        )
+        qgs_field.setConstraints(constraints)
+
+        self.assertTrue(NgwField.is_qgs_field_required(qgs_field))
 
     def test_frozen_class(self):
         field = NgwField(

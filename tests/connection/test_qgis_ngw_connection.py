@@ -86,6 +86,31 @@ class TestQgsNgwConnection(NgConnectTestCase):
 
         self.assertEqual(mock_invalidate.call_count, 1)
 
+    def test_all_features_require_supported_ngw_version(self) -> None:
+        from nextgis_connect.settings import NgConnectSettings
+        from nextgis_connect.utils import SupportStatus, is_version_supported
+
+        settings = NgConnectSettings()
+        previous_developer_mode = settings.is_developer_mode
+        settings.is_developer_mode = False
+        self.addCleanup(
+            setattr,
+            settings,
+            "is_developer_mode",
+            previous_developer_mode,
+        )
+
+        for feature in self.ngw_feature_class:
+            required_version = str(feature.required_version)
+            with self.subTest(
+                feature=feature.name,
+                required_version=required_version,
+            ):
+                self.assertEqual(
+                    is_version_supported(required_version),
+                    SupportStatus.SUPPORTED,
+                )
+
     def test_has_support_for_no_geometry_layers_requires_dev6(self) -> None:
         connection_id = self.connection_id(TestConnection.SandboxGuest)
 
@@ -106,6 +131,58 @@ class TestQgsNgwConnection(NgConnectTestCase):
                 self.assertEqual(
                     connection.has_support_for_feature(
                         self.ngw_feature_class.NO_GEOMETRY_LAYERS
+                    ),
+                    expected,
+                )
+
+                connection.invalidate_cached_ngw_components()
+
+    def test_has_support_for_required_fields_requires_550(self) -> None:
+        connection_id = self.connection_id(TestConnection.SandboxGuest)
+
+        versions = {
+            "5.4.9": False,
+            "5.5.0": True,
+        }
+
+        for version, expected in versions.items():
+            with self.subTest(version=version), patch.object(
+                self.qgs_ngw_connection_class,
+                "get",
+                autospec=True,
+                return_value={"nextgisweb": version},
+            ):
+                connection = self.qgs_ngw_connection_class(connection_id)
+
+                self.assertEqual(
+                    connection.has_support_for_feature(
+                        self.ngw_feature_class.REQUIRED_FIELDS
+                    ),
+                    expected,
+                )
+
+                connection.invalidate_cached_ngw_components()
+
+    def test_has_support_for_type_requires_550(self) -> None:
+        connection_id = self.connection_id(TestConnection.SandboxGuest)
+
+        versions = {
+            "5.4.9": False,
+            "5.5.0.dev0": True,
+        }
+
+        for version, expected in versions.items():
+            with self.subTest(version=version), patch.object(
+                self.qgs_ngw_connection_class,
+                "get",
+                autospec=True,
+                return_value={"nextgisweb": version},
+            ):
+                connection = self.qgs_ngw_connection_class(connection_id)
+
+                self.assertEqual(
+                    connection.has_support_for_feature(
+                        self.ngw_feature_class.JSON_TYPE
                     ),
                     expected,
                 )

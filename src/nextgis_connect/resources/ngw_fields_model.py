@@ -23,6 +23,7 @@ class NgwFieldsModel(QAbstractTableModel):
         DATATYPE = auto()
         IS_VISIBLE = auto()
         IS_USED_FOR_SEARCH = auto()
+        IS_REQUIRED = auto()
         IS_LABEL = auto()
 
     __fields: NgwFields
@@ -35,6 +36,7 @@ class NgwFieldsModel(QAbstractTableModel):
         super().__init__(parent)
         self.__fields = NgwFields([]) if fields is None else fields
 
+        self.__is_required_icon = material_icon("exclamation")
         self.__is_visible_icon = material_icon("table_chart")
         self.__is_used_for_search_icon = material_icon("manage_search")
         self.__is_label_icon = material_icon("font_download")
@@ -93,7 +95,9 @@ class NgwFieldsModel(QAbstractTableModel):
 
         elif role == Qt.ItemDataRole.DecorationRole:
             if orientation == Qt.Orientation.Horizontal:
-                if section == NgwFieldsModel.Column.IS_VISIBLE:
+                if section == NgwFieldsModel.Column.IS_REQUIRED:
+                    return self.__is_required_icon
+                elif section == NgwFieldsModel.Column.IS_VISIBLE:
                     return self.__is_visible_icon
                 elif section == NgwFieldsModel.Column.IS_USED_FOR_SEARCH:
                     return self.__is_used_for_search_icon
@@ -125,7 +129,9 @@ class NgwFieldsModel(QAbstractTableModel):
 
         if role == Qt.ItemDataRole.EditRole:
             field = self.__fields[index.row()]
-            if index.column() == NgwFieldsModel.Column.IS_VISIBLE:
+            if index.column() == NgwFieldsModel.Column.IS_REQUIRED:
+                return field.is_required
+            elif index.column() == NgwFieldsModel.Column.IS_VISIBLE:
                 return field.is_visible
             elif index.column() == NgwFieldsModel.Column.IS_USED_FOR_SEARCH:
                 return field.is_used_for_search
@@ -152,6 +158,7 @@ class NgwFieldsModel(QAbstractTableModel):
             self.Column.DISPLAY_NAME: "display_name",
             self.Column.KEYNAME: "keyname",
             self.Column.DATATYPE: "datatype",
+            self.Column.IS_REQUIRED: "is_required",
             self.Column.IS_VISIBLE: "is_visible",
             self.Column.IS_USED_FOR_SEARCH: "is_used_for_search",
             self.Column.IS_LABEL: "is_label",
@@ -218,6 +225,7 @@ class NgwFieldsModel(QAbstractTableModel):
         keyname: str,
         datatype: NgwDataType,
         is_label: bool,
+        is_required: bool,
         is_visible: bool,
         is_used_for_search: bool,
     ):
@@ -227,6 +235,7 @@ class NgwFieldsModel(QAbstractTableModel):
             keyname=keyname,
             display_name=display_name,
             is_label=is_label,
+            is_required=is_required,
             is_visible=is_visible,
             is_used_for_search=is_used_for_search,
         )

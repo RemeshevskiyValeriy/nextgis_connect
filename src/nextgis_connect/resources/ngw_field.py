@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from typing import Any, Dict, Optional, Union
 
-from qgis.core import QgsField
+from qgis.core import QgsField, QgsFieldConstraints
 
 from nextgis_connect.compat import FieldType
 from nextgis_connect.resources.ngw_data_type import NgwDataType
@@ -15,6 +15,7 @@ class NgwField:
     keyname: str
     display_name: str
     is_label: bool
+    is_required: bool
     is_visible: bool
     is_used_for_search: bool
     lookup_table: Optional[int] = None
@@ -27,6 +28,7 @@ class NgwField:
         keyname: str,
         display_name: str,
         is_label: bool,
+        is_required: bool = False,
         is_visible: bool = True,
         is_used_for_search: bool = True,
         lookup_table: Optional[int] = None,
@@ -44,6 +46,7 @@ class NgwField:
         super().__setattr__("keyname", keyname)
         super().__setattr__("display_name", display_name)
         super().__setattr__("is_label", is_label)
+        super().__setattr__("is_required", is_required)
         super().__setattr__("is_visible", is_visible)
         super().__setattr__("is_used_for_search", is_used_for_search)
         super().__setattr__("lookup_table", lookup_table)
@@ -55,6 +58,7 @@ class NgwField:
                 self.ngw_id == rhs.ngw_id
                 and self.datatype == rhs.datatype
                 and self.keyname == rhs.keyname
+                and self.is_required == rhs.is_required
             )
         else:
             datatype = self.datatype.qt_value
@@ -63,10 +67,29 @@ class NgwField:
                 # GPKG does not have Time type
                 datatype = FieldType.QString
 
-            return datatype == rhs.type() and self.keyname == rhs.name()
+            return (
+                datatype == rhs.type()
+                and self.keyname == rhs.name()
+                and self.is_required == self.is_qgs_field_required(rhs)
+            )
 
     def to_qgs_field(self) -> QgsField:
-        return QgsField(self.keyname, self.datatype.qt_value)
+        field = QgsField(self.keyname, self.datatype.qt_value)
+        if self.is_required:
+            constraints = field.constraints()
+            constraints.setConstraint(
+                QgsFieldConstraints.Constraint.ConstraintNotNull
+            )
+            field.setConstraints(constraints)
+
+        return field
+
+    @staticmethod
+    def is_qgs_field_required(field: QgsField) -> bool:
+        constraints = field.constraints().constraints()
+        return bool(
+            constraints & QgsFieldConstraints.Constraint.ConstraintNotNull
+        )
 
     def to_json(self) -> Dict[str, Any]:
         return {
@@ -75,6 +98,7 @@ class NgwField:
             "keyname": self.keyname,
             "display_name": self.display_name,
             "label_field": self.is_label,
+            "required": self.is_required,
             "grid_visibility": self.is_visible,
             "text_search": self.is_used_for_search,
             "lookup_table": {"id": self.lookup_table}
@@ -97,6 +121,7 @@ class NgwField:
             keyname=json["keyname"],
             display_name=json.get("display_name", json["id"]),
             is_label=json.get("label_field", False),
+            is_required=json.get("required", False),
             is_visible=json.get("grid_visibility", True),
             is_used_for_search=json.get("text_search", True),
             lookup_table=get_lookup_table(json),

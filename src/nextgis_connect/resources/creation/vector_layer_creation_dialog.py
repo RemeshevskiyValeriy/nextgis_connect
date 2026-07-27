@@ -16,7 +16,7 @@ from qgis.PyQt.QtCore import (
     pyqtSignal,
     pyqtSlot,
 )
-from qgis.PyQt.QtGui import QIcon, QKeyEvent
+from qgis.PyQt.QtGui import QKeyEvent
 from qgis.PyQt.QtWidgets import (
     QDialog,
     QDialogButtonBox,
@@ -24,7 +24,7 @@ from qgis.PyQt.QtWidgets import (
     QWidget,
 )
 
-from nextgis_connect.compat import FieldType, WkbType
+from nextgis_connect.compat import WkbType
 from nextgis_connect.core.ui.checkbox_delegate import (
     CheckBoxDelegate,
 )
@@ -260,6 +260,7 @@ class VectorLayerCreationDialog(QDialog, VectorLayerCreationDialogBase):
         self.fields_view.setColumnWidth(
             NgwFieldsModel.Column.IS_USED_FOR_SEARCH, 20
         )
+        self.fields_view.setColumnWidth(NgwFieldsModel.Column.IS_REQUIRED, 20)
         self.fields_view.setColumnWidth(NgwFieldsModel.Column.IS_VISIBLE, 20)
         self.__header_proxy_style = HeaderWithCenteredIconProxyStyle()
         self.fields_view.horizontalHeader().setStyle(self.__header_proxy_style)
@@ -281,6 +282,9 @@ class VectorLayerCreationDialog(QDialog, VectorLayerCreationDialogBase):
         )
 
         checkbox_delegate = CheckBoxDelegate(self.fields_view)
+        self.fields_view.setItemDelegateForColumn(
+            NgwFieldsModel.Column.IS_REQUIRED, checkbox_delegate
+        )
         self.fields_view.setItemDelegateForColumn(
             NgwFieldsModel.Column.IS_VISIBLE, checkbox_delegate
         )
@@ -379,6 +383,7 @@ class VectorLayerCreationDialog(QDialog, VectorLayerCreationDialogBase):
             self.field_keyname_lineedit.text(),
             NgwDataType.from_qt_value(self.field_type_combobox.currentData()),
             is_label=self.label_attribute_checkbox.isChecked(),
+            is_required=self.required_checkbox.isChecked(),
             is_visible=self.feature_table_checkbox.isChecked(),
             is_used_for_search=self.text_search_checkbox.isChecked(),
         )
@@ -386,8 +391,10 @@ class VectorLayerCreationDialog(QDialog, VectorLayerCreationDialogBase):
         self.field_keyname_lineedit.clear()
         self.field_display_name_lineedit.setFocus()
         self.label_attribute_checkbox.setChecked(False)
+        self.required_checkbox.setChecked(False)
 
         for column in (
+            NgwFieldsModel.Column.IS_REQUIRED,
             NgwFieldsModel.Column.IS_VISIBLE,
             NgwFieldsModel.Column.IS_USED_FOR_SEARCH,
             NgwFieldsModel.Column.IS_LABEL,

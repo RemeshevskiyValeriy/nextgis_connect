@@ -225,6 +225,7 @@ class DetachedContainerFactory:
                 'keyname' TEXT,
                 'display_name' TEXT,
                 'is_label' BOOLEAN,
+                'is_required' BOOLEAN,
                 'lookup_table' INTEGER
             );
 
@@ -395,6 +396,7 @@ class DetachedContainerFactory:
                 field.keyname,
                 field.display_name,
                 field.is_label,
+                field.is_required,
                 field.lookup_table,
             )
             for field in ngw_layer.fields
@@ -408,9 +410,10 @@ class DetachedContainerFactory:
                 keyname,
                 display_name,
                 is_label,
+                is_required,
                 lookup_table
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """,
             fields_tuple_generator,
         )
