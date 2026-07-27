@@ -512,11 +512,13 @@ class QGISResourceJob(NGWResourceModelJob):
         )
 
         fields_aliases: Dict[str, Dict[str, str]] = {}
+        fields_datatypes: Dict[str, Dict[str, str]] = {}
         fields_lookup_table: Dict[str, Dict[str, Dict[str, Any]]] = {}
         fields_required: Dict[str, Dict[str, bool]] = {}
         for field in qgs_vector_layer.fields():
             alias = field.alias()
             lookup_table = None
+            is_json_field = NgwField.is_qgs_field_json(field)
             is_required_field = NgwField.is_qgs_field_required(field)
             editor_widget_setup = field.editorWidgetSetup()
             if editor_widget_setup.type() == "ValueRelation":
@@ -534,6 +536,7 @@ class QGISResourceJob(NGWResourceModelJob):
             if (
                 len(alias) == 0
                 and lookup_table is None
+                and not is_json_field
                 and not is_required_field
             ):
                 continue
@@ -542,6 +545,8 @@ class QGISResourceJob(NGWResourceModelJob):
 
             if len(alias) > 0:
                 fields_aliases[field_name] = dict(display_name=alias)
+            if is_json_field:
+                fields_datatypes[field_name] = dict(datatype="JSON")
             if lookup_table is not None:
                 fields_lookup_table[field_name] = dict(
                     lookup_table=dict(id=lookup_table)
@@ -569,6 +574,16 @@ class QGISResourceJob(NGWResourceModelJob):
             )
             try:
                 ngw_vector_layer.update_fields_params(fields_lookup_table)
+            except Exception as error:
+                self.warningOccurred.emit(error)
+
+        if len(
+            fields_datatypes
+        ) > 0 and ngw_parent_resource.connection.has_support_for_feature(
+            NgwServerFeature.JSON_TYPE
+        ):
+            try:
+                ngw_vector_layer.update_fields_params(fields_datatypes)
             except Exception as error:
                 self.warningOccurred.emit(error)
 

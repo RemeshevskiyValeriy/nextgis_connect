@@ -118,17 +118,25 @@ else:
 if Qgis.versionInt() >= QGIS_3_38 or TYPE_CHECKING:
     FieldType = QMetaType.Type
 else:
-    FieldType = QVariant.Type
-    FieldType.QString = QVariant.Type.String
+    FieldType = getattr(QVariant, "Type", QVariant)
+    FieldType.QString = FieldType.String
     FieldType.QString.is_monkey_patched = True
-    FieldType.QDate = QVariant.Type.Date
+    FieldType.QDate = FieldType.Date
     FieldType.QDate.is_monkey_patched = True
-    FieldType.QTime = QVariant.Type.Time
+    FieldType.QTime = FieldType.Time
     FieldType.QTime.is_monkey_patched = True
-    FieldType.QDateTime = QVariant.Type.DateTime
+    FieldType.QDateTime = FieldType.DateTime
     FieldType.QDateTime.is_monkey_patched = True
-    FieldType.Bool = QVariant.Type.Bool
+    FieldType.Bool = FieldType.Bool
     FieldType.Bool.is_monkey_patched = True
+    FieldType.QVariantMap = FieldType.Map
+    FieldType.QVariantMap.is_monkey_patched = True
+    FieldType.QJsonValue = FieldType.Map
+    FieldType.QJsonValue.is_monkey_patched = True
+    FieldType.QJsonObject = FieldType.Map
+    FieldType.QJsonObject.is_monkey_patched = True
+    FieldType.QJsonArray = FieldType.Map
+    FieldType.QJsonArray.is_monkey_patched = True
 
 try:
     from packaging import version
@@ -139,7 +147,6 @@ except Exception:
     import pkg_resources
 
     parse_version = pkg_resources.parse_version  # type: ignore
-
 
 
 class DataType(IntEnum):

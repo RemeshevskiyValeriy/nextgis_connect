@@ -1150,6 +1150,11 @@ class NgwResourcesAdder(QObject):
                 field_index = qgs_fields.indexFromName(ngw_field.keyname)
                 qgs_vector_layer.setEditorWidgetSetup(field_index, setup)
 
+            elif ngw_field.datatype == NgwDataType.JSON:
+                setup = QgsEditorWidgetSetup("JsonEdit", {})
+                field_index = qgs_fields.indexFromName(ngw_field.keyname)
+                qgs_vector_layer.setEditorWidgetSetup(field_index, setup)
+
             elif ngw_field.lookup_table is not None:
                 lookup_table_id = ngw_field.lookup_table
 

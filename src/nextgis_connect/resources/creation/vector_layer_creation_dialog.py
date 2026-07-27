@@ -72,6 +72,7 @@ class VectorLayerCreationDialog(QDialog, VectorLayerCreationDialogBase):
         self.__parent_resource_index = parent_resource_index
         self.__result_resource = None
         self.__has_boolean_support = False
+        self.__has_json_support = False
         self.__setup_ui()
 
     def accept(self) -> None:
@@ -122,6 +123,17 @@ class VectorLayerCreationDialog(QDialog, VectorLayerCreationDialogBase):
             NgwDataType.BOOLEAN.icon,
             NgwDataType.BOOLEAN.name,
             NgwDataType.BOOLEAN.qt_value,
+        )
+
+    def enable_json_field_type(self):
+        if self.__has_json_support:
+            return
+
+        self.__has_json_support = True
+        self.field_type_combobox.addItem(
+            NgwDataType.JSON.icon,
+            NgwDataType.JSON.name,
+            NgwDataType.JSON.qt_value,
         )
 
     def keyPressEvent(self, a0: Optional[QKeyEvent]) -> None:

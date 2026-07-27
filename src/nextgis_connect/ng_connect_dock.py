@@ -2387,6 +2387,8 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
         )
         if connection.has_support_for_feature(NgwServerFeature.BOOLEAN_TYPE):
             dialog.enable_boolean_field_type()
+        if connection.has_support_for_feature(NgwServerFeature.JSON_TYPE):
+            dialog.enable_json_field_type()
         result = dialog.exec()
         if result != VectorLayerCreationDialog.DialogCode.Accepted:
             return

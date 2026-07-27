@@ -82,8 +82,13 @@ class NgwField:
                 # GPKG does not have Time type
                 datatype = FieldType.QString
 
+            if self.datatype == NgwDataType.JSON:
+                is_same_datatype = self.is_qgs_field_json(rhs)
+            else:
+                is_same_datatype = datatype == rhs.type()
+
             return (
-                datatype == rhs.type()
+                is_same_datatype
                 and self.keyname == rhs.name()
                 and self.is_required == self.is_qgs_field_required(rhs)
             )
@@ -104,6 +109,21 @@ class NgwField:
         constraints = field.constraints().constraints()
         return bool(
             constraints & QgsFieldConstraints.Constraint.ConstraintNotNull
+        )
+
+    @staticmethod
+    def is_qgs_field_json(field: QgsField) -> bool:
+        type_name = field.typeName().lower()
+        return (
+            field.type()
+            in (
+                FieldType.QVariantMap,
+                FieldType.QJsonValue,
+                FieldType.QJsonObject,
+                FieldType.QJsonArray,
+            )
+            or "map" in type_name
+            or "json" in type_name
         )
 
     def to_json(self) -> Dict[str, Any]:
