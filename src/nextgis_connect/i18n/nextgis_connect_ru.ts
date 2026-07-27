@@ -1723,6 +1723,41 @@ Are you sure you want to continue?</source>
         <source>Label Attribute</source>
         <translation>Атрибут наименование</translation>
     </message>
+    <message>
+        <location filename="../resources/ngw_fields_model.py" line="85"/>
+        <source>&lt;b&gt;Display name&lt;/b&gt;&lt;br/&gt;Display name that is used in the identification window instead of the keyname.</source>
+        <translation>&lt;b&gt;Наименование&lt;/b&gt;&lt;br/&gt;Наименование, которое используется в окне идентификации вместо ключа.</translation>
+    </message>
+    <message>
+        <location filename="../resources/ngw_fields_model.py" line="91"/>
+        <source>&lt;b&gt;Keyname&lt;/b&gt;&lt;br/&gt;Technical name of the attribute, can be comprised only of plain latin symbols.</source>
+        <translation>&lt;b&gt;Ключ&lt;/b&gt;&lt;br/&gt;Техническое имя атрибута, может состоять только из простых латинских символов.</translation>
+    </message>
+    <message>
+        <location filename="../resources/ngw_fields_model.py" line="97"/>
+        <source>&lt;b&gt;Type&lt;/b&gt;&lt;br/&gt;Attribute value type.</source>
+        <translation>&lt;b&gt;Тип&lt;/b&gt;&lt;br/&gt;Тип значения атрибута.</translation>
+    </message>
+    <message>
+        <location filename="../resources/ngw_fields_model.py" line="103"/>
+        <source>&lt;b&gt;Required&lt;/b&gt;&lt;br/&gt;The attribute must have a value.</source>
+        <translation>&lt;b&gt;Обязательное&lt;/b&gt;&lt;br/&gt;Атрибут должен иметь значение.</translation>
+    </message>
+    <message>
+        <location filename="../resources/ngw_fields_model.py" line="90"/>
+        <source>&lt;b&gt;Feature table&lt;/b&gt;&lt;br/&gt;The attribute is displayed in the identification window.</source>
+        <translation>&lt;b&gt;Таблица объектов&lt;/b&gt;&lt;br/&gt;Атрибут отображается в окне идентификации.</translation>
+    </message>
+    <message>
+        <location filename="../resources/ngw_fields_model.py" line="96"/>
+        <source>&lt;b&gt;Text search&lt;/b&gt;&lt;br/&gt;You can disable text search in the values of the attribute.</source>
+        <translation>&lt;b&gt;Текстовый поиск&lt;/b&gt;&lt;br/&gt;Можно отключить текстовый поиск по значениям атрибута.</translation>
+    </message>
+    <message>
+        <location filename="../resources/ngw_fields_model.py" line="102"/>
+        <source>&lt;b&gt;Label attribute&lt;/b&gt;&lt;br/&gt;Value from this field is used as feature name for search results, identification and bookmarks.</source>
+        <translation>&lt;b&gt;Атрибут наименования&lt;/b&gt;&lt;br/&gt;Значение этого поля используется как имя объекта в результатах поиска, идентификации и закладках.</translation>
+    </message>
 </context>
 <context>
     <name>NgwResourcesAdder</name>
@@ -2099,6 +2134,106 @@ NextGIS Web version: {}</source>
         <location filename="../resources/creation/vector_layer_creation_dialog.py" line="336"/>
         <source>Keyname reserved by NextGIS Web</source>
         <translation>Ключ зарезервирован NextGIS Web</translation>
+    </message>
+    <message>
+        <location filename="../resources/creation/vector_layer_creation_dialog.py" line="195"/>
+        <source>The attribute must have a value.</source>
+        <translation>Атрибут должен иметь значение.</translation>
+    </message>
+    <message>
+        <location filename="../resources/creation/vector_layer_creation_dialog.py" line="198"/>
+        <source>The attribute is displayed in the identification window.</source>
+        <translation>Атрибут отображается в окне идентификации.</translation>
+    </message>
+    <message>
+        <location filename="../resources/creation/vector_layer_creation_dialog.py" line="205"/>
+        <source>You can disable text search in the values of the attribute.</source>
+        <translation>Можно отключить текстовый поиск по значениям атрибута.</translation>
+    </message>
+    <message>
+        <location filename="../resources/creation/vector_layer_creation_dialog.py" line="212"/>
+        <source>Value from this field is used as feature name for search results, identification and bookmarks.</source>
+        <translation>Значение этого поля используется как имя объекта в результатах поиска, идентификации и закладках.</translation>
+    </message>
+    <message>
+        <location filename="../resources/creation/vector_layer_creation_dialog.py" line="225"/>
+        <source>Display name that is used in the identification window instead of the keyname.</source>
+        <translation>Наименование, которое используется в окне идентификации вместо ключа.</translation>
+    </message>
+    <message>
+        <location filename="../resources/creation/vector_layer_creation_dialog.py" line="232"/>
+        <source>Technical name of the attribute, can be comprised only of plain latin symbols.</source>
+        <translation>Техническое имя атрибута, может состоять только из простых латинских символов.</translation>
+    </message>
+    <message>
+        <location filename="../resources/creation/vector_layer_creation_dialog.py" line="241"/>
+        <source>Select attribute value type.</source>
+        <translation>Выберите тип значения атрибута.</translation>
+    </message>
+    <message>
+        <location filename="../resources/creation/vector_layer_creation_dialog.py" line="299"/>
+        <source>Add field to the list.</source>
+        <translation>Добавить поле в список.</translation>
+    </message>
+    <message>
+        <location filename="../resources/creation/vector_layer_creation_dialog.py" line="315"/>
+        <source>Remove selected field from the list.</source>
+        <translation>Удалить выбранное поле из списка.</translation>
+    </message>
+    <message>
+        <location filename="../resources/creation/vector_layer_creation_dialog.py" line="318"/>
+        <source>Move selected field up in the list.</source>
+        <translation>Переместить выбранное поле выше в списке.</translation>
+    </message>
+    <message>
+        <location filename="../resources/creation/vector_layer_creation_dialog.py" line="321"/>
+        <source>Move selected field down in the list.</source>
+        <translation>Переместить выбранное поле ниже в списке.</translation>
+    </message>
+    <message>
+        <location filename="../resources/creation/vector_layer_creation_dialog.py" line="370"/>
+        <source>Numbers between -2147483647 and 2147483647, no decimals.</source>
+        <translation>Числа от -2147483647 до 2147483647, без десятичной части.</translation>
+    </message>
+    <message>
+        <location filename="../resources/creation/vector_layer_creation_dialog.py" line="373"/>
+        <source>Long numbers without decimals, between -9223372036854775807 and 9223372036854775807.</source>
+        <translation>Длинные числа без десятичной части, от -9223372036854775807 до 9223372036854775807.</translation>
+    </message>
+    <message>
+        <location filename="../resources/creation/vector_layer_creation_dialog.py" line="377"/>
+        <source>Floating-point numbers, e.g. 44.4444.</source>
+        <translation>Числа с плавающей точкой, например 44.4444.</translation>
+    </message>
+    <message>
+        <location filename="../resources/creation/vector_layer_creation_dialog.py" line="380"/>
+        <source>A text of any length.</source>
+        <translation>Текст любой длины.</translation>
+    </message>
+    <message>
+        <location filename="../resources/creation/vector_layer_creation_dialog.py" line="381"/>
+        <source>Structured JSON data.</source>
+        <translation>Структурированные данные JSON.</translation>
+    </message>
+    <message>
+        <location filename="../resources/creation/vector_layer_creation_dialog.py" line="381"/>
+        <source>Date.</source>
+        <translation>Дата.</translation>
+    </message>
+    <message>
+        <location filename="../resources/creation/vector_layer_creation_dialog.py" line="382"/>
+        <source>Time.</source>
+        <translation>Время.</translation>
+    </message>
+    <message>
+        <location filename="../resources/creation/vector_layer_creation_dialog.py" line="383"/>
+        <source>Date and time.</source>
+        <translation>Дата и время.</translation>
+    </message>
+    <message>
+        <location filename="../resources/creation/vector_layer_creation_dialog.py" line="385"/>
+        <source>Logical field, possible values are &quot;TRUE&quot; and &quot;FALSE&quot;.</source>
+        <translation>Логическое поле, возможные значения: &quot;TRUE&quot; и &quot;FALSE&quot;.</translation>
     </message>
 </context>
 <context>

@@ -80,17 +80,46 @@ class NgwFieldsModel(QAbstractTableModel):
 
         elif role == Qt.ItemDataRole.ToolTipRole:
             if orientation == Qt.Orientation.Horizontal:
-                if section == NgwFieldsModel.Column.IS_VISIBLE:
+                if section == NgwFieldsModel.Column.DISPLAY_NAME:
                     return QgsApplication.translate(
-                        "NgwFieldsModel", "Feature table"
+                        "NgwFieldsModel",
+                        "<b>Display name</b><br/>Display name that is used "
+                        "in the identification window instead of the keyname.",
+                    )
+                elif section == NgwFieldsModel.Column.KEYNAME:
+                    return QgsApplication.translate(
+                        "NgwFieldsModel",
+                        "<b>Keyname</b><br/>Technical name of the attribute, "
+                        "can be comprised only of plain latin symbols.",
+                    )
+                elif section == NgwFieldsModel.Column.DATATYPE:
+                    return QgsApplication.translate(
+                        "NgwFieldsModel",
+                        "<b>Type</b><br/>Attribute value type.",
+                    )
+                elif section == NgwFieldsModel.Column.IS_REQUIRED:
+                    return QgsApplication.translate(
+                        "NgwFieldsModel",
+                        "<b>Required</b><br/>The attribute must have a value.",
+                    )
+                elif section == NgwFieldsModel.Column.IS_VISIBLE:
+                    return QgsApplication.translate(
+                        "NgwFieldsModel",
+                        "<b>Feature table</b><br/>The attribute is displayed in the "
+                        "identification window.",
                     )
                 elif section == NgwFieldsModel.Column.IS_USED_FOR_SEARCH:
                     return QgsApplication.translate(
-                        "NgwFieldsModel", "Text search"
+                        "NgwFieldsModel",
+                        "<b>Text search</b><br/>You can disable text search in the "
+                        "values of the attribute.",
                     )
                 elif section == NgwFieldsModel.Column.IS_LABEL:
                     return QgsApplication.translate(
-                        "NgwFieldsModel", "Label Attribute"
+                        "NgwFieldsModel",
+                        "<b>Label attribute</b><br/>Value from this field is used as "
+                        "feature name for search results, identification and "
+                        "bookmarks.",
                     )
 
         elif role == Qt.ItemDataRole.DecorationRole:

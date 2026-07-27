@@ -210,6 +210,44 @@ class VectorLayerCreationDialog(QDialog, VectorLayerCreationDialogBase):
             self.__add_field
         )
 
+        display_name_tooltip = self.tr(
+            "Display name that is used in the identification window instead "
+            "of the keyname."
+        )
+        self.field_display_name_label.setToolTip(display_name_tooltip)
+        self.field_display_name_lineedit.setToolTip(display_name_tooltip)
+
+        keyname_tooltip = self.tr(
+            "Technical name of the attribute, can be comprised only of plain "
+            "latin symbols."
+        )
+        self.field_keyname_label.setToolTip(keyname_tooltip)
+        self.field_keyname_lineedit.setToolTip(keyname_tooltip)
+
+        self.field_type_label.setToolTip(self.__field_type_tooltip())
+        self.field_type_combobox.setToolTip(self.__field_type_tooltip())
+        self.field_type_combobox.currentIndexChanged.connect(
+            self.__update_field_type_tooltip
+        )
+
+        self.required_checkbox.setToolTip(
+            self.tr("The attribute must have a value.")
+        )
+        self.feature_table_checkbox.setToolTip(
+            self.tr("The attribute is displayed in the identification window.")
+        )
+        self.text_search_checkbox.setToolTip(
+            self.tr(
+                "You can disable text search in the values of the attribute."
+            )
+        )
+        self.label_attribute_checkbox.setToolTip(
+            self.tr(
+                "Value from this field is used as feature name for search "
+                "results, identification and bookmarks."
+            )
+        )
+
         # Init field types
         for ngw_type in NgwDataType:
             if (
@@ -218,14 +256,26 @@ class VectorLayerCreationDialog(QDialog, VectorLayerCreationDialogBase):
             ):
                 continue
 
+            if ngw_type == NgwDataType.JSON and not self.__has_json_support:
+                continue
+
             self.field_type_combobox.addItem(
                 ngw_type.icon, ngw_type.name, ngw_type.qt_value
             )
+            item_index = self.field_type_combobox.count() - 1
+            self.field_type_combobox.setItemData(
+                item_index,
+                self.__field_type_tooltip(ngw_type),
+                Qt.ItemDataRole.ToolTipRole,
+            )
+
+        self.__update_field_type_tooltip()
 
         # Setup button
         self.add_field_button.setIcon(
             QgsApplication.getThemeIcon("mActionNewAttribute.svg")
         )
+        self.add_field_button.setToolTip(self.tr("Add field to the list."))
         self.add_field_button.clicked.connect(self.__add_field)
 
     def __setup_fields_view(self):
@@ -238,6 +288,15 @@ class VectorLayerCreationDialog(QDialog, VectorLayerCreationDialogBase):
         )
         self.move_down_button.setIcon(
             QgsApplication.getThemeIcon("mActionArrowDown.svg")
+        )
+        self.remove_field_button.setToolTip(
+            self.tr("Remove selected field from the list.")
+        )
+        self.move_up_button.setToolTip(
+            self.tr("Move selected field up in the list.")
+        )
+        self.move_down_button.setToolTip(
+            self.tr("Move selected field down in the list.")
         )
 
         # Init buttons
@@ -293,6 +352,45 @@ class VectorLayerCreationDialog(QDialog, VectorLayerCreationDialogBase):
         )
         self.fields_view.setItemDelegateForColumn(
             NgwFieldsModel.Column.IS_LABEL, checkbox_delegate
+        )
+
+    def __field_type_tooltip(
+        self, ngw_type: Optional[NgwDataType] = None
+    ) -> str:
+        if ngw_type is None:
+            return self.tr("Select attribute value type.")
+
+        descriptions = {
+            NgwDataType.INTEGER: self.tr(
+                "Numbers between -2147483647 and 2147483647, no decimals."
+            ),
+            NgwDataType.BIGINT: self.tr(
+                "Long numbers without decimals, between -9223372036854775807 "
+                "and 9223372036854775807."
+            ),
+            NgwDataType.REAL: self.tr("Floating-point numbers, e.g. 44.4444."),
+            NgwDataType.STRING: self.tr("A text of any length."),
+            NgwDataType.JSON: self.tr("Structured JSON data."),
+            NgwDataType.DATE: self.tr("Date."),
+            NgwDataType.TIME: self.tr("Time."),
+            NgwDataType.DATETIME: self.tr("Date and time."),
+            NgwDataType.BOOLEAN: self.tr(
+                'Logical field, possible values are "TRUE" and "FALSE".'
+            ),
+        }
+        return descriptions.get(
+            ngw_type, self.tr("Select attribute value type.")
+        )
+
+    def __update_field_type_tooltip(self) -> None:
+        current_data = self.field_type_combobox.currentData()
+        if current_data is None:
+            self.field_type_combobox.setToolTip(self.__field_type_tooltip())
+            return
+
+        ngw_type = NgwDataType.from_qt_value(current_data)
+        self.field_type_combobox.setToolTip(
+            self.__field_type_tooltip(ngw_type)
         )
 
     def __setup_button_box(

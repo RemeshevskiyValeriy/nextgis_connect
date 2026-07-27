@@ -10,6 +10,21 @@ from nextgis_connect.types import FieldId
 
 @dataclass(frozen=True, init=False)
 class NgwField:
+    """NextGIS Web vector layer field metadata.
+
+    :ivar datatype: Attribute value type.
+    :ivar keyname: Technical name of the attribute, can be comprised only of
+        plain latin symbols.
+    :ivar display_name: Display name that is used in the identification window
+        instead of the keyname.
+    :ivar is_label: Value from this field is used as feature name for search
+        results, identification and bookmarks.
+    :ivar is_required: The attribute must have a value.
+    :ivar is_visible: The attribute is displayed in the identification window.
+    :ivar is_used_for_search: Text search is enabled in the values of the
+        attribute.
+    """
+
     ngw_id: FieldId
     datatype: NgwDataType
     keyname: str
