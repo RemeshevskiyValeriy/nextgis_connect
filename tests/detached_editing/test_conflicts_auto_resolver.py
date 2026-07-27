@@ -35,7 +35,7 @@ from nextgis_connect.detached_editing.sync.versioned.actions import (
     FeatureRestoreAction,
     FeatureUpdateAction,
 )
-from nextgis_connect.types import Unset
+from nextgis_connect.shared.types import Unset
 from tests.ng_connect_testcase import NgConnectTestCase
 
 

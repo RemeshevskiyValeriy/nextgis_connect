@@ -5,7 +5,6 @@ from unittest import mock
 
 from qgis.core import QgsFeature, QgsField, QgsVectorLayer
 
-from nextgis_connect.compat import FieldType, GeometryType, LayerType
 from nextgis_connect.detached_editing.container.container_factory import (
     DetachedContainerFactory,
 )
@@ -13,17 +12,22 @@ from nextgis_connect.detached_editing.utils import (
     container_metadata,
     detached_layer_uri,
 )
-from nextgis_connect.exceptions import ContainerError
-from nextgis_connect.ngw_api.core import NGWVectorLayer
-from nextgis_connect.ngw_api.qgis.ngw_resource_model_4qgis import (
+from nextgis_connect.ngw.core import NGWVectorLayer
+from nextgis_connect.ngw.qgis.ngw_resource_model_4qgis import (
     QGISResourceJob,
 )
-from nextgis_connect.ngw_api.qgis.qgis_ngw_connection import (
+from nextgis_connect.ngw.qgis.qgis_ngw_connection import (
     NgwServerFeature,
 )
-from nextgis_connect.ngw_api.qt.qt_ngw_resource_model_job_error import (
+from nextgis_connect.ngw.qt.qt_ngw_resource_model_job_error import (
     JobError,
 )
+from nextgis_connect.platform.qgis.compat import (
+    FieldType,
+    GeometryType,
+    LayerType,
+)
+from nextgis_connect.platform.qgis.errors import ContainerError
 from tests.ng_connect_testcase import NgConnectTestCase, TestData
 
 

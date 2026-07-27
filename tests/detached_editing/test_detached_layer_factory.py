@@ -14,7 +14,6 @@ from qgis.core import (
     QgsVectorLayer,
 )
 
-from nextgis_connect.compat import FieldType
 from nextgis_connect.detached_editing.container.container_factory import (
     DetachedContainerFactory,
 )
@@ -24,8 +23,9 @@ from nextgis_connect.detached_editing.utils import (
     detached_layer_uri,
     make_connection,
 )
-from nextgis_connect.ngw_api.core import NGWVectorLayer
+from nextgis_connect.ngw.core import NGWVectorLayer
 from nextgis_connect.ngw_connection import NgwConnection
+from nextgis_connect.platform.qgis.compat import FieldType
 from nextgis_connect.resources.ngw_fields import NgwFields
 from nextgis_connect.settings import NgConnectSettings
 from tests.ng_connect_testcase import (
@@ -179,17 +179,17 @@ class TestDetachedContainerFactory(NgConnectTestCase):
                 self.assertEqual(metadata.layer_name, display_name)
 
     @mock.patch(
-        "nextgis_connect.ngw_api.core.NGWVectorLayer.is_versioning_enabled",
+        "nextgis_connect.ngw.core.NGWVectorLayer.is_versioning_enabled",
         new_callable=mock.PropertyMock,
         return_value=True,
     )
     @mock.patch(
-        "nextgis_connect.ngw_api.core.NGWVectorLayer.epoch",
+        "nextgis_connect.ngw.core.NGWVectorLayer.epoch",
         new_callable=mock.PropertyMock,
         return_value=42,
     )
     @mock.patch(
-        "nextgis_connect.ngw_api.core.NGWVectorLayer.version",
+        "nextgis_connect.ngw.core.NGWVectorLayer.version",
         new_callable=mock.PropertyMock,
         return_value=24,
     )

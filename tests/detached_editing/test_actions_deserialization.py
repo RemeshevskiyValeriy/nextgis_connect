@@ -21,8 +21,8 @@ from nextgis_connect.detached_editing.sync.versioned.actions import (
 from nextgis_connect.detached_editing.sync.versioned.actions_serializer import (
     ActionSerializer,
 )
-from nextgis_connect.exceptions import SerializationError
-from nextgis_connect.types import Unset
+from nextgis_connect.platform.qgis.errors import SerializationError
+from nextgis_connect.shared.types import Unset
 from tests.detached_editing.utils import mock_container
 from tests.ng_connect_testcase import (
     NgConnectTestCase,

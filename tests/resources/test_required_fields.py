@@ -13,12 +13,12 @@ from nextgis_connect.detached_editing.utils import (
     container_metadata,
     detached_layer_uri,
 )
-from nextgis_connect.ngw_api.core import NGWVectorLayer
-from nextgis_connect.ngw_api.core.ngw_resource_creator import ResourceCreator
-from nextgis_connect.ngw_api.qgis.ngw_resource_model_4qgis import (
+from nextgis_connect.ngw.core import NGWVectorLayer
+from nextgis_connect.ngw.core.ngw_resource_creator import ResourceCreator
+from nextgis_connect.ngw.qgis.ngw_resource_model_4qgis import (
     QGISResourceJob,
 )
-from nextgis_connect.ngw_api.qgis.qgis_ngw_connection import (
+from nextgis_connect.ngw.qgis.qgis_ngw_connection import (
     NgwServerFeature,
 )
 from nextgis_connect.resources.ngw_fields import NgwFields
@@ -58,7 +58,7 @@ class TestRequiredFields(NgConnectTestCase):
             "create_vector_layer",
             return_value=ngw_vector_layer,
         ), mock.patch(
-            "nextgis_connect.ngw_api.qgis.ngw_resource_model_4qgis.os.remove"
+            "nextgis_connect.ngw.qgis.ngw_resource_model_4qgis.os.remove"
         ):
             job.importQgsVectorLayer(layer, parent_resource)
 

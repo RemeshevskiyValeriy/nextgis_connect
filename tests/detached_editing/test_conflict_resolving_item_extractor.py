@@ -51,7 +51,7 @@ from nextgis_connect.detached_editing.sync.versioned.actions import (
 from nextgis_connect.detached_editing.utils import AttachmentMetadata
 from nextgis_connect.resources.ngw_field import NgwField
 from nextgis_connect.settings.ng_connect_settings import NgConnectSettings
-from nextgis_connect.types import Unset, UnsetType
+from nextgis_connect.shared.types import Unset, UnsetType
 from tests.detached_editing.utils import mock_container
 from tests.ng_connect_testcase import NgConnectTestCase, TestData
 

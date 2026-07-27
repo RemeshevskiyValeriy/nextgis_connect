@@ -10,13 +10,6 @@ from qgis.core import QgsFeature, QgsField, QgsGeometry, QgsVectorLayer, edit
 from qgis.PyQt.QtCore import QObject, pyqtSlot
 from qgis.PyQt.QtWidgets import QMessageBox
 
-from nextgis_connect.compat import (
-    FieldType,
-    QgsChangedAttributesMap,
-    QgsFeatureIds,
-    QgsFeatureList,
-    QgsGeometryMap,
-)
 from nextgis_connect.detached_editing.detached_layer import DetachedLayer
 from nextgis_connect.detached_editing.sync.common.serialization import (
     deserialize_geometry,
@@ -28,7 +21,17 @@ from nextgis_connect.detached_editing.utils import (
     AttachmentMetadata,
     make_connection,
 )
-from nextgis_connect.exceptions import ContainerError, DetachedEditingError
+from nextgis_connect.platform.qgis.compat import (
+    FieldType,
+    QgsChangedAttributesMap,
+    QgsFeatureIds,
+    QgsFeatureList,
+    QgsGeometryMap,
+)
+from nextgis_connect.platform.qgis.errors import (
+    ContainerError,
+    DetachedEditingError,
+)
 from nextgis_connect.settings.ng_connect_settings import NgConnectSettings
 from tests.detached_editing.utils import mock_container
 from tests.ng_connect_testcase import (

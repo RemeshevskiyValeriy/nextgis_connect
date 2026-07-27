@@ -22,9 +22,12 @@ from nextgis_connect.detached_editing.utils import (
     AttachmentMetadata,
     DetachedContainerContext,
 )
-from nextgis_connect.exceptions import ErrorCode, SynchronizationError
+from nextgis_connect.platform.qgis.errors import (
+    ErrorCode,
+    SynchronizationError,
+)
 from nextgis_connect.resources.ngw_data_type import NgwDataType
-from nextgis_connect.types import Unset
+from nextgis_connect.shared.types import Unset
 from tests.detached_editing.utils import mock_container
 from tests.ng_connect_testcase import NgConnectTestCase, TestData
 

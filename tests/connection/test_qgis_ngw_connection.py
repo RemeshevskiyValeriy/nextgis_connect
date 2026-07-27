@@ -8,7 +8,7 @@ class TestQgsNgwConnection(NgConnectTestCase):
     def setUp(self) -> None:
         super().setUp()
 
-        from nextgis_connect.ngw_api.qgis.qgis_ngw_connection import (
+        from nextgis_connect.ngw.qgis.qgis_ngw_connection import (
             NgwServerFeature,
             QgsNgwConnection,
         )
@@ -87,8 +87,11 @@ class TestQgsNgwConnection(NgConnectTestCase):
         self.assertEqual(mock_invalidate.call_count, 1)
 
     def test_all_features_require_supported_ngw_version(self) -> None:
+        from nextgis_connect.platform.qgis.utils import (
+            SupportStatus,
+            is_version_supported,
+        )
         from nextgis_connect.settings import NgConnectSettings
-        from nextgis_connect.utils import SupportStatus, is_version_supported
 
         settings = NgConnectSettings()
         previous_developer_mode = settings.is_developer_mode

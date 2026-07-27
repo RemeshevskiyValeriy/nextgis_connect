@@ -4,10 +4,10 @@ import qgis.utils
 from qgis.utils import updateAvailablePlugins
 
 import nextgis_connect
-from nextgis_connect.compat import parse_version
-from nextgis_connect.core.constants import PACKAGE_NAME
-from nextgis_connect.ngw_api.qgis.qgis_ngw_connection import QgsNgwConnection
+from nextgis_connect.ngw.qgis.qgis_ngw_connection import QgsNgwConnection
+from nextgis_connect.platform.qgis.compat import parse_version
 from nextgis_connect.settings.ng_connect_settings import NgConnectSettings
+from nextgis_connect.shared.constants import PACKAGE_NAME
 from tests.ng_connect_testcase import NgConnectTestCase, TestConnection
 
 

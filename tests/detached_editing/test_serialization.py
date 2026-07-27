@@ -15,7 +15,7 @@ from nextgis_connect.detached_editing.sync.common.serialization import (
     simplify_date_and_time,
     simplify_value,
 )
-from nextgis_connect.exceptions import SerializationError
+from nextgis_connect.platform.qgis.errors import SerializationError
 from tests.ng_connect_testcase import (
     NgConnectTestCase,
 )

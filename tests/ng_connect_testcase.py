@@ -26,11 +26,11 @@ from qgis.PyQt.QtCore import QSize, Qt
 from qgis.PyQt.QtWidgets import QMainWindow
 from qgis.testing import QgisTestCase
 
-from nextgis_connect.ngw_api.core import NGWResource
-from nextgis_connect.ngw_api.core.ngw_resource_factory import (
+from nextgis_connect.ngw.core import NGWResource
+from nextgis_connect.ngw.core.ngw_resource_factory import (
     NGWResourceFactory,
 )
-from nextgis_connect.ngw_api.qgis.qgis_ngw_connection import QgsNgwConnection
+from nextgis_connect.ngw.qgis.qgis_ngw_connection import QgsNgwConnection
 from nextgis_connect.ngw_connection import NgwConnection, NgwConnectionsManager
 from tests.utils import safe_remove
 
