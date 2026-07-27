@@ -177,7 +177,7 @@ class MessageBarNotifier(NotifierInterface):
 
         if error.code == ErrorCode.QuotaExceeded:
             button = QPushButton(self.tr("Upgrade your plan"))
-            button.setIcon(plugin_icon("upgrade.svg"))
+            button.setIcon(plugin_icon("status/upgrade.svg"))
             button.pressed.connect(upgrade_plan)
             widget.layout().addWidget(button)
 

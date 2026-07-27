@@ -377,13 +377,13 @@ class AttachmentsModel(QAbstractListModel):
         if len(suffix) > 4:
             suffix = "…" + suffix[-3:]
 
-        icon_name = "files/general_file.svg"
+        icon_name = "attachments/general_file.svg"
         if not is_cached:
-            icon_name = "files/not_downloaded_file.svg"
+            icon_name = "attachments/not_downloaded_file.svg"
         elif self._is_image(attachment):
-            icon_name = "files/image_file.svg"
+            icon_name = "attachments/image_file.svg"
         else:
-            icon_name = "files/no_extension_file.svg"
+            icon_name = "attachments/no_extension_file.svg"
 
         if attachment.size is None:
             size = ""

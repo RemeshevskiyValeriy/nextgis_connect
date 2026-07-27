@@ -495,7 +495,7 @@ class IdentificationResultsWidget(QgsDockWidget, ResultsDialogBase):
         extra_menu = QMenu(self)
         # TODO: check is uploaded
         self.__open_feature_in_ngw_action = extra_menu.addAction(
-            plugin_icon("ngw_logo.svg"),
+            plugin_icon("branding/ngw_logo.svg"),
             self.tr("Open feature in NextGIS Web"),
             self.__open_feature_in_ngw,
         )

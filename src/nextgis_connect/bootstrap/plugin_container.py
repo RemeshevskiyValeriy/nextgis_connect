@@ -291,7 +291,7 @@ class PluginContainer:
         )
 
         self.__show_ngw_resources_tree_action = QAction(
-            QIcon(str(self.plugin_dir / "icons/connect_logo.svg")),
+            QIcon(str(self.plugin_dir / "icons/branding/connect_logo.svg")),
             self._plugin.tr("Show/Hide NextGIS Connect panel"),
             self.iface.mainWindow(),
         )
@@ -334,13 +334,13 @@ class PluginContainer:
             if action.text() != PLUGIN_NAME:
                 continue
             action.setIcon(
-                QIcon(str(self.plugin_dir / "icons/connect_logo.svg"))
+                QIcon(str(self.plugin_dir / "icons/branding/connect_logo.svg"))
             )
             break
 
         # Add adction to Help > Plugins
         self.__show_help_action = QAction(
-            QIcon(str(self.plugin_dir / "icons/connect_logo.svg")),
+            QIcon(str(self.plugin_dir / "icons/branding/connect_logo.svg")),
             PLUGIN_NAME,
             self.iface.mainWindow(),
         )

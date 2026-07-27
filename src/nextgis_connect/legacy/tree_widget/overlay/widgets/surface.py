@@ -432,7 +432,7 @@ class OverlaySurfaceWidget(QWidget):
 
         self._plugin_path = NgConnectInterface.instance().path
         self._background_painter = NextgisBackgroundPainter(
-            self._plugin_path / "icons" / "isolines.svg",
+            self._plugin_path / "icons" / "branding" / "isolines.svg",
             self,
         )
         self._draw_background = True
@@ -475,7 +475,7 @@ class OverlaySurfaceWidget(QWidget):
         self._card_stack.addWidget(self._compact_label)
 
         self._logo_widget = LogoLinkWidget(
-            self._plugin_path / "icons" / "nextgis_full_logo.svg",
+            self._plugin_path / "icons" / "branding" / "nextgis_full_logo.svg",
             self,
         )
         self._logo_widget.clicked.connect(self._emit_logo_action)

@@ -75,7 +75,7 @@ class IdentificationManager(QObject):
     def load(self) -> None:
         """Load identification manager and set the identify tool."""
         self._action = QAction(self.tr("Identify"), self)
-        self._action.setIcon(plugin_icon("mActionIdentify.svg"))
+        self._action.setIcon(plugin_icon("actions/identify.svg"))
         # Add after toolbar initialization
         QTimer.singleShot(2, self.__add_icon_to_toolbar)
 
@@ -93,7 +93,7 @@ class IdentificationManager(QObject):
             LayerType.Vector,
             Qgis.MapLayerActionTarget.SingleFeature,
         )
-        open_in_ngw_action.setIcon(plugin_icon("ngw_logo.svg"))
+        open_in_ngw_action.setIcon(plugin_icon("branding/ngw_logo.svg"))
         open_in_ngw_action.triggeredForFeatureV2.connect(
             self.open_feature_in_nextgis_web
         )

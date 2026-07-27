@@ -257,14 +257,16 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
         self.__is_closed = False
 
         self.actionOpenInNGW = QAction(self.tr("Open in Web GIS"), self)
-        self.actionOpenInNGW.setIcon(QIcon(plugin_icon("ngw_logo.svg")))
+        self.actionOpenInNGW.setIcon(
+            QIcon(plugin_icon("branding/ngw_logo.svg"))
+        )
         self.actionOpenInNGW.triggered.connect(self.open_ngw_resource_page)
 
         self.actionOpenInNGWFromLayer = QAction(
             self.tr("Open in Web GIS"), self
         )
         self.actionOpenInNGWFromLayer.setIcon(
-            QIcon(plugin_icon("ngw_logo.svg"))
+            QIcon(plugin_icon("branding/ngw_logo.svg"))
         )
         self.actionOpenInNGWFromLayer.triggered.connect(
             self.open_ngw_resource_page_from_layer
@@ -293,7 +295,7 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
         self.actionRename.triggered.connect(self.rename_ngw_resource)
 
         self.actionExport = QAction(
-            QIcon(os.path.join(ICONS_PATH, "mActionExport.svg")),
+            QIcon(os.path.join(ICONS_PATH, "actions/export.svg")),
             self.tr("Add to QGIS"),
             self,
         )
@@ -311,7 +313,7 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
 
         self.menuUpload = QMenu(self.tr("Add to Web GIS"), self)
         self.menuUpload.setIcon(
-            QIcon(os.path.join(ICONS_PATH, "mActionImport.svg"))
+            QIcon(os.path.join(ICONS_PATH, "actions/import.svg"))
         )
         self.menuUpload.menuAction().setIconVisibleInMenu(False)
 
@@ -336,7 +338,9 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
         )
 
         self.actionUploadProjectViaImportExportMenu = QAction(
-            QIcon(str(PACKAGE_PATH / "icons" / "logo.svg")),
+            QIcon(
+                str(PACKAGE_PATH / "icons" / "branding" / "nextgis_logo.svg")
+            ),
             self.tr("Upload project to NextGIS Web"),
         )
         self.actionUploadProjectViaImportExportMenu.triggered.connect(
@@ -426,28 +430,28 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
         )
 
         self.actionOpenInBrowser = QAction(
-            QIcon(os.path.join(ICONS_PATH, "mActionOpenMap.svg")),
+            QIcon(os.path.join(ICONS_PATH, "actions/open_map.svg")),
             self.tr("View in browser"),
             self,
         )
         self.actionOpenInBrowser.triggered.connect(self.__open_in_web)
 
         self.actionRefresh = QAction(
-            QIcon(os.path.join(ICONS_PATH, "mActionRefresh.svg")),
+            QIcon(os.path.join(ICONS_PATH, "actions/refresh.svg")),
             self.tr("Refresh"),
             self,
         )
         self.actionRefresh.triggered.connect(self.__action_refresh_tree)
 
         self.actionSettings = QAction(
-            QIcon(os.path.join(ICONS_PATH, "mActionSettings.svg")),
+            QIcon(os.path.join(ICONS_PATH, "actions/settings.svg")),
             self.tr("Settings"),
             self,
         )
         self.actionSettings.triggered.connect(self.action_settings)
 
         self.actionHelp = QAction(
-            QIcon(os.path.join(ICONS_PATH, "mActionHelp.svg")),
+            QIcon(os.path.join(ICONS_PATH, "actions/help.svg")),
             self.tr("Help"),
             self,
         )
@@ -471,7 +475,7 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
 
         self.toolbuttonDownload = QToolButton()
         self.toolbuttonDownload.setIcon(
-            QIcon(os.path.join(ICONS_PATH, "mActionExport.svg"))
+            QIcon(os.path.join(ICONS_PATH, "actions/export.svg"))
         )
         self.toolbuttonDownload.setToolTip(self.tr("Add to QGIS"))
         self.toolbuttonDownload.clicked.connect(self.__download_selected)
@@ -1441,7 +1445,7 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
     def __get_model_exception_description(self, exception: Exception):
         msg = None
         msg_ext = None
-        icon = os.path.join(ICONS_PATH, "Error.svg")
+        icon = os.path.join(ICONS_PATH, "synchronization/field_error.svg")
 
         if isinstance(exception, JobServerRequestError):
             msg = self.tr("Error occurred while communicating with Web GIS")
@@ -1481,7 +1485,9 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
 
         elif isinstance(exception, JobWarning):
             msg = str(exception)
-            icon = os.path.join(ICONS_PATH, "Warning.svg")
+            icon = os.path.join(
+                ICONS_PATH, "synchronization/field_warning.svg"
+            )
 
         elif isinstance(exception, NgConnectError):
             msg = exception.user_message
@@ -3594,7 +3600,9 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
         export_menu = menus[0]
 
         actionUploadSelectedViaExportMenu = QAction(
-            QIcon(str(PACKAGE_PATH / "icons" / "logo.svg")),
+            QIcon(
+                str(PACKAGE_PATH / "icons" / "branding" / "nextgis_logo.svg")
+            ),
             self.tr("Upload to NextGIS Web"),
             export_menu,
         )
@@ -3641,7 +3649,7 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
             QToolButton.ToolButtonPopupMode.DelayedPopup
         )
         self.search_button.setIcon(
-            QIcon(os.path.join(ICONS_PATH, "mActionFilter.svg"))
+            QIcon(os.path.join(ICONS_PATH, "actions/filter.svg"))
         )
         self.search_button.setText(self.tr("Search"))
         self.search_button.setToolTip(self.tr("Search"))
@@ -3676,7 +3684,7 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
         menu = QMenu()
 
         self.actionCreateNewGroup = QAction(
-            QIcon(os.path.join(ICONS_PATH, "mActionNewFolder.svg")),
+            QIcon(os.path.join(ICONS_PATH, "actions/new_folder.svg")),
             self.tr("Create resource group"),
             self,
         )
@@ -3684,7 +3692,12 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
         menu.addAction(self.actionCreateNewGroup)
 
         self.actionCreateNewVectorLayer = QAction(
-            QIcon(os.path.join(ICONS_PATH, "mActionNewVectorLayer.svg")),
+            QIcon(
+                os.path.join(
+                    ICONS_PATH,
+                    "actions/new_vector_layer.svg",
+                )
+            ),
             self.tr("Create vector layer"),
             self,
         )
@@ -3695,7 +3708,12 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
 
         text = self.tr("New NextGIS Web Vector Layer")
         self.actionCreateNgwVectorLayer = QAction(
-            QIcon(os.path.join(ICONS_PATH, "mActionNewVectorLayerNative.svg")),
+            QIcon(
+                os.path.join(
+                    ICONS_PATH,
+                    "actions/new_vector_layer_native.svg",
+                )
+            ),
             text,
             self,
         )
@@ -3811,7 +3829,7 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
 
         banner_label = QLabel(banner)
         banner_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        icon_path = Path(ICONS_PATH) / "fire.png"
+        icon_path = Path(ICONS_PATH) / "promo/fire.png"
         close_icon = icon_to_base64(material_icon("close_small", size=16))
 
         html = f"""

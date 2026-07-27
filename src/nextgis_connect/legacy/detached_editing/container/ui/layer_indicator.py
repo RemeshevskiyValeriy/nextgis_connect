@@ -66,18 +66,18 @@ class DetachedLayerIndicator(QgsLayerTreeViewIndicator):
             DetachedLayerState.NotInitialized,
             DetachedLayerState.NotSynchronized,
         ):
-            self.setIcon(plugin_icon("detached_layers/not_synchronized.svg"))
+            self.setIcon(plugin_icon("synchronization/not_synchronized.svg"))
             status_tooltip = self.tr("Layer is not synchronized!")
             tooltip = f"{status_tooltip}{date_tooltip}"
         elif state == DetachedLayerState.Synchronized:
-            self.setIcon(plugin_icon("detached_layers/synchronized.svg"))
+            self.setIcon(plugin_icon("synchronization/synchronized.svg"))
             status_tooltip = self.tr("Layer is synchronized")
             tooltip = f"{status_tooltip}{date_tooltip}"
         elif state == DetachedLayerState.Synchronization:
-            self.setIcon(plugin_icon("detached_layers/synchronization.svg"))
+            self.setIcon(plugin_icon("synchronization/synchronization.svg"))
             tooltip = self.tr("Layer is syncing")
         elif state == DetachedLayerState.Error:
-            self.setIcon(plugin_icon("detached_layers/error.svg"))
+            self.setIcon(plugin_icon("synchronization/error.svg"))
             if self.__container.error_code.is_synchronization_error:
                 status_tooltip = self.tr("Synchronization error!")
             elif self.__container.error_code.is_container_error:
@@ -102,6 +102,6 @@ class DetachedLayerIndicator(QgsLayerTreeViewIndicator):
         self.__tick += 1
 
         if self.__tick % 5 == 0:
-            self.setIcon(plugin_icon("detached_layers/empty.svg"))
+            self.setIcon(plugin_icon("synchronization/empty.svg"))
         else:
-            self.setIcon(plugin_icon("detached_layers/synchronization.svg"))
+            self.setIcon(plugin_icon("synchronization/synchronization.svg"))

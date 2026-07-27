@@ -255,7 +255,12 @@ class NgwConnectionEditDialog(QDialog, WIDGET):
         if help_button is not None:
             help_button.setIcon(
                 QIcon(
-                    str(PLUGIN_PATH.parents[1] / "icons" / "nextgis_logo.svg")
+                    str(
+                        PLUGIN_PATH.parents[1]
+                        / "icons"
+                        / "branding"
+                        / "nextgis_logo.svg"
+                    )
                 )
             )
             help_button.clicked.connect(self.__open_help)

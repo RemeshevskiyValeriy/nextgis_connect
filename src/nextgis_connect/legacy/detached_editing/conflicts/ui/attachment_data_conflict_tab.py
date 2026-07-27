@@ -57,7 +57,7 @@ class AttachmentDataConflictTab(
         super().__init__(parent)
         self._unresolved_marker_icon = unresolved_marker_icon
         self._resolved_marker_icon = resolved_marker_icon
-        self._file_icon = plugin_icon("files/no_extension_file.svg")
+        self._file_icon = plugin_icon("attachments/no_extension_file.svg")
 
         self._is_filling = False
         self._markers: Dict[_AttachmentField, QLabel] = {}

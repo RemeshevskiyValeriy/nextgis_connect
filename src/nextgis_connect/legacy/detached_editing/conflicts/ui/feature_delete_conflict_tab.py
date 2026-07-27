@@ -588,7 +588,7 @@ class FeatureDeleteConflictTab(
         )
         draw_icon(
             icon_label,
-            plugin_icon("files/no_extension_file.svg"),
+            plugin_icon("attachments/no_extension_file.svg"),
             size=24,
         )
         layout.addWidget(icon_label, 0, Qt.AlignmentFlag.AlignTop)
