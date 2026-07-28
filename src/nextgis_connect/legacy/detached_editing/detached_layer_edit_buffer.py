@@ -14,10 +14,10 @@ from qgis.PyQt.QtCore import (
     pyqtSlot,
 )
 
-from nextgis_connect.legacy.detached_editing.utils import AttachmentMetadata
-from nextgis_connect.legacy.settings.ng_connect_cache_manager import (
-    NgConnectCacheManager,
+from nextgis_connect.legacy.detached_editing.storage_service_factory import (
+    DetachedStorageServiceFactory,
 )
+from nextgis_connect.legacy.detached_editing.utils import AttachmentMetadata
 from nextgis_connect.legacy.settings.ng_connect_settings import (
     NgConnectSettings,
 )
@@ -216,8 +216,8 @@ class DetachedLayerEditBuffer(QObject):
         if self.__temporary_storage_path is None:
             self.__temporary_storage_path = Path(tempfile.mkdtemp())
 
-        cache_manager = NgConnectCacheManager()
-        temp_file_path = cache_manager.attachment_path(
+        storage_service = DetachedStorageServiceFactory.create()
+        temp_file_path = storage_service.attachment_path(
             self._detached_layer.container.metadata.instance_id,
             self._detached_layer.container.metadata.resource_id,
             self._next_attachment_id,
@@ -226,7 +226,7 @@ class DetachedLayerEditBuffer(QObject):
         )
         temp_file_path = (
             self.__temporary_storage_path
-            / temp_file_path.relative_to(cache_manager.cache_directory)
+            / temp_file_path.relative_to(storage_service.cache_root)
         )
         temp_file_path.parent.mkdir(parents=True, exist_ok=True)
 

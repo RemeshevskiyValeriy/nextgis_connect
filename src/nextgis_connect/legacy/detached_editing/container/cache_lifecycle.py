@@ -6,6 +6,9 @@ from typing import Optional
 from nextgis_connect.legacy.detached_editing.container.container_factory import (
     DetachedContainerFactory,
 )
+from nextgis_connect.legacy.detached_editing.storage_service_factory import (
+    DetachedStorageServiceFactory,
+)
 from nextgis_connect.legacy.detached_editing.utils import (
     DetachedContainerMetaData,
     container_metadata,
@@ -77,6 +80,12 @@ class CachedDetachedContainerLifecycle:
             metadata,
             connection,
         )
+        DetachedStorageServiceFactory.create().register_detached_container(
+            connection.domain_uuid,
+            ngw_layer.resource_id,
+            connection_id=connection.id,
+            container_path=container_path,
+        )
         return True
 
     def replace_with_empty_container(
@@ -107,6 +116,13 @@ class CachedDetachedContainerLifecycle:
                 service_file.unlink(missing_ok=True)
 
             temp_path.replace(container_path)
+            metadata = container_metadata(container_path)
+            DetachedStorageServiceFactory.create().register_detached_container(
+                metadata.instance_id,
+                metadata.resource_id,
+                connection_id=metadata.connection_id,
+                container_path=container_path,
+            )
 
         except Exception:
             logger.exception("Could not replace detached container")

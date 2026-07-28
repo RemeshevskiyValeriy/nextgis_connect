@@ -38,6 +38,9 @@ from nextgis_connect.legacy.detached_editing.detached_layer import (
 from nextgis_connect.legacy.detached_editing.identification.identification_manager import (
     IdentificationManager,
 )
+from nextgis_connect.legacy.detached_editing.storage_service_factory import (
+    DetachedStorageServiceFactory,
+)
 from nextgis_connect.legacy.ngw.core.ngw_resource_factory import (
     NGWResourceFactory,
 )
@@ -51,9 +54,6 @@ from nextgis_connect.legacy.ngw_connection.application.connections_manager impor
     NgwConnectionsManager,
 )
 from nextgis_connect.legacy.settings import NgConnectSettings
-from nextgis_connect.legacy.settings.ng_connect_cache_manager import (
-    NgConnectCacheManager,
-)
 from nextgis_connect.platform.logging import logger
 from nextgis_connect.platform.qgis.compat import QGIS_3_34
 
@@ -646,9 +646,13 @@ class DetachedEditing(QObject):
 
         if container_path is not None:
             candidates = []
-            if len(container_path.parts) >= 4:
+            if (
+                container_path.name == "layer.gpkg"
+                and len(container_path.parts) >= 4
+            ):
                 candidates.append(container_path.parts[-4])
-            candidates.append(container_path.parent.name)
+            else:
+                candidates.append(container_path.parent.name)
             for candidate in candidates:
                 if self.__is_uuid(candidate):
                     return candidate
@@ -678,10 +682,11 @@ class DetachedEditing(QObject):
         resource_id: int,
         source_container_path: Path,
     ) -> Optional[Path]:
-        return NgConnectCacheManager().canonical_detached_container_path(
-            connection,
+        return DetachedStorageServiceFactory.create().canonical_container_path(
+            connection.domain_uuid,
             resource_id,
-            source_container_path,
+            connection_id=connection.id,
+            source_container_path=source_container_path,
         )
 
     def __prepare_connection_container(
@@ -737,6 +742,13 @@ class DetachedEditing(QObject):
         try:
             detached_factory.create_initial_container(
                 ngw_layer, container_path
+            )
+            metadata = utils.container_metadata(container_path)
+            DetachedStorageServiceFactory.create().register_detached_container(
+                metadata.instance_id,
+                metadata.resource_id,
+                connection_id=metadata.connection_id,
+                container_path=container_path,
             )
         except Exception:
             logger.exception("Could not create missing detached container")

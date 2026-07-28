@@ -39,7 +39,7 @@ def test_layer_matches_connection_by_old_connection_id() -> None:
     )
 
 
-def test_layer_matches_connection_by_hashed_cache_path() -> None:
+def test_layer_matches_connection_by_domain_cache_path() -> None:
     detached_editing = DetachedEditing.__new__(DetachedEditing)
     connection = NgwConnection(
         "current-id",
@@ -47,13 +47,7 @@ def test_layer_matches_connection_by_hashed_cache_path() -> None:
         "https://current.nextgis.com/",
         None,
     )
-    container_path = (
-        Path("/tmp/cache")
-        / connection.domain_uuid
-        / "00"
-        / "0123456789012345678901234567890123456789"
-        / "123.gpkg"
-    )
+    container_path = Path("/tmp/cache") / connection.domain_uuid / "123.gpkg"
 
     assert detached_editing._DetachedEditing__layer_belongs_to_connection(
         _Layer({}),
@@ -219,10 +213,10 @@ class TestDetachedEditingConnectionRestore(NgConnectTestCase):
         detached_editing = DetachedEditing.__new__(DetachedEditing)
 
         with patch(
-            "nextgis_connect.legacy.detached_editing.detached_editing.NgConnectCacheManager"
-        ) as cache_manager_class:
-            cache_manager = cache_manager_class.return_value
-            cache_manager.canonical_detached_container_path.return_value = (
+            "nextgis_connect.legacy.detached_editing.detached_editing.DetachedStorageServiceFactory"
+        ) as storage_factory:
+            storage_service = storage_factory.create.return_value
+            storage_service.canonical_container_path.return_value = (
                 restored_path
             )
 
@@ -235,10 +229,11 @@ class TestDetachedEditingConnectionRestore(NgConnectTestCase):
             )
 
         self.assertEqual(result, restored_path)
-        cache_manager.canonical_detached_container_path.assert_called_once_with(
-            connection,
+        storage_service.canonical_container_path.assert_called_once_with(
+            connection.domain_uuid,
             123,
-            source_path,
+            connection_id=connection.id,
+            source_container_path=source_path,
         )
 
     def __memory_layer(self, name: str, instance_id: str) -> QgsVectorLayer:

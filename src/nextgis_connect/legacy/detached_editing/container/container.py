@@ -49,6 +49,9 @@ from nextgis_connect.legacy.detached_editing.container.ui.layer_indicator import
 from nextgis_connect.legacy.detached_editing.detached_layer import (
     DetachedLayer,
 )
+from nextgis_connect.legacy.detached_editing.storage_service_factory import (
+    DetachedStorageServiceFactory,
+)
 from nextgis_connect.legacy.detached_editing.sync.common import (
     DetachedEditingTask,
     FetchAdditionalDataTask,
@@ -525,6 +528,12 @@ class DetachedContainer(QObject):
             for service_file in self.path.parent.glob(f"{self.path.name}-*"):
                 service_file.unlink(missing_ok=True)
             shutil.move(str(temp_file_path), str(self.path))
+            DetachedStorageServiceFactory.create().register_detached_container(
+                connection.domain_uuid,
+                resource_id,
+                connection_id=connection.id,
+                container_path=self.path,
+            )
 
         except Exception as os_error:
             message = "Can't replace container"

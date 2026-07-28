@@ -1,14 +1,17 @@
-import hashlib
 import logging
 import re
 import shutil
 from pathlib import Path
-from time import time
 from typing import Dict, List, Optional, Tuple, Union
 
 from qgis.core import QgsProject
-from qgis.PyQt.QtCore import QMimeDatabase
 
+from nextgis_connect.features.synchronization.infrastructure.storage import (
+    DetachedStorageService,
+    LegacyCacheMigrator,
+    QgisProjectStorageUsage,
+    StorageCleanupService,
+)
 from nextgis_connect.legacy.detached_editing.utils import (
     container_metadata,
     container_path,
@@ -33,6 +36,9 @@ class NgConnectCacheManager:
         self.__settings = NgConnectSettings()
         self.__project_containers = None
         Path(self.cache_directory).mkdir(parents=True, exist_ok=True)
+        self.__storage_service = DetachedStorageService(
+            Path(self.cache_directory)
+        )
 
     @property
     def default_user_profile_cache_directory(self) -> str:
@@ -56,6 +62,7 @@ class NgConnectCacheManager:
             old_cache_directory, new_cache_directory, dirs_exist_ok=True
         )
         shutil.rmtree(old_cache_directory)
+        self.__storage_service = DetachedStorageService(new_cache_directory)
 
     @property
     def cache_duration(self) -> int:
@@ -73,6 +80,8 @@ class NgConnectCacheManager:
         cache_size = 0.0
         for file_path in cache_path.glob("**/*"):
             if not file_path.is_file():
+                continue
+            if self.__is_storage_metadata_file(file_path):
                 continue
             cache_size += file_path.stat().st_size / 1024
         return cache_size
@@ -103,6 +112,9 @@ class NgConnectCacheManager:
             self.cache_directory,
         )
         for cache_path in (old_plugin_cache_path, custom_cache_path):
+            if LegacyCacheMigrator(cache_path).need_migration():
+                return True
+
             for directory in cache_path.glob("*"):
                 if not _is_uuid(directory.name):
                     continue
@@ -122,6 +134,12 @@ class NgConnectCacheManager:
         )
 
         for cache_path in (old_plugin_cache_path, custom_cache_path):
+            if not LegacyCacheMigrator(
+                cache_path,
+                QgisProjectStorageUsage(),
+            ).can_migrate():
+                return False
+
             for directory in cache_path.glob("*"):
                 if not _is_uuid(directory.name):
                     continue
@@ -136,21 +154,15 @@ class NgConnectCacheManager:
     def exists(self, path: Union[str, Path]) -> bool:
         path_to_file = Path(path)
         if not path_to_file.is_absolute():
-            path_to_file = self.cache_directory / path_to_file
+            path_to_file = Path(self.cache_directory) / path_to_file
         return path_to_file.exists()
 
     def detached_container_path(
         self, domain_uuid: str, resource_id: Union[int, str]
     ) -> Path:
-        seed = f"{domain_uuid}_{resource_id}"
-        sha1_hash = hashlib.sha1(seed.encode()).hexdigest()
-        sha1_hash_prefix = sha1_hash[:2]
-        return (
-            Path(self.cache_directory)
-            / domain_uuid
-            / sha1_hash_prefix
-            / sha1_hash
-            / f"{resource_id}.gpkg"
+        return self.__storage_service.ensure_container_placeholder(
+            domain_uuid,
+            resource_id,
         )
 
     def canonical_detached_container_path(
@@ -159,39 +171,11 @@ class NgConnectCacheManager:
         resource_id: int,
         source_container_path: Optional[Path] = None,
     ) -> Optional[Path]:
-        canonical_container_path = self.detached_container_path(
+        return self.__storage_service.canonical_container_path(
             connection.domain_uuid,
             resource_id,
-        )
-        if source_container_path is None:
-            return canonical_container_path
-
-        if source_container_path == canonical_container_path:
-            return canonical_container_path
-
-        if not source_container_path.exists():
-            return canonical_container_path
-
-        if not self.__is_cache_path(source_container_path):
-            logger = logging.getLogger(PLUGIN_NAME)
-            logger.warning(
-                "Detached container source is outside cache and will not be "
-                f"moved: {source_container_path}"
-            )
-            return canonical_container_path
-
-        if canonical_container_path.exists():
-            logger = logging.getLogger(PLUGIN_NAME)
-            logger.warning(
-                "Detached container canonical cache path already exists: "
-                f"{canonical_container_path}"
-            )
-            return canonical_container_path
-
-        return self.__move_container_to_connection_cache(
-            source_container_path,
-            resource_id,
-            connection,
+            connection_id=connection.id,
+            source_container_path=source_container_path,
         )
 
     def attachment_directory(
@@ -202,17 +186,11 @@ class NgConnectCacheManager:
         *,
         fileobj: Union[UnsetType, None, FileObjectId] = None,
     ) -> Path:
-        seed = f"{domain_uuid}_{resource_id}_{attachment_id}"
-        if bool(fileobj) and fileobj != -1:
-            seed += f"_{fileobj}"
-
-        sha1_hash = hashlib.sha1(seed.encode()).hexdigest()
-        sha1_hash_prefix = sha1_hash[:2]
-        return (
-            Path(self.cache_directory)
-            / domain_uuid
-            / sha1_hash_prefix
-            / sha1_hash
+        return self.__storage_service.attachment_directory(
+            domain_uuid,
+            resource_id,
+            attachment_id,
+            fileobj=fileobj,
         )
 
     def attachment_path(
@@ -225,11 +203,14 @@ class NgConnectCacheManager:
         mime_type: Optional[str] = None,
         fileobj: Union[UnsetType, None, FileObjectId] = None,
     ) -> Path:
-        attachment_directory = self.attachment_directory(
-            domain_uuid, resource_id, attachment_id, fileobj=fileobj
+        return self.__storage_service.attachment_path(
+            domain_uuid,
+            resource_id,
+            attachment_id,
+            file_name=file_name,
+            mime_type=mime_type,
+            fileobj=fileobj,
         )
-        extension = _guess_extension(file_name=file_name, mime_type=mime_type)
-        return attachment_directory / f"{attachment_id}{extension}"
 
     def attachment_thumbnail_directory(
         self,
@@ -239,18 +220,11 @@ class NgConnectCacheManager:
         *,
         fileobj: Union[UnsetType, None, FileObjectId] = None,
     ) -> Path:
-        seed = f"{domain_uuid}_{resource_id}_{attachment_id}"
-        if bool(fileobj) and fileobj != -1:
-            seed += f"_{fileobj}"
-        seed += "_thumbnail"
-
-        sha1_hash = hashlib.sha1(seed.encode()).hexdigest()
-        sha1_hash_prefix = sha1_hash[:2]
-        return (
-            Path(self.cache_directory)
-            / domain_uuid
-            / sha1_hash_prefix
-            / sha1_hash
+        return self.__storage_service.attachment_thumbnail_directory(
+            domain_uuid,
+            resource_id,
+            attachment_id,
+            fileobj=fileobj,
         )
 
     def attachment_thumbnail_path(
@@ -261,10 +235,119 @@ class NgConnectCacheManager:
         *,
         fileobj: Union[UnsetType, None, FileObjectId] = None,
     ) -> Path:
-        thumbnail_directory = self.attachment_thumbnail_directory(
-            domain_uuid, resource_id, attachment_id, fileobj=fileobj
+        return self.__storage_service.attachment_thumbnail_path(
+            domain_uuid,
+            resource_id,
+            attachment_id,
+            fileobj=fileobj,
         )
-        return thumbnail_directory / f"{attachment_id}.jpg"
+
+    def register_detached_container(
+        self,
+        domain_uuid: str,
+        resource_id: Union[int, str],
+        *,
+        connection_id: Optional[str] = None,
+        container_path: Optional[Path] = None,
+    ) -> bool:
+        """Register an existing detached container in the storage index."""
+        effective_container_path = (
+            container_path
+            or self.__storage_service.container_path(domain_uuid, resource_id)
+        )
+        return self.__storage_service.register_detached_container(
+            domain_uuid,
+            resource_id,
+            connection_id=connection_id,
+            container_path=container_path,
+            is_used_by_project=self.__is_file_used_by_project(
+                effective_container_path
+            ),
+        )
+
+    def register_attachment_file(
+        self,
+        domain_uuid: str,
+        resource_id: Union[int, str],
+        attachment_id: Union[int, str],
+        *,
+        file_name: Optional[str] = None,
+        mime_type: Optional[str] = None,
+        fileobj: Union[UnsetType, None, FileObjectId] = None,
+        feature_local_id: Optional[int] = None,
+        feature_ngw_fid: Optional[int] = None,
+        ngw_aid: Optional[int] = None,
+        is_dirty: bool = False,
+    ) -> bool:
+        """Register an existing attachment file in the storage index."""
+        return self.__storage_service.register_attachment_file(
+            domain_uuid,
+            resource_id,
+            attachment_id,
+            file_name=file_name,
+            mime_type=mime_type,
+            fileobj=fileobj,
+            feature_local_id=feature_local_id,
+            feature_ngw_fid=feature_ngw_fid,
+            ngw_aid=ngw_aid,
+            is_dirty=is_dirty,
+        )
+
+    def register_attachment_thumbnail(
+        self,
+        domain_uuid: str,
+        resource_id: Union[int, str],
+        attachment_id: Union[int, str],
+        *,
+        fileobj: Union[UnsetType, None, FileObjectId] = None,
+        feature_local_id: Optional[int] = None,
+        feature_ngw_fid: Optional[int] = None,
+        ngw_aid: Optional[int] = None,
+    ) -> bool:
+        """Register an existing attachment thumbnail in the storage index."""
+        return self.__storage_service.register_attachment_thumbnail(
+            domain_uuid,
+            resource_id,
+            attachment_id,
+            fileobj=fileobj,
+            feature_local_id=feature_local_id,
+            feature_ngw_fid=feature_ngw_fid,
+            ngw_aid=ngw_aid,
+        )
+
+    def remove_attachment_cache(
+        self,
+        domain_uuid: str,
+        resource_id: Union[int, str],
+        attachment_id: Union[int, str],
+        *,
+        fileobj: Union[UnsetType, None, FileObjectId] = None,
+    ) -> None:
+        """Remove cached attachment blob and thumbnail files."""
+        self.__storage_service.remove_attachment_cache(
+            domain_uuid,
+            resource_id,
+            attachment_id,
+            fileobj=fileobj,
+        )
+
+    def move_attachment_cache_to_fileobj(
+        self,
+        domain_uuid: str,
+        resource_id: Union[int, str],
+        attachment_id: Union[int, str],
+        *,
+        old_fileobj: Union[UnsetType, None, FileObjectId],
+        new_fileobj: FileObjectId,
+    ) -> None:
+        """Move cached attachment files to a remote file object key."""
+        self.__storage_service.move_attachment_cache_to_fileobj(
+            domain_uuid,
+            resource_id,
+            attachment_id,
+            old_fileobj=old_fileobj,
+            new_fileobj=new_fileobj,
+        )
 
     def migrate(self) -> bool:
         logger = logging.getLogger(PLUGIN_NAME)
@@ -275,13 +358,17 @@ class NgConnectCacheManager:
         )
 
         # Migrate from default cache directory
-        self.__migrate(old_plugin_cache_path, Path(self.cache_directory))
+        if not self.__migrate(
+            old_plugin_cache_path, Path(self.cache_directory)
+        ):
+            return False
 
         if self.cache_directory != self.__settings.old_plugin_cache_directory:
             # Just update structure if custom cache directory was used
-            self.__migrate(
+            if not self.__migrate(
                 Path(self.cache_directory), Path(self.cache_directory)
-            )
+            ):
+                return False
 
         if self.cache_directory == self.__settings.old_plugin_cache_directory:
             # Reset if default value was stored in settings
@@ -346,33 +433,12 @@ class NgConnectCacheManager:
         resource_id: int,
         connection: NgwConnection,
     ) -> Optional[Path]:
-        canonical_container_file = self.detached_container_path(
+        return self.__storage_service.canonical_container_path(
             connection.domain_uuid,
             resource_id,
+            connection_id=connection.id,
+            source_container_path=container_file,
         )
-        if container_file == canonical_container_file:
-            return container_file
-
-        logger = logging.getLogger(PLUGIN_NAME)
-        if canonical_container_file.exists():
-            logger.warning(
-                "Detached container canonical cache path already exists: "
-                f"{canonical_container_file}"
-            )
-            return container_file
-
-        try:
-            canonical_container_file.parent.mkdir(parents=True, exist_ok=True)
-            container_file.replace(canonical_container_file)
-            self.__move_detached_container_service_files(
-                container_file,
-                canonical_container_file,
-            )
-        except Exception:
-            logger.exception("Could not move detached container")
-            return None
-
-        return canonical_container_file
 
     def __move_detached_container_service_files(
         self,
@@ -425,37 +491,55 @@ class NgConnectCacheManager:
         )
 
     def clear_cache(self) -> bool:
-        cache_path = Path(self.cache_directory)
-
         logger = logging.getLogger(PLUGIN_NAME)
 
-        try:
-            shutil.rmtree(cache_path)
-        except Exception:
-            logger.debug("Cache clearing error")
+        self.__refresh_detached_storage_index()
+        if self.has_files_used_by_project or self.has_containers_with_changes:
+            logger.warning("Cache clearing was blocked by protected files")
             return False
 
-        cache_path.mkdir()
+        report = StorageCleanupService(
+            Path(self.cache_directory)
+        ).clear_disposable_cache()
+        if report.errors:
+            logger.debug("Cache clearing error: %s", "; ".join(report.errors))
+            return False
 
         return True
 
     def clear_connection_cache(self, connection) -> bool:
+        self.__refresh_detached_storage_index()
         if len(self.containers_used_by_project(connection)) > 0:
+            return False
+        if len(self.containers_with_changes(connection)) > 0:
             return False
 
         logger = logging.getLogger(PLUGIN_NAME)
+        cleanup_report = StorageCleanupService(
+            Path(self.cache_directory)
+        ).clear_connection_cache(connection.domain_uuid)
+        if cleanup_report.errors or cleanup_report.blocked_files:
+            logger.warning(
+                "Could not clear indexed connection cache: %s",
+                "; ".join(cleanup_report.errors + cleanup_report.warnings),
+            )
+            return False
+
         has_errors = False
         cache_paths = self.__connection_cache_paths(connection)
 
         for cache_path in sorted(
-            cache_paths, key=lambda path: len(path.parts)
+            cache_paths, key=lambda path: len(path.parts), reverse=True
         ):
             if not cache_path.exists():
                 continue
 
             try:
                 if cache_path.is_dir():
-                    shutil.rmtree(cache_path)
+                    try:
+                        cache_path.rmdir()
+                    except OSError:
+                        continue
                 else:
                     cache_path.unlink()
             except Exception:
@@ -540,72 +624,13 @@ class NgConnectCacheManager:
             logger.debug("Cache limits is disabled")
             return True
 
-        cache_duration_in_s = self.cache_duration * 24 * 60 * 60
-        current_time_in_s = time()
+        self.__refresh_detached_storage_index()
+        report = StorageCleanupService(
+            Path(self.cache_directory)
+        ).clear_disposable_cache()
+        logger.debug(f"Deleted {report.deleted_files} indexed cache files")
 
-        # Collect cache files information
-        cache_size = 0
-        has_old_files = False
-        files_with_time: List[Tuple[Path, float, float]] = []
-        for file_path in Path(self.cache_directory).glob("**/*"):
-            if not file_path.is_file():
-                continue
-
-            file_stat = file_path.stat()
-
-            file_size = file_stat.st_size / 1024**2
-            file_time = file_stat.st_mtime
-            cache_size += file_size
-
-            if need_check_date:
-                has_old_files = has_old_files or (
-                    current_time_in_s - file_time > cache_duration_in_s
-                )
-
-            files_with_time.append((file_path, file_time, file_size))
-
-        # Check purge neccesity
-        limit_exceeded = need_check_size and cache_size > self.cache_max_size
-        if not limit_exceeded and not has_old_files:
-            logger.debug("There is no need to purge the cache")
-            return True
-
-        # Sort by date
-        files_with_time.sort(key=lambda x: x[1])
-        has_errors = False
-
-        # Purge cache
-        deleted_files_count = 0
-        for file_path, file_time, file_size in files_with_time:
-            limit_exceeded = (
-                need_check_size and cache_size > self.cache_max_size
-            )
-            file_is_old = (
-                need_check_date
-                and current_time_in_s - file_time > cache_duration_in_s
-            )
-
-            if limit_exceeded or file_is_old:
-                if self.__is_file_used_by_project(file_path):
-                    continue
-
-                if self.__is_container_with_changes(file_path):
-                    continue
-
-                try:
-                    file_path.unlink()
-                    cache_size -= file_size
-                except Exception:
-                    logger.debug(f"Error deleting file {file_path}")
-                    has_errors = True
-            else:
-                break
-
-        logger.debug(f"Deleted {deleted_files_count} files")
-
-        self.__remove_empty_dirs(self.cache_directory)
-
-        return not has_errors
+        return not report.errors
 
     def __remove_empty_dirs(self, path: Union[str, Path]):
         path = Path(path)
@@ -615,16 +640,11 @@ class NgConnectCacheManager:
                 continue
             self.__remove_empty_dirs(sub_path)
 
+        if path == Path(self.cache_directory):
+            return
+
         if not any(path.iterdir()):
             path.rmdir()
-
-    def __is_container_with_changes(self, file_path: Path) -> bool:
-        try:
-            metadata = container_metadata(file_path)
-        except Exception:
-            return False
-
-        return metadata.has_changes
 
     def __connection_cache_paths(self, connection) -> List[Path]:
         cache_root = Path(self.cache_directory)
@@ -670,6 +690,14 @@ class NgConnectCacheManager:
     def __is_file_used_by_project(self, file_path: Path) -> bool:
         return file_path in self.__project_container_paths()
 
+    def __is_storage_metadata_file(self, file_path: Path) -> bool:
+        file_name = file_path.name
+        return (
+            file_name == "storage.sqlite"
+            or file_name.startswith("storage.sqlite-")
+            or file_name == ".storage_migration.lock"
+        )
+
     def __project_container_paths(self) -> List[Path]:
         if self.__project_containers is None:
             self.__project_containers = [
@@ -694,28 +722,124 @@ class NgConnectCacheManager:
         if not old_base.exists():
             return True
 
+        if old_base == new_base:
+            migrator = LegacyCacheMigrator(new_base, QgisProjectStorageUsage())
+            try:
+                report = migrator.migrate()
+            except Exception:
+                logging.getLogger(PLUGIN_NAME).exception(
+                    "Could not migrate legacy cache"
+                )
+                return False
+            return len(report.errors) == 0
+
         for directory in old_base.glob("*"):
             if not _is_uuid(directory.name):
                 continue
 
-            gpkg_files = list(directory.glob("*.gpkg"))
-            for gpkg_file in gpkg_files:
-                connection_id = directory.name
-                resource_id = gpkg_file.stem
-                relative_path = self.detached_container_path(
-                    connection_id, resource_id
-                ).relative_to(self.cache_directory)
-                new_path = new_base / relative_path
-                new_path.parent.mkdir(parents=True, exist_ok=True)
-                shutil.move(gpkg_file, new_path)
+            for gpkg_file in self.__legacy_container_files(directory):
+                if not self.__migrate_legacy_container(
+                    gpkg_file,
+                    new_base,
+                    directory.name,
+                    gpkg_file.stem,
+                ):
+                    return False
 
             if old_base != new_base:
-                shutil.rmtree(directory)
+                self.__remove_empty_dirs(directory)
 
         if not any(old_base.iterdir()):
             old_base.rmdir()
 
         return True
+
+    def __legacy_container_files(self, instance_directory: Path) -> List[Path]:
+        return list(instance_directory.glob("*.gpkg"))
+
+    def __migrate_legacy_container(
+        self,
+        container_file: Path,
+        new_base: Path,
+        fallback_instance_uuid: str,
+        fallback_resource_id: Union[int, str],
+    ) -> bool:
+        fallback_resource_id_value = self.__parse_int(fallback_resource_id)
+        try:
+            metadata = container_metadata(container_file)
+            instance_uuid = metadata.instance_id or fallback_instance_uuid
+            resource_id = metadata.resource_id or fallback_resource_id_value
+            connection_id = metadata.connection_id
+        except Exception:
+            instance_uuid = fallback_instance_uuid
+            resource_id = fallback_resource_id_value
+            connection_id = None
+        if resource_id is None:
+            logging.getLogger(PLUGIN_NAME).warning(
+                "Could not determine resource id for legacy detached container: "
+                f"{container_file}"
+            )
+            return True
+
+        storage_service = DetachedStorageService(new_base)
+        target_path = storage_service.container_path(
+            instance_uuid, resource_id
+        )
+        if target_path.exists():
+            return True
+
+        try:
+            is_registered = storage_service.register_detached_container(
+                instance_uuid,
+                resource_id,
+                connection_id=connection_id,
+                container_path=container_file,
+                is_used_by_project=self.__is_file_used_by_project(
+                    container_file
+                ),
+            )
+            if not is_registered:
+                return True
+            self.__move_detached_container_service_files(
+                container_file,
+                target_path,
+            )
+            container_file.unlink(missing_ok=True)
+        except Exception:
+            logging.getLogger(PLUGIN_NAME).exception(
+                "Could not migrate legacy detached container"
+            )
+            return False
+
+        return True
+
+    def __refresh_detached_storage_index(self) -> None:
+        for file_path in Path(self.cache_directory).glob("**/*.gpkg"):
+            try:
+                metadata = container_metadata(file_path)
+            except Exception:
+                continue
+
+            canonical_path = self.__storage_service.container_path(
+                metadata.instance_id,
+                metadata.resource_id,
+            )
+            if file_path != canonical_path:
+                continue
+
+            self.__storage_service.register_detached_container(
+                metadata.instance_id,
+                metadata.resource_id,
+                connection_id=metadata.connection_id,
+                container_path=file_path,
+                is_used_by_project=self.__is_file_used_by_project(file_path),
+            )
+
+    def __parse_int(self, value: object) -> Optional[int]:
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return None
 
 
 def _is_uuid(name: str) -> bool:
@@ -724,30 +848,3 @@ def _is_uuid(name: str) -> bool:
         re.IGNORECASE,
     )
     return bool(uuid_pattern.match(name))
-
-
-def _guess_extension(
-    file_name: Optional[str], mime_type: Optional[str]
-) -> str:
-    extension = ""
-
-    mime_database = QMimeDatabase()
-
-    if mime_type:
-        mime = mime_database.mimeTypeForName(mime_type)
-        if mime.isValid():
-            extension = mime.preferredSuffix()
-            if extension:
-                extension = f".{extension}"
-
-    if not extension and file_name:
-        mime = mime_database.mimeTypeForFile(file_name)
-        if mime.isValid():
-            extension = mime.preferredSuffix()
-            if extension:
-                extension = f".{extension}"
-
-        if not extension:
-            extension = Path(file_name).suffix
-
-    return extension

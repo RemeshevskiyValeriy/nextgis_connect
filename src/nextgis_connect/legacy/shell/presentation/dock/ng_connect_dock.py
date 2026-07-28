@@ -103,6 +103,9 @@ from nextgis_connect.legacy.detached_editing.container.cache_lifecycle import (
 from nextgis_connect.legacy.detached_editing.container.container_factory import (
     DetachedContainerFactory,
 )
+from nextgis_connect.legacy.detached_editing.storage_service_factory import (
+    DetachedStorageServiceFactory,
+)
 from nextgis_connect.legacy.detached_editing.utils import (
     detached_layer_uri,
 )
@@ -188,9 +191,6 @@ from nextgis_connect.legacy.search.search_panel import SearchPanel
 from nextgis_connect.legacy.search.search_settings import SearchSettings
 from nextgis_connect.legacy.search.utils import SearchType
 from nextgis_connect.legacy.settings import NgConnectSettings
-from nextgis_connect.legacy.settings.ng_connect_cache_manager import (
-    NgConnectCacheManager,
-)
 from nextgis_connect.legacy.shell.presentation.dock.resource_delete_confirmation_dialog import (
     ResourceDeleteConfirmationDialog,
 )
@@ -2754,6 +2754,12 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
             DetachedContainerFactory().create_initial_container(
                 ngw_layer, container_path
             )
+            DetachedStorageServiceFactory.create().register_detached_container(
+                connection.domain_uuid,
+                ngw_layer.resource_id,
+                connection_id=connection.id,
+                container_path=container_path,
+            )
 
         source = detached_layer_uri(container_path)
         old_source, old_name, old_provider = self.__layer_source_info(
@@ -2807,7 +2813,7 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
 
     def __detached_container_path(self, ngw_layer: NGWVectorLayer) -> Path:
         connection = self.__ngw_connection(ngw_layer)
-        return NgConnectCacheManager().detached_container_path(
+        return DetachedStorageServiceFactory.create().container_path(
             connection.domain_uuid, ngw_layer.resource_id
         )
 

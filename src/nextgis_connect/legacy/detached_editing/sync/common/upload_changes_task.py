@@ -6,6 +6,9 @@ from typing import Any, Dict, List, Optional, Sequence, Set, Tuple, Union
 from nextgis_connect.legacy.detached_editing.container.editing.container_sessions import (
     ContainerReadWriteSession,
 )
+from nextgis_connect.legacy.detached_editing.storage_service_factory import (
+    DetachedStorageServiceFactory,
+)
 from nextgis_connect.legacy.detached_editing.sync.common.changes import (
     AttachmentCreation,
     AttachmentRestoration,
@@ -32,9 +35,6 @@ from nextgis_connect.legacy.detached_editing.sync.versioned.versioned_changes_se
 )
 from nextgis_connect.legacy.ngw.qgis.qgis_ngw_connection import (
     QgsNgwConnection,
-)
-from nextgis_connect.legacy.settings.ng_connect_cache_manager import (
-    NgConnectCacheManager,
 )
 from nextgis_connect.platform.logging import logger
 from nextgis_connect.platform.qgis.errors import SynchronizationError
@@ -596,7 +596,7 @@ class UploadChangesTask(DetachedEditingTask):
             Union[AttachmentCreation, AttachmentUpdate, AttachmentRestoration]
         ],
     ) -> None:
-        cache_manager = NgConnectCacheManager()
+        storage_service = DetachedStorageServiceFactory.create()
 
         for change in changes:
             if (
@@ -605,16 +605,35 @@ class UploadChangesTask(DetachedEditingTask):
             ):
                 continue
 
-            path = cache_manager.attachment_path(
+            file_name = (
+                change.name if not isinstance(change.name, UnsetType) else None
+            )
+            mime_type = (
+                change.mime_type
+                if not isinstance(change.mime_type, UnsetType)
+                else None
+            )
+            path = storage_service.attachment_path(
                 self._metadata.instance_id,
                 self._metadata.resource_id,
                 change.aid,
-                file_name=change.name
-                if not isinstance(change.name, UnsetType)
+                file_name=file_name,
+                mime_type=mime_type,
+            )
+            storage_service.register_attachment_file(
+                self._metadata.instance_id,
+                self._metadata.resource_id,
+                change.aid,
+                file_name=file_name,
+                mime_type=mime_type,
+                feature_local_id=int(change.fid),
+                feature_ngw_fid=change.ngw_fid,
+                ngw_aid=change.ngw_aid
+                if isinstance(
+                    change, (AttachmentUpdate, AttachmentRestoration)
+                )
                 else None,
-                mime_type=change.mime_type
-                if not isinstance(change.mime_type, UnsetType)
-                else None,
+                is_dirty=True,
             )
 
             uploaded_file = ngw_connection.tus_upload_file(

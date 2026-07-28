@@ -24,6 +24,9 @@ from qgis.utils import iface
 from nextgis_connect.legacy.detached_editing.container.cache_lifecycle import (
     CachedDetachedContainerLifecycle,
 )
+from nextgis_connect.legacy.detached_editing.storage_service_factory import (
+    DetachedStorageServiceFactory,
+)
 from nextgis_connect.legacy.detached_editing.utils import (
     detached_layer_uri,
     is_ngw_container,
@@ -62,9 +65,6 @@ from nextgis_connect.legacy.ngw.core.ngw_webmap import (
 )
 from nextgis_connect.legacy.ngw.resources.ngw_data_type import NgwDataType
 from nextgis_connect.legacy.ngw_connection import NgwConnectionsManager
-from nextgis_connect.legacy.settings.ng_connect_cache_manager import (
-    NgConnectCacheManager,
-)
 from nextgis_connect.legacy.tree_widget.item import QNGWResourceItem
 from nextgis_connect.legacy.tree_widget.model import QNGWResourceTreeModel
 from nextgis_connect.platform.logging import escape_html, logger
@@ -1025,9 +1025,10 @@ class NgwResourcesAdder(QObject):
         connection = connections_manager.connection(vector_layer.connection_id)
         assert connection is not None
 
-        cache_manager = NgConnectCacheManager()
-        detached_layer_path = cache_manager.detached_container_path(
-            connection.domain_uuid, vector_layer.resource_id
+        detached_layer_path = (
+            DetachedStorageServiceFactory.create().container_path(
+                connection.domain_uuid, vector_layer.resource_id
+            )
         )
         if detached_layer_path.exists() and is_ngw_container(
             detached_layer_path

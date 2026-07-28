@@ -51,6 +51,9 @@ from nextgis_connect.legacy.detached_editing.identification.settings import (
 from nextgis_connect.legacy.detached_editing.identification.ui.attachments_view_wrapper import (
     AttachmentsViewWrapper,
 )
+from nextgis_connect.legacy.detached_editing.storage_service_factory import (
+    DetachedStorageServiceFactory,
+)
 from nextgis_connect.legacy.detached_editing.utils import (
     AttachmentMetadata,
     make_connection,
@@ -200,6 +203,7 @@ class AttachmentThumbnailsTask(NgConnectTask):
     def __init__(
         self,
         attachments: List[AttachmentMetadata],
+        instance_uuid: str,
         connection_id: str,
         resource_id: int,
         generation: int,
@@ -211,6 +215,7 @@ class AttachmentThumbnailsTask(NgConnectTask):
             )
         )
         self.attachments = list(attachments)
+        self.instance_uuid = instance_uuid
         self.connection_id = connection_id
         self.resource_id = resource_id
         self.generation = generation
@@ -273,6 +278,15 @@ class AttachmentThumbnailsTask(NgConnectTask):
             )
             return
 
+        DetachedStorageServiceFactory.create().register_attachment_thumbnail(
+            self.instance_uuid,
+            self.resource_id,
+            attachment.aid,
+            fileobj=attachment.fileobj,
+            feature_local_id=int(attachment.fid),
+            feature_ngw_fid=attachment.ngw_fid,
+            ngw_aid=attachment.ngw_aid,
+        )
         self._changed_attachment_ids.append(attachment.aid)
 
     def _needs_thumbnail_download(
@@ -556,6 +570,7 @@ class AttachmentsTab(QWidget):
             return
 
         connection_id = detached_layer.container.metadata.connection_id
+        instance_uuid = detached_layer.container.metadata.instance_id
         resource_id = detached_layer.container.metadata.resource_id
         attachments_to_load = [
             attachment
@@ -577,6 +592,7 @@ class AttachmentsTab(QWidget):
 
         task = AttachmentThumbnailsTask(
             attachments_to_load,
+            instance_uuid,
             connection_id,
             resource_id,
             self._loading_generation,
@@ -797,7 +813,7 @@ class AttachmentsTab(QWidget):
                     connection,
                     resource_id,
                     feature_ngw_fid,
-                    attachment.ngw_aid,
+                    attachment,
                     attachment_path,
                 )
 
@@ -917,7 +933,7 @@ class AttachmentsTab(QWidget):
                 (self._feature_id, attachment.aid),
             )
             rows = cursor.fetchall()
-            ngw_fid, ngw_aid = rows[0]
+            ngw_fid, _ngw_aid = rows[0]
 
         assert attachment.file_path is not None
         with self._attachment_download_overlay(
@@ -928,7 +944,7 @@ class AttachmentsTab(QWidget):
                 ngw_connection,
                 detached_layer.container.metadata.resource_id,
                 ngw_fid,
-                ngw_aid,
+                attachment,
                 attachment.file_path,
             )
         self._attachments_model.update_cached_states()
@@ -949,16 +965,28 @@ class AttachmentsTab(QWidget):
         connection: NgwConnection,
         resource_id: int,
         feature_ngw_fid: str,
-        ngw_aid: Union[str, int],
+        attachment: AttachmentMetadata,
         attachment_path: Path,
     ) -> None:
+        assert attachment.ngw_aid is not None
         url = (
             connection.url + f"/api/resource/{resource_id}"
             f"/feature/{feature_ngw_fid}"
-            f"/attachment/{ngw_aid}/download"
+            f"/attachment/{attachment.ngw_aid}/download"
         )
 
         attachment_path.parent.mkdir(parents=True, exist_ok=True)
 
         ngw_connection = QgsNgwConnection(connection.id)
         ngw_connection.download(url, str(attachment_path))
+        DetachedStorageServiceFactory.create().register_attachment_file(
+            connection.domain_uuid,
+            resource_id,
+            attachment.aid,
+            file_name=attachment.name,
+            mime_type=attachment.mime_type,
+            fileobj=attachment.fileobj,
+            feature_local_id=int(attachment.fid),
+            feature_ngw_fid=attachment.ngw_fid,
+            ngw_aid=attachment.ngw_aid,
+        )

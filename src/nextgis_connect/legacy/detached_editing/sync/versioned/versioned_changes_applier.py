@@ -1,5 +1,11 @@
 from typing import Any, List, Optional, Sequence, Tuple, Union, cast
 
+from nextgis_connect.features.synchronization.infrastructure.storage import (
+    DetachedStorageService,
+)
+from nextgis_connect.legacy.detached_editing.storage_service_factory import (
+    DetachedStorageServiceFactory,
+)
 from nextgis_connect.legacy.detached_editing.sync.common.changes import (
     AttachmentCreation,
     AttachmentDeletion,
@@ -19,9 +25,6 @@ from nextgis_connect.legacy.detached_editing.utils import (
     AttachmentMetadata,
     DetachedContainerContext,
     FeatureMetadata,
-)
-from nextgis_connect.legacy.settings.ng_connect_cache_manager import (
-    NgConnectCacheManager,
 )
 from nextgis_connect.platform.logging import logger
 from nextgis_connect.platform.qgis.errors import (
@@ -167,10 +170,10 @@ class VersionedChangesApplier(ChangesApplier):
         if len(attachments_info) == 0:
             return
 
-        cache_manager = NgConnectCacheManager()
+        storage_service = DetachedStorageServiceFactory.create()
         for attachment_id, new_fileobj in attachments_info:
             self.__move_attachment_cache(
-                cache_manager,
+                storage_service,
                 attachment_id,
                 old_fileobj=None,
                 new_fileobj=new_fileobj,
@@ -178,7 +181,7 @@ class VersionedChangesApplier(ChangesApplier):
 
     def __move_attachment_cache(
         self,
-        cache_manager: NgConnectCacheManager,
+        storage_service: DetachedStorageService,
         attachment_id: AttachmentId,
         *,
         old_fileobj: Optional[FileObjectId],
@@ -193,35 +196,13 @@ class VersionedChangesApplier(ChangesApplier):
             attachment_id,
         )
 
-        old_attachment_directory = cache_manager.attachment_directory(
-            *positional_arguments, fileobj=old_fileobj
+        logger.debug(
+            "Moving attachment cache for aid %s to fileobj %s",
+            attachment_id,
+            new_fileobj,
         )
-        old_thumbnail_directory = cache_manager.attachment_thumbnail_directory(
-            *positional_arguments, fileobj=old_fileobj
+        storage_service.move_attachment_cache_to_fileobj(
+            *positional_arguments,
+            old_fileobj=old_fileobj,
+            new_fileobj=new_fileobj,
         )
-        new_attachment_directory = cache_manager.attachment_directory(
-            *positional_arguments, fileobj=new_fileobj
-        )
-        new_thumbnail_directory = cache_manager.attachment_thumbnail_directory(
-            *positional_arguments, fileobj=new_fileobj
-        )
-
-        if old_attachment_directory.exists():
-            logger.debug(
-                f"Moving attachment cache from {old_attachment_directory} to {new_attachment_directory}"
-            )
-            new_attachment_directory.mkdir(parents=True, exist_ok=True)
-            for old_path in old_attachment_directory.iterdir():
-                new_path = new_attachment_directory / old_path.name
-                old_path.rename(new_path)
-            old_attachment_directory.rmdir()
-
-        if old_thumbnail_directory.exists():
-            logger.debug(
-                f"Moving attachment thumbnail cache from {old_thumbnail_directory} to {new_thumbnail_directory}"
-            )
-            new_thumbnail_directory.mkdir(parents=True, exist_ok=True)
-            for old_path in old_thumbnail_directory.iterdir():
-                new_path = new_thumbnail_directory / old_path.name
-                old_path.rename(new_path)
-            old_thumbnail_directory.rmdir()

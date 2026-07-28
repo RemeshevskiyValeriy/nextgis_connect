@@ -1,6 +1,7 @@
 import shutil
 from contextlib import closing
-from unittest.mock import MagicMock
+from pathlib import Path
+from unittest.mock import MagicMock, patch
 
 from qgis.core import QgsProject, QgsVectorLayer
 
@@ -12,6 +13,20 @@ from nextgis_connect.legacy.detached_editing.utils import (
 from nextgis_connect.legacy.settings.ng_connect_cache_manager import (
     NgConnectCacheManager,
 )
+from nextgis_connect.legacy.settings.tasks.clear_ng_connect_cache_task import (
+    ClearNgConnectCacheTask,
+)
+from nextgis_connect.platform.storage.models import (
+    AttachmentKey,
+    StorageEntryKind,
+    StorageEntryProtection,
+    StorageEntryState,
+)
+from nextgis_connect.platform.storage.path_resolver import StoragePathResolver
+from nextgis_connect.platform.storage.sqlite_storage_index import (
+    SqliteStorageIndex,
+)
+from nextgis_connect.platform.storage.storage_key import StorageKeyFactory
 from tests.detached_editing.utils import mock_container
 from tests.ng_connect_testcase import (
     NgConnectTestCase,
@@ -186,6 +201,234 @@ class TestConnectionCacheManager(NgConnectTestCase):
         self.assertTrue(canonical_container_path.exists())
         self.assertTrue(canonical_service_file.exists())
 
+    @mock_container(TestData.Points)
+    def test_register_detached_container_updates_storage_index(
+        self,
+        container_mock: MagicMock,
+        qgs_layer: QgsVectorLayer,
+    ) -> None:
+        del qgs_layer
+        resource = self.resource(TestData.Points)
+        connection = self.connection(TestConnection.SandboxGuest)
+        container_path = self.__copy_container_to_cache(container_mock)
+
+        is_registered = self.cache_manager.register_detached_container(
+            connection.domain_uuid,
+            resource.resource_id,
+            connection_id=connection.id,
+            container_path=container_path,
+        )
+
+        storage_index = self.__storage_index(connection.domain_uuid)
+        layer_entry = storage_index.layer_entry(resource.resource_id)
+        self.assertTrue(is_registered)
+        self.assertIsNotNone(layer_entry)
+        assert layer_entry is not None
+        self.assertEqual(layer_entry["connection_id"], connection.id)
+
+        container_entry = storage_index.find_entry_by_id(
+            int(layer_entry["container_entry_id"])
+        )
+        self.assertIsNotNone(container_entry)
+        assert container_entry is not None
+        self.assertEqual(
+            container_entry.kind, StorageEntryKind.LAYER_CONTAINER
+        )
+        self.assertEqual(container_entry.state, StorageEntryState.COMMITTED)
+        self.assertEqual(
+            container_entry.protection, StorageEntryProtection.NONE
+        )
+        self.assertEqual(
+            container_entry.size_bytes, container_path.stat().st_size
+        )
+        self.assertIsNotNone(container_entry.sha256)
+
+    def test_register_attachment_file_and_thumbnail_updates_storage_index(
+        self,
+    ) -> None:
+        resource = self.resource(TestData.Points)
+        connection = self.connection(TestConnection.SandboxGuest)
+        attachment_id = 12
+        fileobj = 345
+        blob_path = self.cache_manager.attachment_path(
+            connection.domain_uuid,
+            resource.resource_id,
+            attachment_id,
+            file_name="photo.jpg",
+            mime_type="image/jpeg",
+            fileobj=fileobj,
+        )
+        blob_path.parent.mkdir(parents=True, exist_ok=True)
+        blob_path.write_bytes(b"blob")
+        thumbnail_path = self.cache_manager.attachment_thumbnail_path(
+            connection.domain_uuid,
+            resource.resource_id,
+            attachment_id,
+            fileobj=fileobj,
+        )
+        thumbnail_path.parent.mkdir(parents=True, exist_ok=True)
+        thumbnail_path.write_bytes(b"preview")
+
+        is_blob_registered = self.cache_manager.register_attachment_file(
+            connection.domain_uuid,
+            resource.resource_id,
+            attachment_id,
+            file_name="photo.jpg",
+            mime_type="image/jpeg",
+            fileobj=fileobj,
+            feature_local_id=1,
+            feature_ngw_fid=101,
+            ngw_aid=attachment_id,
+        )
+        is_thumbnail_registered = (
+            self.cache_manager.register_attachment_thumbnail(
+                connection.domain_uuid,
+                resource.resource_id,
+                attachment_id,
+                fileobj=fileobj,
+                feature_local_id=1,
+                feature_ngw_fid=101,
+                ngw_aid=attachment_id,
+            )
+        )
+
+        storage_index = self.__storage_index(connection.domain_uuid)
+        record = storage_index.attachment_record(
+            AttachmentKey(
+                instance_uuid=connection.domain_uuid,
+                resource_id=resource.resource_id,
+                feature_local_id=1,
+                feature_ngw_fid=101,
+                local_attachment_id=str(attachment_id),
+                ngw_aid=attachment_id,
+            )
+        )
+        self.assertTrue(is_blob_registered)
+        self.assertTrue(is_thumbnail_registered)
+        self.assertIsNotNone(record)
+        assert record is not None
+
+        blob_entry = storage_index.find_entry_by_id(
+            int(record["active_blob_entry_id"])
+        )
+        preview_entry = storage_index.find_entry_by_id(
+            int(record["preview_entry_id"])
+        )
+        self.assertIsNotNone(blob_entry)
+        self.assertIsNotNone(preview_entry)
+        assert blob_entry is not None
+        assert preview_entry is not None
+        self.assertEqual(blob_entry.kind, StorageEntryKind.ATTACHMENT_BLOB)
+        self.assertEqual(
+            preview_entry.kind, StorageEntryKind.ATTACHMENT_PREVIEW
+        )
+        self.assertEqual(blob_entry.state, StorageEntryState.COMMITTED)
+        self.assertEqual(blob_entry.protection, StorageEntryProtection.NONE)
+
+    def test_move_attachment_cache_to_fileobj_reindexes_file(self) -> None:
+        resource = self.resource(TestData.Points)
+        connection = self.connection(TestConnection.SandboxGuest)
+        attachment_id = 13
+        new_fileobj = 456
+        old_blob_directory = self.cache_manager.attachment_directory(
+            connection.domain_uuid,
+            resource.resource_id,
+            attachment_id,
+        )
+        blob_path = self.cache_manager.attachment_path(
+            connection.domain_uuid,
+            resource.resource_id,
+            attachment_id,
+            file_name="document.txt",
+            mime_type="text/plain",
+        )
+        blob_path.parent.mkdir(parents=True, exist_ok=True)
+        blob_path.write_text("blob")
+        thumbnail_path = self.cache_manager.attachment_thumbnail_path(
+            connection.domain_uuid,
+            resource.resource_id,
+            attachment_id,
+        )
+        thumbnail_path.parent.mkdir(parents=True, exist_ok=True)
+        thumbnail_path.write_bytes(b"preview")
+        self.cache_manager.register_attachment_file(
+            connection.domain_uuid,
+            resource.resource_id,
+            attachment_id,
+            file_name="document.txt",
+            mime_type="text/plain",
+            is_dirty=True,
+        )
+        self.cache_manager.register_attachment_thumbnail(
+            connection.domain_uuid,
+            resource.resource_id,
+            attachment_id,
+        )
+
+        self.cache_manager.move_attachment_cache_to_fileobj(
+            connection.domain_uuid,
+            resource.resource_id,
+            attachment_id,
+            old_fileobj=None,
+            new_fileobj=new_fileobj,
+        )
+
+        storage_index = self.__storage_index(connection.domain_uuid)
+        local_storage_key = StorageKeyFactory.local_attachment_blob(
+            connection.domain_uuid,
+            resource.resource_id,
+            str(attachment_id),
+        )
+        remote_storage_key = StorageKeyFactory.remote_attachment_blob(
+            connection.domain_uuid,
+            resource.resource_id,
+            new_fileobj,
+        )
+        remote_entry = storage_index.find_entry(remote_storage_key)
+        remote_blob_path = self.cache_manager.attachment_path(
+            connection.domain_uuid,
+            resource.resource_id,
+            attachment_id,
+            file_name="document.txt",
+            mime_type="text/plain",
+            fileobj=new_fileobj,
+        )
+        remote_thumbnail_path = self.cache_manager.attachment_thumbnail_path(
+            connection.domain_uuid,
+            resource.resource_id,
+            attachment_id,
+            fileobj=new_fileobj,
+        )
+        self.assertFalse(old_blob_directory.exists())
+        self.assertTrue(remote_blob_path.exists())
+        self.assertTrue(remote_thumbnail_path.exists())
+        self.assertIsNone(storage_index.find_entry(local_storage_key))
+        self.assertIsNotNone(remote_entry)
+        assert remote_entry is not None
+        self.assertEqual(remote_entry.state, StorageEntryState.COMMITTED)
+        self.assertEqual(remote_entry.protection, StorageEntryProtection.NONE)
+
+    def test_cache_size_ignores_storage_metadata_files(self) -> None:
+        connection = self.connection(TestConnection.SandboxGuest)
+        instance_directory = self.cache_directory / connection.domain_uuid
+        instance_directory.mkdir(parents=True, exist_ok=True)
+        (instance_directory / "storage.sqlite").write_bytes(b"x" * 2048)
+        (instance_directory / "storage.sqlite-wal").write_bytes(b"x" * 2048)
+        cache_file_path = instance_directory / "cache.bin"
+        cache_file_path.write_bytes(b"x" * 1024)
+
+        self.assertEqual(self.cache_manager.cache_size, 1)
+        cache_file_path.unlink()
+        self.assertEqual(self.cache_manager.cache_size, 0)
+
+    def test_clear_cache_task_returns_cache_manager_result(self) -> None:
+        with patch(
+            "nextgis_connect.legacy.settings.tasks.clear_ng_connect_cache_task.NgConnectCacheManager"
+        ) as cache_manager_class:
+            cache_manager_class.return_value.clear_cache.return_value = False
+
+            self.assertFalse(ClearNgConnectCacheTask().run())
+
     def __copy_container_to_cache(self, container_mock: MagicMock):
         resource = self.resource(TestData.Points)
         connection = self.connection(TestConnection.SandboxGuest)
@@ -221,3 +464,11 @@ class TestConnectionCacheManager(NgConnectTestCase):
                 (1, attribute, "previous"),
             )
             connection.commit()
+
+    def __storage_index(self, instance_uuid: str) -> SqliteStorageIndex:
+        path_resolver = StoragePathResolver(Path(self.cache_directory))
+        storage_index = SqliteStorageIndex(
+            path_resolver.index_path(instance_uuid)
+        )
+        storage_index.initialize()
+        return storage_index

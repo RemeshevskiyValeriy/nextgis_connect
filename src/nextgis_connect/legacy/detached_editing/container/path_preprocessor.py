@@ -1,4 +1,5 @@
 import re
+import sqlite3
 from pathlib import Path, PurePath, PurePosixPath, PureWindowsPath
 from typing import List, Optional, Tuple
 
@@ -10,6 +11,9 @@ from nextgis_connect.legacy.detached_editing.container.cache_lifecycle import (
 )
 from nextgis_connect.legacy.detached_editing.container.container_factory import (
     DetachedContainerFactory,
+)
+from nextgis_connect.legacy.detached_editing.storage_service_factory import (
+    DetachedStorageServiceFactory,
 )
 from nextgis_connect.legacy.detached_editing.utils import (
     container_metadata,
@@ -24,9 +28,6 @@ from nextgis_connect.legacy.ngw.qgis.qgis_ngw_connection import (
     QgsNgwConnection,
 )
 from nextgis_connect.legacy.ngw_connection import NgwConnectionsManager
-from nextgis_connect.legacy.settings.ng_connect_cache_manager import (
-    NgConnectCacheManager,
-)
 from nextgis_connect.platform.logging import logger
 
 
@@ -142,13 +143,93 @@ class DetachedEditingPathPreprocessor(QObject):
                 uuid_candidate = candidate
                 break
 
-        if uuid_candidate is None or not file_pattern.match(file_candidate):
+        if uuid_candidate is None:
             return None, None
 
-        return uuid_candidate, int(source_path.stem)
+        if (
+            file_pattern.match(file_candidate)
+            and source_path.parts[-2] == uuid_candidate
+        ):
+            return uuid_candidate, int(source_path.stem)
+
+        if file_candidate != "layer.gpkg":
+            return None, None
+
+        resource_id = self._resource_id_from_storage_index(
+            source_path,
+            uuid_candidate,
+        )
+        if resource_id is not None:
+            return uuid_candidate, resource_id
+
+        resource_id = self._resource_id_from_container_metadata(source_path)
+        return uuid_candidate, resource_id
+
+    def _resource_id_from_storage_index(
+        self,
+        source_path: PurePath,
+        domain_uuid: str,
+    ) -> Optional[int]:
+        actual_path = self._actual_source_path(source_path)
+        parts = actual_path.parts
+        if len(parts) < 4:
+            return None
+
+        if parts[-4] != domain_uuid:
+            return None
+
+        relative_path = Path(*parts[-3:])
+        index_path = actual_path.parents[2] / "storage.sqlite"
+        if not index_path.exists():
+            return None
+
+        try:
+            with sqlite3.connect(str(index_path)) as connection:
+                cursor = connection.execute(
+                    """
+                    SELECT resource_id
+                    FROM storage_entries
+                    WHERE relative_path = ?
+                    LIMIT 1
+                    """,
+                    (relative_path.as_posix(),),
+                )
+                row = cursor.fetchone()
+        except sqlite3.DatabaseError:
+            logger.exception("Could not read storage index")
+            return None
+
+        if row is None or row[0] is None:
+            return None
+
+        return int(row[0])
+
+    def _resource_id_from_container_metadata(
+        self,
+        source_path: PurePath,
+    ) -> Optional[int]:
+        actual_path = self._actual_source_path(source_path)
+        if not actual_path.exists():
+            return None
+
+        try:
+            return container_metadata(actual_path).resource_id
+        except Exception:
+            logger.exception("Could not read detached container metadata")
+            return None
+
+    def _actual_source_path(self, source_path: PurePath) -> Path:
+        path = Path(str(source_path))
+        if path.is_absolute():
+            return path
+
+        absolute_path = QDir(
+            QgsProject.instance().absolutePath()
+        ).absoluteFilePath(str(source_path))
+        return Path(absolute_path)
 
     def _cached_layer_path(self, domain_uuid: str, resource_id: int) -> Path:
-        return NgConnectCacheManager().detached_container_path(
+        return DetachedStorageServiceFactory.create().container_path(
             domain_uuid, resource_id
         )
 
@@ -266,3 +347,10 @@ class DetachedEditingPathPreprocessor(QObject):
         detached_factory = DetachedContainerFactory()
         cached_layer_path.parent.mkdir(exist_ok=True, parents=True)
         detached_factory.create_initial_container(ngw_layer, cached_layer_path)
+        metadata = container_metadata(cached_layer_path)
+        DetachedStorageServiceFactory.create().register_detached_container(
+            metadata.instance_id,
+            metadata.resource_id,
+            connection_id=metadata.connection_id,
+            container_path=cached_layer_path,
+        )

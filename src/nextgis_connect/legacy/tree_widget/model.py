@@ -34,6 +34,9 @@ from nextgis_connect.features.search.domain.query import (
 from nextgis_connect.legacy.detached_editing.container.container_factory import (
     DetachedContainerFactory,
 )
+from nextgis_connect.legacy.detached_editing.storage_service_factory import (
+    DetachedStorageServiceFactory,
+)
 from nextgis_connect.legacy.ngw.core import (
     NGWGroupResource,
     NGWResource,
@@ -80,9 +83,6 @@ from nextgis_connect.legacy.ngw.qt.qt_ngw_resource_model_job_error import (
     NGWResourceModelJobError,
 )
 from nextgis_connect.legacy.ngw_connection import NgwConnectionsManager
-from nextgis_connect.legacy.settings.ng_connect_cache_manager import (
-    NgConnectCacheManager,
-)
 from nextgis_connect.platform.logging import logger
 from nextgis_connect.platform.qgis import utils
 from nextgis_connect.platform.qgis.errors import (
@@ -260,7 +260,7 @@ class NgwCreateVectorLayersStubs(NGWResourceModelJob):
     def _do(self):
         connections_manager = NgwConnectionsManager()
 
-        cache_manager = NgConnectCacheManager()
+        storage_service = DetachedStorageServiceFactory.create()
 
         detached_factory = DetachedContainerFactory()
 
@@ -284,10 +284,16 @@ class NgwCreateVectorLayersStubs(NGWResourceModelJob):
             # TODO: optimizations. e.g. fetch common dir for resources
             ngw_resource.update(skip_children=True)
 
-            gpkg_path = cache_manager.detached_container_path(
+            gpkg_path = storage_service.container_path(
                 connection.domain_uuid, ngw_resource.resource_id
             )
             detached_factory.create_initial_container(ngw_resource, gpkg_path)
+            storage_service.register_detached_container(
+                connection.domain_uuid,
+                ngw_resource.resource_id,
+                connection_id=connection.id,
+                container_path=gpkg_path,
+            )
 
 
 class NgwSearch(NGWResourceModelJob):
@@ -1605,7 +1611,7 @@ class QNGWResourceTreeModel(QNGWResourceTreeModelBase):
     def download_vector_layers_if_needed(
         self, indexes: Union[QModelIndex, List[QModelIndex]]
     ):
-        cache_manager = NgConnectCacheManager()
+        storage_service = DetachedStorageServiceFactory.create()
         connections_manager = NgwConnectionsManager()
 
         def collect_indexes(
@@ -1618,10 +1624,10 @@ class QNGWResourceTreeModel(QNGWResourceTreeModelBase):
             assert connection is not None
 
             if isinstance(ngw_resource, NGWVectorLayer):
-                container_path = cache_manager.detached_container_path(
+                container_path = storage_service.container_path(
                     connection.domain_uuid, ngw_resource.resource_id
                 )
-                if cache_manager.exists(container_path):
+                if container_path.exists():
                     return [index], []
                 return [index], [index]
 
@@ -1631,10 +1637,10 @@ class QNGWResourceTreeModel(QNGWResourceTreeModelBase):
                 if not isinstance(parent_resource, NGWVectorLayer):
                     return [], []
 
-                container_path = cache_manager.detached_container_path(
+                container_path = storage_service.container_path(
                     connection.domain_uuid, ngw_resource.resource_id
                 )
-                if cache_manager.exists(container_path):
+                if container_path.exists():
                     return [parent, index], []
                 return [parent, index], [parent]
 
@@ -1665,10 +1671,10 @@ class QNGWResourceTreeModel(QNGWResourceTreeModelBase):
                     ngw_resource.connection_id
                 )
                 assert connection is not None
-                container_path = cache_manager.detached_container_path(
+                container_path = storage_service.container_path(
                     connection.domain_uuid, ngw_resource.resource_id
                 )
-                if cache_manager.exists(container_path):
+                if container_path.exists():
                     continue
 
                 result.append(ngw_resource)

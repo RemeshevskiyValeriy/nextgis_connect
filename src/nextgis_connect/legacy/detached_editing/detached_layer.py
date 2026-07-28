@@ -43,6 +43,9 @@ from nextgis_connect.legacy.detached_editing.container.editing.commands.descript
 from nextgis_connect.legacy.detached_editing.detached_layer_edit_buffer import (
     DetachedLayerEditBuffer,
 )
+from nextgis_connect.legacy.detached_editing.storage_service_factory import (
+    DetachedStorageServiceFactory,
+)
 from nextgis_connect.legacy.detached_editing.sync.common.serialization import (
     deserialize_value,
     serialize_geometry,
@@ -61,9 +64,6 @@ from nextgis_connect.legacy.ngw.qgis.qgis_ngw_connection import (
     QgsNgwConnection,
 )
 from nextgis_connect.legacy.ngw.resources.ngw_field import FieldId
-from nextgis_connect.legacy.settings.ng_connect_cache_manager import (
-    NgConnectCacheManager,
-)
 from nextgis_connect.platform.logging import logger
 from nextgis_connect.platform.qgis.compat import (
     QgsAttributeList,
@@ -1102,6 +1102,15 @@ class DetachedLayer(QObject):
                     assert attachment.file_path is not None
                     new_path.parent.mkdir(parents=True, exist_ok=True)
                     shutil.move(attachment.file_path, new_path)
+                    DetachedStorageServiceFactory.create().register_attachment_file(
+                        self.__container.metadata.instance_id,
+                        self.__container.metadata.resource_id,
+                        new_aid,
+                        file_name=attachment.name,
+                        mime_type=attachment.mime_type,
+                        feature_local_id=int(attachment.fid),
+                        is_dirty=True,
+                    )
 
         except Exception as error:
             message = "Can't move added attachment files"
@@ -1733,8 +1742,8 @@ class DetachedLayer(QObject):
 
         assert self.__container.metadata.instance_id
 
-        cache_manager = NgConnectCacheManager()
-        return cache_manager.attachment_path(
+        storage_service = DetachedStorageServiceFactory.create()
+        path = storage_service.attachment_path(
             self.__container.metadata.instance_id,
             self.__container.metadata.resource_id,
             attachment.aid,
@@ -1742,6 +1751,19 @@ class DetachedLayer(QObject):
             mime_type=attachment.mime_type,
             fileobj=attachment.fileobj,
         )
+        if path.exists():
+            storage_service.register_attachment_file(
+                self.__container.metadata.instance_id,
+                self.__container.metadata.resource_id,
+                attachment.aid,
+                file_name=attachment.name,
+                mime_type=attachment.mime_type,
+                fileobj=attachment.fileobj,
+                feature_local_id=int(attachment.fid),
+                feature_ngw_fid=attachment.ngw_fid,
+                ngw_aid=attachment.ngw_aid,
+            )
+        return path
 
     def __refresh_feature_attachments(self, feature_id: QgsFeatureId) -> None:
         ngw_fid = self.__feature_ngw_fid(feature_id)
@@ -1989,23 +2011,12 @@ class DetachedLayer(QObject):
         attachment_id: AttachmentId,
         fileobj: Optional[FileObjectId],
     ) -> None:
-        cache_manager = NgConnectCacheManager()
-        for path in (
-            cache_manager.attachment_directory(
-                self.__container.metadata.instance_id,
-                self.__container.metadata.resource_id,
-                attachment_id,
-                fileobj=fileobj,
-            ),
-            cache_manager.attachment_thumbnail_directory(
-                self.__container.metadata.instance_id,
-                self.__container.metadata.resource_id,
-                attachment_id,
-                fileobj=fileobj,
-            ),
-        ):
-            if path.exists():
-                shutil.rmtree(path)
+        DetachedStorageServiceFactory.create().remove_attachment_cache(
+            self.__container.metadata.instance_id,
+            self.__container.metadata.resource_id,
+            attachment_id,
+            fileobj=fileobj,
+        )
 
     def __attachment_thumbnail_path(
         self, attachment: AttachmentMetadata
@@ -2015,13 +2026,24 @@ class DetachedLayer(QObject):
 
         assert self.__container.metadata.instance_id
 
-        cache_manager = NgConnectCacheManager()
-        return cache_manager.attachment_thumbnail_path(
+        storage_service = DetachedStorageServiceFactory.create()
+        path = storage_service.attachment_thumbnail_path(
             self.__container.metadata.instance_id,
             self.__container.metadata.resource_id,
             attachment.aid,
             fileobj=attachment.fileobj,
         )
+        if path.exists():
+            storage_service.register_attachment_thumbnail(
+                self.__container.metadata.instance_id,
+                self.__container.metadata.resource_id,
+                attachment.aid,
+                fileobj=attachment.fileobj,
+                feature_local_id=int(attachment.fid),
+                feature_ngw_fid=attachment.ngw_fid,
+                ngw_aid=attachment.ngw_aid,
+            )
+        return path
 
     def __fix_source_if_needed(self) -> None:
         if self.qgs_layer.isValid():
