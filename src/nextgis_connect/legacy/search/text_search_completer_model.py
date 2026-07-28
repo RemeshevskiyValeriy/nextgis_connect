@@ -12,17 +12,17 @@ from qgis.PyQt.QtCore import (
 )
 from qgis.PyQt.QtNetwork import QNetworkReply, QNetworkRequest
 
-from nextgis_connect.legacy.ngw_connection.application.connections_manager import (
-    NgwConnectionsManager,
-)
-from nextgis_connect.legacy.search.query_suggestions import (
+from nextgis_connect.features.search.domain.query_suggestions import (
     TextSearchSuggestionBuilder,
 )
-from nextgis_connect.legacy.search.resource_blueprint import (
+from nextgis_connect.features.search.domain.resource_blueprint import (
     ResourceBlueprintTypeParser,
 )
-from nextgis_connect.legacy.search.resource_owners import (
+from nextgis_connect.features.search.domain.resource_owners import (
     ResourceOwnerSuggestionParser,
+)
+from nextgis_connect.legacy.ngw_connection.application.connections_manager import (
+    NgwConnectionsManager,
 )
 from nextgis_connect.legacy.search.search_settings import SearchSettings
 from nextgis_connect.platform.logging import logger

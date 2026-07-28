@@ -1,4 +1,4 @@
-from nextgis_connect.legacy.search.query_suggestions import (
+from nextgis_connect.features.search.domain.query_suggestions import (
     TextSearchSuggestionBuilder,
 )
 

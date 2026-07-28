@@ -1,4 +1,4 @@
-from nextgis_connect.legacy.search.resource_blueprint import (
+from nextgis_connect.features.search.domain.resource_blueprint import (
     ResourceBlueprintTypeParser,
 )
 

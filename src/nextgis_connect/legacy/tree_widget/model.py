@@ -1,8 +1,6 @@
 import functools
-import itertools
 import re
 import uuid
-from dataclasses import dataclass
 from typing import (
     Any,
     Callable,
@@ -15,7 +13,6 @@ from typing import (
     Union,
     cast,
 )
-from urllib.parse import quote_plus
 
 from qgis.core import QgsFeedback
 from qgis.PyQt.QtCore import (
@@ -31,6 +28,10 @@ from qgis.PyQt.QtCore import (
 from qgis.PyQt.QtGui import QBrush, QFont
 
 from nextgis_connect.bootstrap.plugin_interface import NgConnectInterface
+from nextgis_connect.features.search.domain.query import (
+    NgwSearchQueryBuilder,
+    SearchQueryParser,
+)
 from nextgis_connect.legacy.detached_editing.container.container_factory import (
     DetachedContainerFactory,
 )
@@ -285,38 +286,6 @@ class NgwCreateVectorLayersStubs(NGWResourceModelJob):
 
 
 class NgwSearch(NGWResourceModelJob):
-    @dataclass
-    class Tag:
-        name: str
-        query_name: str
-        old_query_name: str
-        in_supported: bool = True
-        visible: bool = True
-        unquoted_value_pattern: str = ""
-
-    @dataclass
-    class StringQueryMatch:
-        operator: str
-        values: List[str]
-
-    INT_TAGS: ClassVar[List[Tag]] = [
-        Tag("id", "id", "id"),
-        Tag("parent", "parent", "parent_id"),
-        Tag("root", "root", "parent_id__recursive", in_supported=False),
-        Tag("owner", "owner_user", "owner_user_id"),
-    ]
-
-    STR_TAGS: ClassVar[List[Tag]] = [
-        Tag("type", "cls", "cls", unquoted_value_pattern=r"[a-zA-Z0-9_]+"),
-        Tag("name", "display_name", "display_name"),
-        Tag("keyname", "keyname", "keyname"),
-        Tag(
-            "owner",
-            "owner",
-            "owner_user_id",
-            unquoted_value_pattern=r"[^'\"]+",
-        ),
-    ]
     CURRENT_USER_ALIAS: ClassVar[str] = "me"
 
     def __init__(
@@ -333,6 +302,8 @@ class NgwSearch(NGWResourceModelJob):
         self.current_user_id: Optional[int] = None
         self.parents = []
         self._feedback = QgsFeedback()
+        self.__query_parser = SearchQueryParser()
+        self.__query_builder = NgwSearchQueryBuilder(self)
 
     def _do(self):
         connections_manager = NgwConnectionsManager()
@@ -395,233 +366,19 @@ class NgwSearch(NGWResourceModelJob):
             self.parents.append(parent_id)
 
     def __queries(self) -> List[str]:
-        if not self.search_string.startswith("@"):
-            return [self.__default_query()]
+        if self.__has_mixed_boolean_operators():
+            logger.warning("only one operator type is supported at a time")
+        parsed_search = self.__query_parser.parse(self.search_string)
+        if parsed_search.is_fallback and self.search_string.startswith("@"):
+            logger.debug("Wrong syntax. Fallback to display_name query")
 
+        return self.__query_builder.build(parsed_search)
+
+    def __has_mixed_boolean_operators(self) -> bool:
         lower_search_string = self.search_string.lower()
         and_operator_count = lower_search_string.count(" and ")
         or_operator_count = lower_search_string.count(" or ")
-
-        if and_operator_count + or_operator_count not in (
-            and_operator_count,
-            or_operator_count,
-        ):
-            logger.warning("only one operator type is supported at a time")
-            return [self.__default_query()]
-
-        result = list(
-            itertools.chain.from_iterable(
-                self.__parallel_queries(search_substring)
-                for search_substring in re.split(
-                    r"(?i)\sor\s", self.search_string
-                )
-            )
-        )
-
-        if len(result) == 0:
-            logger.debug("Wrong syntax. Fallback to display_name query")
-            return [self.__default_query()]
-
-        return result
-
-    def __parallel_queries(self, search_string: str) -> List[str]:
-        groups = [
-            self.__tag_queries(search_substring)
-            for search_substring in re.split(r"(?i)\sand\s", search_string)
-        ]
-        return ["&".join(combo) for combo in itertools.product(*groups)]
-
-    def __tag_queries(self, search_string: str) -> List[str]:
-        for tag in self.INT_TAGS:
-            queries = self.__int_queries(search_string, tag)
-            if len(queries) != 0:
-                return queries
-
-        for tag in self.STR_TAGS:
-            queries = self.__str_queries(search_string, tag)
-            if len(queries) != 0:
-                return queries
-
-        queries = self.__metadata_queries(search_string)
-        if len(queries) != 0:
-            return queries
-
-        logger.warning(
-            self.tr("Unknown search tag. Possible values: ")
-            + ", ".join(
-                f"@{tag.name}" for tag in (*self.INT_TAGS, *self.STR_TAGS)
-            )
-            + ", @metadata"
-        )
-
-        return []
-
-    def __default_query(self) -> str:
-        if self.search_string.startswith('"') and self.search_string.endswith(
-            '"'
-        ):
-            search_string = quote_plus(self.search_string[1:-1])
-            return f"display_name={search_string}"
-        else:
-            search_string = quote_plus(f"%{self.search_string}%")
-            return f"display_name__ilike={search_string}"
-
-    def __int_queries(self, search_string: str, tag: Tag) -> List[str]:
-        tag_name = re.escape(tag.name)
-        pattern = (
-            rf"^@{tag_name}\s*=\s*(\d+)$"
-            rf"|^@{tag_name}\s+IN\s*\(([\d,\s]+)\)$"
-        )
-        matches = re.findall(pattern, search_string, flags=re.IGNORECASE)
-        if not matches:
-            return []
-
-        values = []
-        for match in matches:
-            if match[0]:
-                values.append(int(match[0]))
-            elif match[1]:
-                values.extend(map(int, match[1].split(",")))
-
-        logger.debug(f"Found {tag.name} queries: {values}")
-
-        values_count = len(values)
-        if values_count == 0:
-            return []
-        elif values_count == 1:
-            return [f"{tag.query_name}={values[0]}"]
-        else:
-            joined_values = ",".join(map(str, values))
-            if tag.in_supported:
-                return [f"{tag.query_name}__in={joined_values}"]
-            else:
-                return list(
-                    map(lambda value: f"{tag.query_name}={value}", values)
-                )
-
-    def __str_queries(self, search_string: str, tag: Tag) -> List[str]:
-        string_query_match = self.__match_str_query(search_string, tag)
-        if string_query_match is None:
-            return []
-
-        operator = string_query_match.operator
-        values = string_query_match.values
-
-        if tag.name == "owner":
-            values = self.__extract_user_ids(operator, values)
-            operator = "__eq"
-
-        logger.debug(f"Found {tag.name} queries: {values}")
-
-        operator = "" if operator == "__eq" else operator
-
-        values_count = len(values)
-        if values_count == 0:
-            return []
-        elif values_count == 1:
-            return [f"{tag.query_name}{operator}={quote_plus(str(values[0]))}"]
-        else:
-            joined_values = ",".join(
-                map(lambda value: quote_plus(str(value)), values)
-            )
-            return [f"{tag.query_name}__in={joined_values}"]
-
-    def __match_str_query(
-        self, search_string: str, tag: Tag
-    ) -> Optional[StringQueryMatch]:
-        tag_name = re.escape(tag.name)
-        quoted_eq_match = re.match(
-            rf"^@{tag_name}\s*=\s*(?P<quote>['\"])(?P<value>.*?)"
-            rf"(?P=quote)$",
-            search_string,
-            flags=re.IGNORECASE,
-        )
-        if quoted_eq_match is not None:
-            return self.StringQueryMatch(
-                operator="__eq",
-                values=[quoted_eq_match.group("value")],
-            )
-
-        quoted_like_match = re.match(
-            rf"^@{tag_name}\s+(?P<operation>ILIKE|LIKE)\s+"
-            rf"(?P<quote>['\"])(?P<value>.*?)(?P=quote)$",
-            search_string,
-            flags=re.IGNORECASE,
-        )
-        if quoted_like_match is not None:
-            operation = quoted_like_match.group("operation").lower()
-            return self.StringQueryMatch(
-                operator=f"__{operation}",
-                values=[quoted_like_match.group("value")],
-            )
-
-        in_match = re.match(
-            rf"^@{tag_name}\s+IN\s*\((?P<values>.*?)\)$",
-            search_string,
-            flags=re.IGNORECASE,
-        )
-        if in_match is not None:
-            matches = re.findall(
-                r"\"(.*?)\"|'(.*?)'", in_match.group("values")
-            )
-            values = [match for pair in matches for match in pair if match]
-            return self.StringQueryMatch(operator="__eq", values=values)
-
-        if tag.unquoted_value_pattern == "":
-            return None
-
-        unquoted_eq_match = re.match(
-            rf"^@{tag_name}\s*=\s*"
-            rf"(?P<value>{tag.unquoted_value_pattern})$",
-            search_string,
-            flags=re.IGNORECASE,
-        )
-        if unquoted_eq_match is not None:
-            return self.StringQueryMatch(
-                operator="__eq",
-                values=[unquoted_eq_match.group("value").strip()],
-            )
-
-        unquoted_like_match = re.match(
-            rf"^@{tag_name}\s+(?P<operation>ILIKE|LIKE)\s+"
-            rf"(?P<value>{tag.unquoted_value_pattern})$",
-            search_string,
-            flags=re.IGNORECASE,
-        )
-        if unquoted_like_match is None:
-            return None
-
-        operation = unquoted_like_match.group("operation").lower()
-        return self.StringQueryMatch(
-            operator=f"__{operation}",
-            values=[unquoted_like_match.group("value").strip()],
-        )
-
-    def __metadata_queries(self, search_string: str) -> List[str]:
-        pattern = r'@metadata\["([^"]+)"\]\s*=\s*(?:"([^"]+)"|([^"]\S*))'
-        match = re.match(pattern, search_string)
-        if not match:
-            return []
-
-        key = quote_plus(match.group(1))
-        value: str = (
-            match.group(2) if match.group(2) is not None else match.group(3)
-        )
-        ilike_value = quote_plus(f"%{value}%")
-
-        queries = [f"resmeta__ilike[{key}]={ilike_value}"]
-        if value.isnumeric():
-            queries.append(f"resmeta__json[{key}]={value}")
-        elif value.lower() in ("true", "false"):
-            queries.append(f"resmeta__json[{key}]={value.lower()}")
-        else:
-            try:
-                float_value = float(value)
-                queries.append(f"resmeta__json[{key}]={float_value}")
-            except ValueError:
-                pass
-
-        return queries
+        return and_operator_count > 0 and or_operator_count > 0
 
     def __fetch_users(self) -> None:
         if len(self.users_keyname) > 0:
@@ -648,61 +405,58 @@ class NgwSearch(NGWResourceModelJob):
 
             logger.exception("Can't fetch users")
 
-    def __extract_user_ids(
-        self, operator: str, values: List[str]
-    ) -> List[int]:
+    def resolve_equal(self, values: List[str]) -> List[int]:
         user_ids = set()
 
-        if operator == "__eq":
-            non_alias_values = [
-                value
-                for value in values
-                if not self.__is_current_user_alias(value)
-            ]
-            if len(non_alias_values) > 0:
-                self.__fetch_users()
-
-            missing_values = []
-            for value in values:
-                user_id = self.__user_id_for_owner_value(value)
-                if user_id is None:
-                    missing_values.append(value)
-                    continue
-
-                user_ids.add(user_id)
-
-            if len(missing_values) > 0:
-                self.__raise_user_not_found(missing_values)
-
-        elif operator in ("__ilike", "__like"):
-            if len(values) == 0:
-                return []
-
-            if self.__is_current_user_alias(values[0]):
-                current_user_id = self.__fetch_current_user_id()
-                if current_user_id is None:
-                    self.__raise_user_not_found(values)
-
-                return [current_user_id]
-
+        non_alias_values = [
+            value
+            for value in values
+            if not self.__is_current_user_alias(value)
+        ]
+        if len(non_alias_values) > 0:
             self.__fetch_users()
 
-            regex_pattern = self.__like_value_regex_pattern(values[0])
-            regex_flags = re.IGNORECASE if operator == "__ilike" else 0
-            regex = re.compile(f"^{regex_pattern}$", regex_flags)
-            user_ids.update(
-                value
-                for key, value in self.users_keyname.items()
-                if regex.match(key)
-            )
-            user_ids.update(
-                value
-                for key, value in self.users_username.items()
-                if regex.match(key)
-            )
+        missing_values = []
+        for value in values:
+            user_id = self.__user_id_for_owner_value(value)
+            if user_id is None:
+                missing_values.append(value)
+                continue
 
-            if len(user_ids) == 0:
-                self.__raise_user_not_found(values)
+            user_ids.add(user_id)
+
+        if len(missing_values) > 0:
+            self.__raise_user_not_found(missing_values)
+
+        return sorted(user_ids)
+
+    def resolve_like(self, operator: str, value: str) -> List[int]:
+        if self.__is_current_user_alias(value):
+            current_user_id = self.__fetch_current_user_id()
+            if current_user_id is None:
+                self.__raise_user_not_found([value])
+
+            return [current_user_id]
+
+        self.__fetch_users()
+
+        user_ids = set()
+        regex_pattern = self.__like_value_regex_pattern(value)
+        regex_flags = re.IGNORECASE if operator == "__ilike" else 0
+        regex = re.compile(f"^{regex_pattern}$", regex_flags)
+        user_ids.update(
+            user_id
+            for key, user_id in self.users_keyname.items()
+            if regex.match(key)
+        )
+        user_ids.update(
+            user_id
+            for key, user_id in self.users_username.items()
+            if regex.match(key)
+        )
+
+        if len(user_ids) == 0:
+            self.__raise_user_not_found([value])
 
         return sorted(user_ids)
 

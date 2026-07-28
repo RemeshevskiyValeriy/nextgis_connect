@@ -1,4 +1,4 @@
-from nextgis_connect.legacy.search.resource_owners import (
+from nextgis_connect.features.search.domain.resource_owners import (
     ResourceOwnerSuggestionParser,
 )
 
