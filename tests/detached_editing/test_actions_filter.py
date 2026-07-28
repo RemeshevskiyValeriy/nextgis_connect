@@ -57,3 +57,46 @@ class TestActionsFilter(NgConnectTestCase):
                 ),
             ],
         )
+
+    def test_filter_keeps_attachment_delete_before_feature_delete(
+        self,
+    ) -> None:
+        actions = [
+            AttachmentDeleteAction(
+                fid=101,
+                aid=201,
+                vid=self.ATTACHMENT_VERSION,
+            ),
+            FeatureDeleteAction(fid=101, vid=self.FEATURE_VERSION),
+        ]
+
+        result = ActionsFilter().filter(actions)
+
+        self.assertEqual(result, actions)
+
+    def test_filter_resets_deleted_features_between_calls(self) -> None:
+        filter_ = ActionsFilter()
+        filter_.filter(
+            [FeatureDeleteAction(fid=101, vid=self.FEATURE_VERSION)]
+        )
+
+        result = filter_.filter(
+            [
+                AttachmentDeleteAction(
+                    fid=101,
+                    aid=201,
+                    vid=self.ATTACHMENT_VERSION,
+                )
+            ]
+        )
+
+        self.assertEqual(
+            result,
+            [
+                AttachmentDeleteAction(
+                    fid=101,
+                    aid=201,
+                    vid=self.ATTACHMENT_VERSION,
+                )
+            ],
+        )

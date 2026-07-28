@@ -1,4 +1,5 @@
 import unittest
+import uuid
 from dataclasses import replace
 from unittest.mock import MagicMock, patch, sentinel
 from urllib.parse import quote
@@ -40,6 +41,40 @@ class TestNgwConnection(NgConnectTestCase):
         self.assertEqual(
             http_connection.domain_uuid, https_connection.domain_uuid
         )
+
+    def test_suggested_id_for_url_uses_domain_uuid(self):
+        url = "https://demo.nextgis.com/resource/1"
+
+        self.assertEqual(
+            NgwConnection.suggested_id_for_url(url, []),
+            NgwConnection.domain_uuid_for_url(url),
+        )
+
+    def test_suggested_id_for_url_uses_fallback_on_domain_collision(self):
+        url = "https://demo.nextgis.com/"
+        domain_uuid = NgwConnection.domain_uuid_for_url(url)
+
+        self.assertEqual(
+            NgwConnection.suggested_id_for_url(
+                url,
+                [domain_uuid],
+                fallback_id="existing-random-id",
+            ),
+            "existing-random-id",
+        )
+
+    def test_suggested_id_for_url_generates_uuid_on_full_collision(self):
+        url = "https://demo.nextgis.com/"
+        domain_uuid = NgwConnection.domain_uuid_for_url(url)
+
+        connection_id = NgwConnection.suggested_id_for_url(
+            url,
+            [domain_uuid, "existing-random-id"],
+            fallback_id="existing-random-id",
+        )
+
+        self.assertNotIn(connection_id, [domain_uuid, "existing-random-id"])
+        uuid.UUID(connection_id)
 
     def test_update_network_request_guest(self):
         connection = self.connection(TestConnection.SandboxGuest)

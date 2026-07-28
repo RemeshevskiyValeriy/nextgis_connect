@@ -43,6 +43,11 @@ class NgwConnectionsManager(QObject):
         migrator: Optional[NgwConnectionSettingsMigrator] = None,
     ) -> None:
         super().__init__(parent)
+        should_reassign_cache = (
+            connections is None
+            and settings_repository is None
+            and migrator is None
+        )
         self.__settings_repository = (
             QgisConnectionSettingsRepository()
             if settings_repository is None
@@ -80,6 +85,8 @@ class NgwConnectionsManager(QObject):
         )
         if is_migrated:
             self.__write_all_connections()
+            if should_reassign_cache:
+                self.__reassign_cached_container_connection_ids()
 
         self.__initial_connections = dict(self.__connections)
         self.__initial_current_connection_id = self.__current_connection_id
@@ -116,7 +123,15 @@ class NgwConnectionsManager(QObject):
         )
 
     def connection(self, connection_id: str) -> Optional[NgwConnection]:
-        return self.__connections.get(connection_id)
+        connection = self.__connections.get(connection_id)
+        if connection is not None:
+            return connection
+
+        for connection in self.__connections.values():
+            if connection.matches_id(connection_id):
+                return connection
+
+        return None
 
     def find_connection_by_url(
         self,
@@ -278,6 +293,15 @@ class NgwConnectionsManager(QObject):
             self.__current_connection_id,
         )
 
+    def __reassign_cached_container_connection_ids(self) -> None:
+        from nextgis_connect.legacy.settings.ng_connect_cache_manager import (
+            NgConnectCacheManager,
+        )
+
+        NgConnectCacheManager().reassign_container_connection_ids(
+            self.connections
+        )
+
     def is_valid(self, connection_id: Optional[str]) -> bool:
         return self.invalid_reason(connection_id) is None
 
@@ -334,6 +358,11 @@ class NgwConnectionsManager(QObject):
     ) -> Optional[str]:
         if connection_id in self.__connections:
             return connection_id
+
+        if connection_id is not None:
+            connection = self.connection(connection_id)
+            if connection is not None:
+                return connection.id
 
         if len(self.__connections) == 0:
             return None

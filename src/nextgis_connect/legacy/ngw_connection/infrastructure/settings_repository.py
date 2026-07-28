@@ -1,3 +1,4 @@
+import json
 from dataclasses import dataclass
 from typing import List, Optional, Tuple
 
@@ -55,6 +56,10 @@ class QgisConnectionSettingsRepository:
             f"{connection_key}/auth_config",
             connection.auth_config_id,
         )
+        self.__settings.setValue(
+            f"{connection_key}/old_connection_ids",
+            json.dumps(list(connection.old_connection_ids)),
+        )
 
     def __read_connections(self) -> List[NgwConnection]:
         self.__settings.beginGroup(self.CONNECTIONS_KEY)
@@ -80,4 +85,34 @@ class QgisConnectionSettingsRepository:
         auth_config_id = self.__settings.value(f"{connection_key}/auth_config")
         if auth_config_id == "":
             auth_config_id = None
-        return NgwConnection(connection_id, name, url, auth_config_id)
+        return NgwConnection(
+            connection_id,
+            name,
+            url,
+            auth_config_id,
+            self.__read_old_connection_ids(connection_key),
+        )
+
+    def __read_old_connection_ids(
+        self,
+        connection_key: str,
+    ) -> Tuple[str, ...]:
+        value = self.__settings.value(
+            f"{connection_key}/old_connection_ids",
+            "[]",
+            type=str,
+        )
+        try:
+            old_connection_ids = json.loads(value)
+        except (TypeError, ValueError):
+            return ()
+
+        if not isinstance(old_connection_ids, list):
+            return ()
+
+        return tuple(
+            old_connection_id
+            for old_connection_id in old_connection_ids
+            if isinstance(old_connection_id, str)
+            and len(old_connection_id) > 0
+        )

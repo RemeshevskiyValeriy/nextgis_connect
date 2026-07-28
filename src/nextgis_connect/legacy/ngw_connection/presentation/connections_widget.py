@@ -1,3 +1,4 @@
+from html import escape
 from typing import Optional
 
 from qgis.core import QgsApplication
@@ -23,8 +24,11 @@ from nextgis_connect.legacy.ngw_connection.domain.connection import (
 from nextgis_connect.legacy.ngw_connection.presentation.connection_edit_dialog import (
     NgwConnectionEditDialog,
 )
+from nextgis_connect.legacy.settings.ng_connect_cache_manager import (
+    NgConnectCacheManager,
+)
 from nextgis_connect.ui_kit.rendering.graphics.decorator import (
-    NextgisColor,
+    NextgisBrandColor,
     NextgisDecorator,
 )
 
@@ -47,9 +51,9 @@ class HighlightablePushButton(QPushButton):
         if not self.__highlighted:
             return
 
-        color = NextgisDecorator.corporate_color(NextgisColor.MAIN)
+        color = NextgisDecorator.brand_color()
         if self.isDown():
-            color = NextgisDecorator.corporate_color(NextgisColor.PRESSED)
+            color = NextgisDecorator.brand_color(NextgisBrandColor.ACTIVE)
 
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
@@ -213,21 +217,69 @@ class NgwConnectionsWidget(QWidget):
                 connection_id
             )
         )
+        cache_manager = NgConnectCacheManager()
+        project_containers = cache_manager.containers_used_by_project(
+            connection
+        )
+        if len(project_containers) > 0:
+            self.__show_connection_used_by_project_warning(
+                connection,
+                project_containers,
+            )
+            return
+
+        changed_containers = cache_manager.containers_with_changes(connection)
         if not self.__confirm_remove_connection(
-            connection, len(auth_config_ids)
+            connection,
+            len(auth_config_ids),
+            changed_containers,
         ):
             return
 
         self.__connections_manager.remove(connection_id)
+        if not cache_manager.clear_connection_cache(connection):
+            QMessageBox.warning(
+                self,
+                self.tr("Cache was not fully deleted"),
+                self.tr(
+                    "Some cache files for the connection were not deleted."
+                ),
+            )
 
         self.__connection_id = None
 
         self.refresh()
 
+    def __show_connection_used_by_project_warning(
+        self,
+        connection: NgwConnection,
+        project_containers,
+    ) -> None:
+        containers_list = self.__project_containers_html(project_containers)
+        QMessageBox.warning(
+            self,
+            self.tr("Connection is used in project"),
+            self.tr(
+                "It is not possible to delete connection <b>{}</b> while "
+                "layers from it are being used in the project."
+            ).format(escape(connection.name))
+            + "<br><br>"
+            + self.tr("Remove these layers from the project first:")
+            + containers_list,
+        )
+
+    @staticmethod
+    def __project_containers_html(project_containers) -> str:
+        items = "".join(
+            f"<li>{escape(label)}</li>" for _, label in project_containers
+        )
+        return f"<ul>{items}</ul>"
+
     def __confirm_remove_connection(
         self,
         connection: NgwConnection,
         auth_config_count: int,
+        changed_containers,
     ) -> bool:
         if auth_config_count == 0:
             message = self.tr(
@@ -239,20 +291,28 @@ class NgwConnectionsWidget(QWidget):
                 "{} sign-in parameter(s) attached to it?"
             ).format(connection.name, auth_config_count)
 
+        if len(changed_containers) > 0:
+            containers_list = "\n".join(
+                f"- {label}\n  {path}" for path, label in changed_containers
+            )
+            message += "\n\n" + self.tr(
+                "The connection cache contains layers with unsynchronized "
+                "changes. If you continue, you will lose them forever:"
+            )
+            message += f"\n{containers_list}"
+
         message_box = QMessageBox(
             QMessageBox.Icon.Warning,
             self.tr("Delete connection?"),
             message,
-            QMessageBox.StandardButton.Cancel,
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel,
             self,
         )
-        delete_button = message_box.addButton(
-            self.tr("Delete"),
-            QMessageBox.ButtonRole.DestructiveRole,
-        )
+        delete_button = message_box.button(QMessageBox.StandardButton.Yes)
+        delete_button.setText(self.tr("Delete"))
         message_box.setDefaultButton(QMessageBox.StandardButton.Cancel)
-        message_box.exec()
-        return message_box.clickedButton() is delete_button
+        message_box.setEscapeButton(QMessageBox.StandardButton.Cancel)
+        return message_box.exec() == QMessageBox.StandardButton.Yes
 
     def __find_connection(
         self, connection_id: Optional[str]

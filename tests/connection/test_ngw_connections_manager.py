@@ -3,6 +3,7 @@ import uuid
 from dataclasses import replace
 
 from qgis.core import QgsApplication, QgsAuthMethodConfig
+from qgis.PyQt.QtCore import QSettings
 
 from nextgis_connect.legacy.ngw_connection import (
     ConnectionUpdateState,
@@ -252,6 +253,155 @@ class TestNgwConnectionsManager(NgConnectTestCase):
 
         self.assertTrue(changed)
         self.assertEqual(current_connection_id, current_connection.id)
+
+    def test_migration_moves_connection_id_to_domain_uuid_and_keeps_old_id(
+        self,
+    ) -> None:
+        connection = NgwConnection(
+            "old-random-id",
+            "Migrated",
+            "https://migrated.nextgis.com/",
+            None,
+        )
+
+        connections, current_connection_id, changed = (
+            NgwConnectionSettingsMigrator().migrate_connection_ids_to_instance_ids(
+                [connection],
+                connection.id,
+            )
+        )
+
+        self.assertTrue(changed)
+        self.assertEqual(
+            connections[0].id,
+            NgwConnection.domain_uuid_for_url(connection.url),
+        )
+        self.assertEqual(connections[0].old_connection_ids, (connection.id,))
+        self.assertEqual(current_connection_id, connections[0].id)
+
+    def test_migration_keeps_random_connection_id_when_domain_uuid_exists(
+        self,
+    ) -> None:
+        url = "https://collision.nextgis.com/"
+        domain_connection = NgwConnection(
+            NgwConnection.domain_uuid_for_url(url),
+            "Domain",
+            url,
+            None,
+        )
+        random_connection = NgwConnection(
+            "random-id",
+            "Random",
+            url,
+            None,
+        )
+
+        connections, current_connection_id, changed = (
+            NgwConnectionSettingsMigrator().migrate_connection_ids_to_instance_ids(
+                [domain_connection, random_connection],
+                random_connection.id,
+            )
+        )
+
+        self.assertFalse(changed)
+        self.assertEqual(connections, [domain_connection, random_connection])
+        self.assertEqual(current_connection_id, random_connection.id)
+
+    def test_manager_finds_connection_by_old_connection_id(self) -> None:
+        connection = NgwConnection(
+            "current-id",
+            "Current",
+            "https://current.nextgis.com/",
+            None,
+            ("old-id",),
+        )
+        manager = NgwConnectionsManager(
+            connections=[connection],
+            current_connection_id=connection.id,
+        )
+
+        self.assertEqual(manager.connection("old-id"), connection)
+
+    def test_manager_normalizes_current_old_connection_id(self) -> None:
+        connection = NgwConnection(
+            "current-id",
+            "Current",
+            "https://current.nextgis.com/",
+            None,
+            ("old-id",),
+        )
+        manager = NgwConnectionsManager(
+            connections=[connection],
+            current_connection_id="old-id",
+        )
+
+        self.assertEqual(manager.current_connection_id, connection.id)
+        self.assertEqual(manager.current_connection, connection)
+
+    def test_migration_uses_domain_uuid_as_converted_connection_id(
+        self,
+    ) -> None:
+        old_settings = QSettings("NextGIS", "NextGIS WEB API")
+        old_settings.clear()
+        url = "https://legacy-domain.nextgis.com/resource/1"
+        old_settings.setValue("/connections/Legacy/server_url", url)
+        old_settings.setValue("/connections/Legacy/username", "")
+        old_settings.setValue("/connections/Legacy/password", "")
+        old_settings.setValue("/connections/Legacy/oauth", False)
+
+        try:
+            connections, current_connection_id, changed = (
+                NgwConnectionSettingsMigrator().convert_old_connections(
+                    [],
+                    None,
+                    convert_auth=False,
+                )
+            )
+        finally:
+            old_settings.clear()
+
+        self.assertTrue(changed)
+        self.assertEqual(len(connections), 1)
+        self.assertEqual(
+            connections[0].id,
+            NgwConnection.domain_uuid_for_url(url),
+        )
+        self.assertEqual(connections[0].old_connection_ids, ("Legacy",))
+        self.assertIsNone(current_connection_id)
+
+    def test_migration_generates_random_id_when_domain_uuid_exists(
+        self,
+    ) -> None:
+        old_settings = QSettings("NextGIS", "NextGIS WEB API")
+        old_settings.clear()
+        url = "https://legacy-collision.nextgis.com/"
+        existing_connection = NgwConnection(
+            NgwConnection.domain_uuid_for_url(url),
+            "Existing",
+            "https://another.nextgis.com/",
+            None,
+        )
+        old_settings.setValue("/connections/Legacy/server_url", url)
+        old_settings.setValue("/connections/Legacy/username", "")
+        old_settings.setValue("/connections/Legacy/password", "")
+        old_settings.setValue("/connections/Legacy/oauth", False)
+
+        try:
+            connections, _, changed = (
+                NgwConnectionSettingsMigrator().convert_old_connections(
+                    [existing_connection],
+                    None,
+                    convert_auth=False,
+                )
+            )
+        finally:
+            old_settings.clear()
+
+        self.assertTrue(changed)
+        self.assertEqual(len(connections), 2)
+        converted_connection = connections[1]
+        self.assertNotEqual(converted_connection.id, existing_connection.id)
+        uuid.UUID(converted_connection.id)
 
     def __create_basic_auth_config(self, resource: str = "") -> str:
         auth_config = QgsAuthMethodConfig("Basic")

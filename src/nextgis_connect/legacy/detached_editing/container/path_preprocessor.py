@@ -5,10 +5,14 @@ from typing import List, Optional, Tuple
 from qgis.core import QgsProject
 from qgis.PyQt.QtCore import QDir, QObject, QTimer, pyqtSignal
 
+from nextgis_connect.legacy.detached_editing.container.cache_lifecycle import (
+    CachedDetachedContainerLifecycle,
+)
 from nextgis_connect.legacy.detached_editing.container.container_factory import (
     DetachedContainerFactory,
 )
 from nextgis_connect.legacy.detached_editing.utils import (
+    container_metadata,
     detached_layer_uri,
     is_ngw_container,
 )
@@ -26,6 +30,17 @@ from nextgis_connect.platform.logging import logger
 
 class DetachedEditingPathPreprocessor(QObject):
     error_occurred = pyqtSignal(Exception)
+
+    def __init__(
+        self,
+        parent: Optional[QObject] = None,
+        *,
+        container_lifecycle: Optional[CachedDetachedContainerLifecycle] = None,
+    ) -> None:
+        super().__init__(parent)
+        self._container_lifecycle = (
+            container_lifecycle or CachedDetachedContainerLifecycle()
+        )
 
     def __call__(self, old_source: str) -> str:
         new_source = old_source
@@ -74,6 +89,14 @@ class DetachedEditingPathPreprocessor(QObject):
                 return old_source
         elif not is_ngw_container(cached_layer_path):
             return old_source
+        elif self._needs_reconciliation(
+            domain_uuid, resource_id, cached_layer_path
+        ):
+            is_reconciled = self._find_connection_and_reconcile_container(
+                domain_uuid, resource_id, cached_layer_path
+            )
+            if not is_reconciled:
+                return old_source
 
         layer_path = (
             str(cached_layer_path)
@@ -141,6 +164,56 @@ class DetachedEditingPathPreprocessor(QObject):
 
         return True
 
+    def _needs_reconciliation(
+        self,
+        domain_uuid: str,
+        resource_id: int,
+        cached_layer_path: Path,
+    ) -> bool:
+        try:
+            metadata = container_metadata(cached_layer_path)
+        except Exception:
+            logger.exception("Could not read detached container metadata")
+            return False
+
+        if metadata.resource_id != resource_id:
+            return not metadata.has_changes
+
+        if metadata.instance_id != domain_uuid:
+            return not metadata.has_changes
+
+        connections_manager = NgwConnectionsManager()
+        connection_is_missing = (
+            connections_manager.connection(metadata.connection_id) is None
+        )
+        if self._container_lifecycle.is_outdated(metadata):
+            return not metadata.has_changes or connection_is_missing
+
+        return connection_is_missing
+
+    def _find_connection_and_reconcile_container(
+        self, domain_uuid: str, resource_id: int, cached_layer_path: Path
+    ) -> bool:
+        connection_id = self._best_connection(domain_uuid, resource_id)
+        if connection_id is None:
+            logger.warning("There are no suitable connections")
+            return False
+
+        connection = NgwConnectionsManager().connection(connection_id)
+        if connection is None:
+            return False
+
+        ngw_connection = QgsNgwConnection(connection_id)
+        resources_factory = NGWResourceFactory(ngw_connection)
+        ngw_layer = resources_factory.get_resource(resource_id)
+        assert isinstance(ngw_layer, NGWVectorLayer)
+
+        return self._container_lifecycle.reconcile(
+            cached_layer_path,
+            ngw_layer,
+            connection,
+        )
+
     def _best_connection(
         self, domain_uuid: str, resource_id: int
     ) -> Optional[str]:
@@ -177,6 +250,7 @@ class DetachedEditingPathPreprocessor(QObject):
             connection.id
             for connection in connections_manager.connections
             if connection.domain_uuid == domain_uuid
+            or domain_uuid in connection.old_connection_ids
         ]
 
     def _create_empty_container(

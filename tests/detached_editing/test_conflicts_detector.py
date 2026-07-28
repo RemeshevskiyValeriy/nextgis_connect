@@ -1,3 +1,4 @@
+import pytest
 from qgis.core import QgsGeometry
 
 from nextgis_connect.legacy.detached_editing.conflicts.conflicts import (
@@ -18,6 +19,7 @@ from nextgis_connect.legacy.detached_editing.sync.common.changes import (
     AttachmentRestoration,
     AttachmentUpdate,
     DescriptionPut,
+    FeatureCreation,
     FeatureDeletion,
     FeatureRestoration,
     FeatureUpdate,
@@ -28,11 +30,86 @@ from nextgis_connect.legacy.detached_editing.sync.versioned.actions import (
     AttachmentRestoreAction,
     AttachmentUpdateAction,
     DescriptionPutAction,
+    FeatureCreateAction,
     FeatureDeleteAction,
     FeatureRestoreAction,
     FeatureUpdateAction,
 )
 from tests.ng_connect_testcase import NgConnectTestCase
+
+
+@pytest.mark.parametrize(
+    "local_change",
+    [
+        FeatureCreation(fid=1, fields=[(10, "local-new-feature")]),
+        DescriptionPut(
+            fid=1,
+            ngw_fid=None,
+            description="local-new-feature-description",
+        ),
+        AttachmentCreation(
+            fid=1,
+            aid=1,
+            ngw_fid=None,
+            name="local-new-feature-attachment",
+        ),
+    ],
+)
+def test_detect_ignores_local_changes_without_remote_feature_id(
+    local_change,
+) -> None:
+    remote_actions = [
+        FeatureUpdateAction(fid=101, vid=11, fields=[(10, "remote")]),
+        DescriptionPutAction(fid=101, vid=21, value="remote-description"),
+        AttachmentUpdateAction(
+            fid=101,
+            aid=201,
+            vid=31,
+            name="remote-attachment",
+        ),
+    ]
+
+    conflicts = ConflictsDetector().detect([local_change], remote_actions)
+
+    assert conflicts == []
+
+
+def test_detect_ignores_remote_feature_create_actions() -> None:
+    local_changes = [
+        FeatureUpdate(fid=1, ngw_fid=101, fields=[(10, "local")]),
+    ]
+    remote_actions = [
+        FeatureCreateAction(fid=101, vid=11, fields=[(10, "remote")]),
+    ]
+
+    conflicts = ConflictsDetector().detect(local_changes, remote_actions)
+
+    assert conflicts == []
+
+
+def test_detect_ignores_local_attachment_creation_on_existing_feature() -> (
+    None
+):
+    local_changes = [
+        AttachmentCreation(
+            fid=1,
+            aid=1,
+            ngw_fid=101,
+            name="local-new-attachment",
+        ),
+    ]
+    remote_actions = [
+        AttachmentUpdateAction(
+            fid=101,
+            aid=201,
+            vid=31,
+            name="remote-attachment",
+        ),
+    ]
+
+    conflicts = ConflictsDetector().detect(local_changes, remote_actions)
+
+    assert conflicts == []
 
 
 class TestConflictsDetection(NgConnectTestCase):

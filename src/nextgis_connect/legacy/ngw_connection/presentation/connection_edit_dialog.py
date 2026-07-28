@@ -65,7 +65,11 @@ from nextgis_connect.legacy.ngw_connection.presentation.dialog_header_widget imp
     NextgisDialogHeaderWidget,
 )
 from nextgis_connect.platform.qgis.utils import nextgis_domain
-from nextgis_connect.ui_kit.widgets.buttons.loading import LoadingToolButton
+from nextgis_connect.ui_kit.icons.icon import material_icon
+from nextgis_connect.ui_kit.widgets.buttons.loading import (
+    LoadingPushButton,
+    LoadingToolButton,
+)
 
 HAS_NGSTD = importlib.util.find_spec("ngstd") is not None
 NGAccess = None
@@ -111,6 +115,7 @@ class NgwConnectionEditDialog(QDialog, WIDGET):
     __temp_connection: Optional[NgwConnection]
     __verifier: Optional[NgwConnectionVerifier]
     __name_loader: Optional[NgwConnectionVerifier]
+    __save_button: LoadingPushButton
     __name_loader_button: LoadingToolButton
     __auth_filter_button: QToolButton
     __filter_auth_by_resource: bool
@@ -313,11 +318,7 @@ class NgwConnectionEditDialog(QDialog, WIDGET):
             self.testConnectionButton,
         )
 
-        save_button = self.buttonBox.button(
-            QDialogButtonBox.StandardButton.Save
-        )
-        assert save_button is not None
-        save_button.clicked.connect(self.__save_clicked)
+        self.__setup_save_button()
         self.buttonBox.rejected.connect(self.reject)
 
         self.__populate_user_choices()
@@ -538,22 +539,17 @@ class NgwConnectionEditDialog(QDialog, WIDGET):
 
         is_valid = is_url_valid and is_name_valid and is_auth_valid
 
-        save_button = self.buttonBox.button(
-            QDialogButtonBox.StandardButton.Save
+        self.__save_button.setEnabled(
+            is_valid and self.__name_loader is None and self.__verifier is None
         )
-        save_button.setEnabled(is_valid and self.__name_loader is None)
         self.testConnectionButton.setEnabled(is_valid)
         self.__name_loader_button.setEnabled(
             is_url_valid and self.__name_loader is None
         )
 
     def __setup_name_loader_button(self) -> None:
-        refresh_icon = QgsApplication.getThemeIcon("mActionRefresh.svg")
-        if refresh_icon.isNull():
-            refresh_icon = QgsApplication.getThemeIcon("mIconRefresh.svg")
-
         self.__name_loader_button = LoadingToolButton(
-            icon=refresh_icon,
+            icon=material_icon("sync"),
             parent=self,
         )
         self.__name_loader_button.setAutoRaise(True)
@@ -570,6 +566,29 @@ class NgwConnectionEditDialog(QDialog, WIDGET):
         name_layout.addWidget(self.__name_loader_button)
         self.gridLayout.addLayout(name_layout, 0, 1)
         self.__name_loader_button.setVisible(self.nameLineEdit.isVisible())
+
+    def __setup_save_button(self) -> None:
+        original_button = self.buttonBox.button(
+            QDialogButtonBox.StandardButton.Save
+        )
+        assert original_button is not None
+
+        self.__save_button = LoadingPushButton(
+            icon=original_button.icon(),
+            parent=self.buttonBox,
+        )
+        self.__save_button.setText(original_button.text())
+        self.__save_button.setAutoDefault(original_button.autoDefault())
+        self.__save_button.setDefault(original_button.isDefault())
+        self.__save_button.clicked.connect(self.__save_clicked)
+
+        self.buttonBox.removeButton(original_button)
+        original_button.hide()
+        original_button.deleteLater()
+        self.buttonBox.addButton(
+            self.__save_button,
+            QDialogButtonBox.ButtonRole.AcceptRole,
+        )
 
     def __stabilize_field_heights(self) -> None:
         fields = (
@@ -608,18 +627,28 @@ class NgwConnectionEditDialog(QDialog, WIDGET):
         original_button = self.testConnectionButton
         index = self.buttonsLayout.indexOf(original_button)
 
-        test_button = QToolButton(self)
+        test_button = LoadingToolButton(parent=self)
         test_button.setPopupMode(
             QToolButton.ToolButtonPopupMode.MenuButtonPopup
         )
-        test_button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextOnly)
+        test_button.setToolButtonStyle(
+            Qt.ToolButtonStyle.ToolButtonTextBesideIcon
+        )
 
-        test_action = QAction(original_button.text(), test_button)
+        test_action = QAction(
+            material_icon("stethoscope"),
+            original_button.text(),
+            test_button,
+        )
         test_action.triggered.connect(self.__test_connection)
         test_button.setDefaultAction(test_action)
 
         diagnostics_menu = QMenu(test_button)
-        diagnostics_action = QAction(self.tr("Diagnostics"), diagnostics_menu)
+        diagnostics_action = QAction(
+            material_icon("troubleshoot"),
+            self.tr("Diagnostics"),
+            diagnostics_menu,
+        )
         diagnostics_action.triggered.connect(
             self.__open_current_connection_diagnostics
         )
@@ -735,10 +764,7 @@ class NgwConnectionEditDialog(QDialog, WIDGET):
         self.__name_loader.failed.connect(self.__handle_name_loader_failure)
         self.__name_loader.finished.connect(self.__handle_name_loader_finished)
         self.nameLineEdit.setReadOnly(True)
-        save_button = self.buttonBox.button(
-            QDialogButtonBox.StandardButton.Save
-        )
-        save_button.setEnabled(False)
+        self.__save_button.setEnabled(False)
         self.__name_loader_button.start()
         self.__name_loader.start()
         self.nameLineEdit.setFocus(Qt.FocusReason.OtherFocusReason)
@@ -912,6 +938,7 @@ class NgwConnectionEditDialog(QDialog, WIDGET):
             message,
         )
         diagnostics_button = QPushButton(self.tr("Run diagnostics"), self)
+        diagnostics_button.setIcon(material_icon("troubleshoot"))
         diagnostics_button.clicked.connect(
             self.__open_current_connection_diagnostics
         )
@@ -978,11 +1005,26 @@ class NgwConnectionEditDialog(QDialog, WIDGET):
 
     def __build_connection(self) -> NgwConnection:
         url = self.__make_valid_url(self.urlLineEdit.text())
+        if not self.__is_edit:
+            self.__connection_id = self.__suggest_connection_id(url)
+
         name = self.nameLineEdit.text()
         auth_config_id = self.authWidget.configId()
         auth_config_id = auth_config_id if len(auth_config_id) > 0 else None
 
         return NgwConnection(self.__connection_id, name, url, auth_config_id)
+
+    def __suggest_connection_id(self, url: str) -> str:
+        existing_connection_ids = [
+            connection.id
+            for connection in self.__connections_manager.connections
+            if connection.id != self.__connection_id
+        ]
+        return NgwConnection.suggested_id_for_url(
+            url,
+            existing_connection_ids,
+            fallback_id=self.__connection_id,
+        )
 
     def __find_connection_by_url(self, url: str) -> Optional[NgwConnection]:
         return self.__connections_manager.find_connection_by_url(
@@ -991,23 +1033,30 @@ class NgwConnectionEditDialog(QDialog, WIDGET):
         )
 
     def __lock_gui(self):
+        if self.__accept_on_verification_success:
+            self.__save_button.start()
+        else:
+            self.testConnectionButton.start()
+
         self.urlLineEdit.setEnabled(False)
         self.nameLineEdit.setEnabled(False)
         self.userComboBox.setEnabled(False)
         self.__auth_editor.setEnabled(False)
         self.authWidget.setEnabled(False)
-        self.testConnectionButton.setEnabled(False)
+        if self.__accept_on_verification_success:
+            self.testConnectionButton.setEnabled(False)
+        else:
+            self.__save_button.setEnabled(False)
         self.__name_loader_button.setEnabled(False)
         self.__auth_filter_button.setEnabled(False)
-        save_button = self.buttonBox.button(
-            QDialogButtonBox.StandardButton.Save
-        )
-        save_button.setEnabled(False)
-        self.testConnectionButton.hide()
-        self.progressBar.show()
         self.messageBar.clearWidgets()
 
     def __unlock_gui(self):
+        if self.__save_button.is_loading():
+            self.__save_button.stop()
+        if self.testConnectionButton.is_loading():
+            self.testConnectionButton.stop()
+
         self.urlLineEdit.setEnabled(True)
         self.nameLineEdit.setEnabled(True)
         self.userComboBox.setEnabled(True)
@@ -1016,12 +1065,7 @@ class NgwConnectionEditDialog(QDialog, WIDGET):
         self.testConnectionButton.setEnabled(True)
         self.__name_loader_button.setEnabled(True)
         self.__auth_filter_button.setEnabled(True)
-        save_button = self.buttonBox.button(
-            QDialogButtonBox.StandardButton.Save
-        )
-        save_button.setEnabled(True)
-        self.testConnectionButton.show()
-        self.progressBar.hide()
+        self.__save_button.setEnabled(True)
 
     def __normalized_auth_config_id(self) -> Optional[str]:
         auth_config_id = self.authWidget.configId()
@@ -1407,19 +1451,13 @@ class NgwConnectionEditDialog(QDialog, WIDGET):
 
     def __update_auth_filter_button_tooltip(self) -> None:
         if self.__filter_auth_by_resource:
-            self.__auth_filter_button.setIcon(
-                QgsApplication.getThemeIcon("mActionLink.svg")
-            )
-            self.__auth_filter_button.setToolTip(
-                self.tr("Showing users for this Web GIS")
-            )
+            self.__auth_filter_button.setIcon(material_icon("visibility"))
+            self.__auth_filter_button.setToolTip(self.tr("Show all users"))
             return
 
-        self.__auth_filter_button.setIcon(
-            QgsApplication.getThemeIcon("mActionUnlink.svg")
-        )
+        self.__auth_filter_button.setIcon(material_icon("visibility_off"))
         self.__auth_filter_button.setToolTip(
-            self.tr("Showing users for all Web GIS resources")
+            self.tr("Show users for this Web GIS")
         )
 
     def __login_choice_title(

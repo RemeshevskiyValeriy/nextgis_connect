@@ -14,12 +14,6 @@ from qgis.PyQt.QtGui import QIcon
 from qgis.PyQt.QtWidgets import QHBoxLayout, QLabel, QVBoxLayout, QWidget
 
 from nextgis_connect.legacy.detached_editing import utils
-from nextgis_connect.legacy.ngw_connection.application.connections_manager import (
-    NgwConnectionsManager,
-)
-from nextgis_connect.legacy.ngw_connection.presentation.connections_widget import (
-    NgwConnectionsWidget,
-)
 from nextgis_connect.platform.logging import logger
 from nextgis_connect.platform.qgis.errors import NgConnectError
 from nextgis_connect.platform.qgis.utils import wrap_sql_value
@@ -67,14 +61,6 @@ class DetachedLayerConfigPage(QgsMapLayerConfigWidget):
 
         self.__layer = layer
 
-        self.__connections_widget = NgwConnectionsWidget(self.__widget)
-        self.__connections_widget.set_connection_id(
-            self.__metadata.connection_id
-        )
-        self.__widget.connectionGroupBox.layout().addWidget(
-            self.__connections_widget
-        )
-
         self.__widget.autosync_checkbox.setChecked(
             self.__metadata.is_auto_sync_enabled
         )
@@ -87,20 +73,8 @@ class DetachedLayerConfigPage(QgsMapLayerConfigWidget):
 
     def apply(self) -> None:
         """Called when changes to the layer need to be made"""
-        self.__connections_widget.apply_connections()
-
-        new_connection_id = self.__connections_widget.connection_id()
         new_autosync_state = self.__widget.autosync_checkbox.isChecked()
-        new_instance_id = self.__metadata.instance_id
-        if new_connection_id is not None:
-            connection = NgwConnectionsManager().connection(new_connection_id)
-            if connection is not None:
-                new_instance_id = connection.domain_uuid
-
-        if (
-            new_connection_id == self.__metadata.connection_id
-            and new_autosync_state == self.__metadata.is_auto_sync_enabled
-        ):
+        if new_autosync_state == self.__metadata.is_auto_sync_enabled:
             return
 
         with closing(
@@ -110,8 +84,6 @@ class DetachedLayerConfigPage(QgsMapLayerConfigWidget):
                 f"""
                 UPDATE ngw_metadata
                 SET
-                    connection_id={wrap_sql_value(new_connection_id)},
-                    instance_id={wrap_sql_value(new_instance_id)},
                     is_auto_sync_enabled={wrap_sql_value(new_autosync_state)}
                 """  # nosec B608
             )
@@ -127,8 +99,9 @@ class DetachedLayerConfigPage(QgsMapLayerConfigWidget):
 
     def syncToLayer(self, layer: Optional[QgsMapLayer]) -> None:
         super().syncToLayer(layer)
-        self.__connections_widget.set_connection_id(
-            self.__metadata.connection_id
+        self.__metadata = utils.container_metadata(self.__path)
+        self.__widget.autosync_checkbox.setChecked(
+            self.__metadata.is_auto_sync_enabled
         )
 
 
@@ -175,7 +148,7 @@ class DetachedLayerConfigWidgetFactory(QgsMapLayerConfigWidgetFactory):
     def supportsLayer(self, layer: Optional[QgsMapLayer]) -> bool:
         if layer is None:
             return False
-        return utils.is_ngw_container(layer, check_metadata=True)
+        return utils.is_ngw_container(layer)
 
     def supportLayerPropertiesDialog(self) -> bool:
         return True

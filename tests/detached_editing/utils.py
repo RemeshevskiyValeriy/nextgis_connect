@@ -1,6 +1,7 @@
 import functools
 import random
 import shutil
+from contextlib import closing
 from dataclasses import replace
 from datetime import date, datetime, time
 from pathlib import Path
@@ -27,6 +28,7 @@ from nextgis_connect.legacy.detached_editing.utils import (
     DetachedContainerContext,
     container_metadata,
     detached_layer_uri,
+    make_connection,
 )
 from nextgis_connect.ngw.core.ngw_vector_layer import NGWVectorLayer
 from nextgis_connect.ngw.resources.ngw_data_type import NgwDataType
@@ -281,7 +283,7 @@ def mock_container(
                             (
                                 attachment.fid,
                                 attachment.aid,
-                                attachment.aid,
+                                attachment.ngw_aid or attachment.aid,
                                 attachment.version or None,
                                 attachment.keyname or None,
                                 attachment.name or f"name_{attachment.aid}",
@@ -326,3 +328,64 @@ def mock_container(
         return wrapper
 
     return decorator
+
+
+def set_container_version(
+    container_path: Path, container_version: str
+) -> None:
+    with closing(make_connection(container_path)) as connection, closing(
+        connection.cursor()
+    ) as cursor:
+        cursor.execute(
+            "UPDATE ngw_metadata SET container_version = ?",
+            (container_version,),
+        )
+        connection.commit()
+
+
+def set_container_connection_metadata(
+    container_path: Path,
+    *,
+    connection_id: Optional[str] = None,
+    instance_id: Optional[str] = None,
+    resource_id: Optional[int] = None,
+) -> None:
+    updates = []
+    values = []
+    if connection_id is not None:
+        updates.append("connection_id = ?")
+        values.append(connection_id)
+    if instance_id is not None:
+        updates.append("instance_id = ?")
+        values.append(instance_id)
+    if resource_id is not None:
+        updates.append("resource_id = ?")
+        values.append(resource_id)
+
+    if len(updates) == 0:
+        return
+
+    with closing(make_connection(container_path)) as connection, closing(
+        connection.cursor()
+    ) as cursor:
+        cursor.execute(
+            f"UPDATE ngw_metadata SET {', '.join(updates)}",
+            values,
+        )
+        connection.commit()
+
+
+def mark_container_changed(container_path: Path) -> None:
+    metadata = container_metadata(container_path)
+    attribute = next(iter(metadata.fields)).attribute
+    with closing(make_connection(container_path)) as connection, closing(
+        connection.cursor()
+    ) as cursor:
+        cursor.execute(
+            """
+            INSERT INTO ngw_updated_attributes (fid, attribute, backup)
+            VALUES (?, ?, ?)
+            """,
+            (1, attribute, "previous"),
+        )
+        connection.commit()

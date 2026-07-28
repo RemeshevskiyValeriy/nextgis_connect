@@ -8,12 +8,15 @@ from qgis.PyQt.QtWidgets import (
     QAction,
     QDialog,
     QDialogButtonBox,
+    QLayout,
     QMenu,
     QMessageBox,
     QWidget,
 )
 
 from nextgis_connect.legacy.detached_editing.utils import DetachedLayerState
+from nextgis_connect.ui_kit.icons.icon import material_icon
+from nextgis_connect.ui_kit.widgets.buttons.loading import LoadingToolButton
 
 if TYPE_CHECKING:
     from nextgis_connect.legacy.detached_editing.container.container import (
@@ -34,6 +37,7 @@ class DetachedLayerStatusDialog(QDialog, WIDGET):
     ) -> None:
         super().__init__(parent)
         self.setupUi(self)
+        self.__replace_sync_button()
 
         warning_icon = QgsApplication.getThemeIcon("mIconWarning.svg")
         size = int(max(24.0, self.syncButton.minimumSize().height()))
@@ -61,14 +65,14 @@ class DetachedLayerStatusDialog(QDialog, WIDGET):
         assert close_button is not None
 
         self.__sync_action = QAction(
-            icon=QgsApplication.getThemeIcon("mActionRefresh.svg"),
+            icon=material_icon("sync"),
             text=reset_button.text(),
             parent=self,
         )
         self.__sync_action.triggered.connect(self.__synchronize)
 
         self.__forced_sync_action = QAction(
-            icon=reset_button.icon(),
+            icon=material_icon("undo"),
             text=self.tr("Reset layer"),
             parent=self,
         )
@@ -90,6 +94,29 @@ class DetachedLayerStatusDialog(QDialog, WIDGET):
         self.__container.state_changed.connect(self.__on_state_changed)
 
         self.__on_state_changed(container.state)
+
+    def __replace_sync_button(self) -> None:
+        original_button = self.syncButton
+        parent = original_button.parentWidget()
+        assert parent is not None
+        layout = self.horizontalLayout
+        assert isinstance(layout, QLayout)
+        index = layout.indexOf(original_button)
+        assert index != -1
+
+        sync_button = LoadingToolButton(parent=parent)
+        sync_button.setObjectName(original_button.objectName())
+        sync_button.setPopupMode(original_button.popupMode())
+        sync_button.setToolButtonStyle(original_button.toolButtonStyle())
+        sync_button.setSizePolicy(original_button.sizePolicy())
+        sync_button.setMinimumSize(original_button.minimumSize())
+        sync_button.setMaximumSize(original_button.maximumSize())
+
+        layout.removeWidget(original_button)
+        original_button.hide()
+        original_button.deleteLater()
+        layout.insertWidget(index, sync_button)
+        self.syncButton = sync_button
 
     @pyqtSlot(DetachedLayerState, name="onStateChanged")
     def __on_state_changed(self, state: DetachedLayerState) -> None:
@@ -137,6 +164,11 @@ class DetachedLayerStatusDialog(QDialog, WIDGET):
             if self.__container.metadata is not None
             else self.__forced_sync_action
         )
+        if self.__container.state == DetachedLayerState.Synchronization:
+            self.syncButton.start()
+        elif self.syncButton.is_loading():
+            self.syncButton.stop()
+
         self.syncButton.setEnabled(
             self.__container.state != DetachedLayerState.Synchronization
             and not self.__container.is_edit_mode_enabled

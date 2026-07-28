@@ -19,12 +19,22 @@ from qgis.PyQt.QtCore import QDir
 from nextgis_connect.legacy.detached_editing.container.path_preprocessor import (
     DetachedEditingPathPreprocessor,
 )
+from nextgis_connect.legacy.detached_editing.utils import (
+    container_metadata,
+)
 from nextgis_connect.legacy.settings.ng_connect_cache_manager import (
     NgConnectCacheManager,
 )
+from nextgis_connect.legacy.settings.ng_connect_settings import (
+    NgConnectSettings,
+)
 from nextgis_connect.platform.filesystem import cp
 from nextgis_connect.platform.qgis.compat import WkbType
-from tests.detached_editing.utils import mock_container
+from tests.detached_editing.utils import (
+    mark_container_changed,
+    mock_container,
+    set_container_version,
+)
 from tests.ng_connect_testcase import (
     NgConnectTestCase,
     TestConnection,
@@ -217,6 +227,88 @@ class TestPathPreprocessor(NgConnectTestCase):
             )
             self.assertEqual(QgsPathResolver().readPath(source), source)
             self._assert_no_error_emitted()
+
+    @mock_container(TestData.Points)
+    @patch(
+        "nextgis_connect.legacy.detached_editing.container.path_preprocessor.NGWResourceFactory"
+    )
+    @patch(
+        "nextgis_connect.legacy.detached_editing.container.path_preprocessor.QgsNgwConnection"
+    )
+    def test_outdated_cached_container_without_local_changes_is_recreated(
+        self,
+        container_mock: MagicMock,
+        qgs_layer: QgsVectorLayer,
+        connection_mock: MagicMock,
+        factory_mock: MagicMock,
+    ) -> None:
+        resource = self.resource(TestData.Points)
+        creation_mock = MagicMock()
+        creation_mock.get_resource.return_value = resource
+        factory_mock.return_value = creation_mock
+
+        permissions_mock = MagicMock()
+        permissions_mock.get.return_value = {
+            "data": {"write": True, "read": True}
+        }
+        connection_mock.return_value = permissions_mock
+
+        self._move_container(container_mock)
+        set_container_version(container_mock.path, "0.1.0")
+        self.assertEqual(
+            container_metadata(container_mock.path).container_version, "0.1.0"
+        )
+
+        source = f"{container_mock.path}|layername=old_layer_name"
+        restored_source = QgsPathResolver().readPath(source)
+
+        metadata = container_metadata(container_mock.path)
+        self.assertEqual(
+            restored_source,
+            f"{container_mock.path}|layername={metadata.table_name}",
+        )
+        self.assertEqual(
+            metadata.container_version,
+            NgConnectSettings().supported_container_version,
+        )
+        self.assertTrue(metadata.is_not_initialized)
+        self.assertEqual(metadata.features_count, 0)
+        self._assert_no_error_emitted()
+
+    @mock_container(TestData.Points)
+    @patch(
+        "nextgis_connect.legacy.detached_editing.container.path_preprocessor.NGWResourceFactory"
+    )
+    @patch(
+        "nextgis_connect.legacy.detached_editing.container.path_preprocessor.QgsNgwConnection"
+    )
+    def test_outdated_cached_container_with_local_changes_is_preserved(
+        self,
+        container_mock: MagicMock,
+        qgs_layer: QgsVectorLayer,
+        connection_mock: MagicMock,
+        factory_mock: MagicMock,
+    ) -> None:
+        self._move_container(container_mock)
+        set_container_version(container_mock.path, "0.1.0")
+        mark_container_changed(container_mock.path)
+
+        metadata_before = container_metadata(container_mock.path)
+        self.assertTrue(metadata_before.has_changes)
+
+        source = f"{container_mock.path}|layername=old_layer_name"
+        restored_source = QgsPathResolver().readPath(source)
+
+        metadata_after = container_metadata(container_mock.path)
+        self.assertEqual(
+            restored_source,
+            f"{container_mock.path}|layername={metadata_after.table_name}",
+        )
+        self.assertEqual(metadata_after.container_version, "0.1.0")
+        self.assertTrue(metadata_after.has_changes)
+        factory_mock.assert_not_called()
+        connection_mock.assert_not_called()
+        self._assert_no_error_emitted()
 
     @mock_container(TestData.Points)
     def test_old_existed(

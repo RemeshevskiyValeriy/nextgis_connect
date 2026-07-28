@@ -178,6 +178,29 @@ class TestDetachedContainerFactory(NgConnectTestCase):
                 check_test_metadata(metadata)
                 self.assertEqual(metadata.layer_name, display_name)
 
+    def test_create_initial_container_does_not_store_old_connection_ids(
+        self,
+    ) -> None:
+        connection = self.connection(TestConnection.SandboxGuest)
+        ngw_layer = cast(
+            NGWVectorLayer,
+            self.resource(TestData.Points, connection),
+        )
+        container_path = self.create_temp_file(".gpkg")
+
+        DetachedContainerFactory().create_initial_container(
+            ngw_layer,
+            container_path,
+        )
+
+        with closing(make_connection(container_path)) as connection, closing(
+            connection.cursor()
+        ) as cursor:
+            cursor.execute("PRAGMA table_info(ngw_metadata)")
+            metadata_columns = {row[1] for row in cursor.fetchall()}
+
+        self.assertNotIn("old_connection_ids", metadata_columns)
+
     @mock.patch(
         "nextgis_connect.ngw.core.NGWVectorLayer.is_versioning_enabled",
         new_callable=mock.PropertyMock,

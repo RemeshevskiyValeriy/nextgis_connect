@@ -22,6 +22,9 @@ from qgis.PyQt.QtWidgets import QMessageBox
 from qgis.utils import iface
 
 from nextgis_connect.bootstrap.plugin_interface import NgConnectInterface
+from nextgis_connect.legacy.detached_editing.container.cache_lifecycle import (
+    CachedDetachedContainerLifecycle,
+)
 from nextgis_connect.legacy.detached_editing.utils import (
     detached_layer_uri,
     is_ngw_container,
@@ -1026,6 +1029,22 @@ class NgwResourcesAdder(QObject):
         detached_layer_path = cache_manager.detached_container_path(
             connection.domain_uuid, vector_layer.resource_id
         )
+        if detached_layer_path.exists() and is_ngw_container(
+            detached_layer_path
+        ):
+            is_ready = CachedDetachedContainerLifecycle().reconcile(
+                detached_layer_path,
+                vector_layer,
+                connection,
+            )
+            if not is_ready:
+                raise NgConnectError(
+                    code=ErrorCode.ContainerIsInvalid,
+                    log_message=(
+                        "Detached container is incompatible: "
+                        f"{detached_layer_path}"
+                    ),
+                )
 
         uri = detached_layer_uri(detached_layer_path)
 

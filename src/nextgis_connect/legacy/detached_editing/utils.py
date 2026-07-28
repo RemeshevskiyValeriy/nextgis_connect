@@ -299,7 +299,25 @@ def _(path: Path) -> DetachedContainerMetaData:
 
 @container_metadata.register
 def _(cursor: sqlite3.Cursor) -> DetachedContainerMetaData:
-    cursor.execute("SELECT * FROM ngw_metadata")
+    metadata_columns = [
+        "container_version",
+        "connection_id",
+        "instance_id",
+        "resource_id",
+        "display_name",
+        "description",
+        "geometry_type",
+        "transaction_id",
+        "epoch",
+        "version",
+        "sync_date",
+        "error_code",
+        "is_auto_sync_enabled",
+    ]
+
+    cursor.execute(f"SELECT {', '.join(metadata_columns)} FROM ngw_metadata")
+    row = cursor.fetchone()
+
     (
         container_version,
         connection_id,
@@ -314,7 +332,7 @@ def _(cursor: sqlite3.Cursor) -> DetachedContainerMetaData:
         sync_date,
         _error_code,
         is_auto_sync_enabled,
-    ) = cursor.fetchone()
+    ) = row
 
     if sync_date is not None:
         sync_date = datetime.fromisoformat(sync_date)

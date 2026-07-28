@@ -117,6 +117,52 @@ class TestChangesExtraction(NgConnectTestCase):
         assert isinstance(result[0].geometry, QgsGeometry)
         self.assertTrue(result[0].geometry.equals(expected_geometry))
 
+    @mock_container(TestData.Points, is_versioning_enabled=True)
+    def test_extract_updated_features_field_only_leaves_geometry_unset(
+        self, container_mock, qgs_layer: QgsVectorLayer
+    ) -> None:
+        extractor = self._extractor(container_mock)
+        layer = DetachedLayer(container_mock, qgs_layer)
+        feature_id = self._first_feature_id(layer.qgs_layer)
+        string_attribute = self._string_attribute_index(layer.qgs_layer)
+
+        with edit(layer.qgs_layer):
+            self.assertTrue(
+                layer.qgs_layer.changeAttributeValue(
+                    feature_id, string_attribute, "field-only"
+                )
+            )
+
+        result = extractor.extract_updated_features()
+
+        self.assertEqual(len(result), 1)
+        self.assertIsInstance(result[0], FeatureUpdate)
+        self.assertIs(result[0].geometry, Unset)
+        self.assertNotEqual(result[0].fields, Unset)
+
+    @mock_container(TestData.Points, is_versioning_enabled=True)
+    def test_extract_updated_features_geometry_only_leaves_fields_unset(
+        self, container_mock, qgs_layer: QgsVectorLayer
+    ) -> None:
+        extractor = self._extractor(container_mock)
+        layer = DetachedLayer(container_mock, qgs_layer)
+        feature_id = self._first_feature_id(layer.qgs_layer)
+        expected_geometry = QgsGeometry.fromWkt("Point (55 66)")
+
+        with edit(layer.qgs_layer):
+            self.assertTrue(
+                layer.qgs_layer.changeGeometry(feature_id, expected_geometry)
+            )
+
+        result = extractor.extract_updated_features()
+
+        self.assertEqual(len(result), 1)
+        self.assertIsInstance(result[0], FeatureUpdate)
+        self.assertIs(result[0].fields, Unset)
+        self.assertIsNot(result[0].geometry, Unset)
+        assert isinstance(result[0].geometry, QgsGeometry)
+        self.assertTrue(result[0].geometry.equals(expected_geometry))
+
     @mock_container(TestData.Points)
     def test_extract_deleted_features_returns_feature_deletion(
         self, container_mock, qgs_layer: QgsVectorLayer
@@ -339,3 +385,143 @@ class TestChangesExtraction(NgConnectTestCase):
         self.assertEqual(updated_attachments[0].aid, 202)
         self.assertEqual(deleted_attachments[0].aid, 203)
         self.assertEqual(restored_attachments[0].aid, 204)
+
+    @mock_container(
+        TestData.Points,
+        is_versioning_enabled=True,
+        descriptions={FEATURE_1: "old-description"},
+        attachments=[
+            AttachmentMetadata(
+                fid=FEATURE_1,
+                aid=201,
+                ngw_aid=301,
+                version=11,
+                name="old-name",
+                description="old-attachment-description",
+                mime_type="text/plain",
+                fileobj=901,
+            ),
+        ],
+    )
+    def test_extract_features_changes_excludes_extensions(
+        self, container_mock, qgs_layer: QgsVectorLayer
+    ) -> None:
+        extractor = self._extractor(container_mock)
+        detached_layer = DetachedLayer(container_mock, qgs_layer)
+
+        attachment = detached_layer.feature_attachment(self.FEATURE_1, 201)
+        assert attachment is not None
+
+        with edit(qgs_layer):
+            detached_layer.set_feature_description(
+                self.FEATURE_1, "new-description"
+            )
+            detached_layer.update_attachment(
+                AttachmentMetadata(
+                    fid=self.FEATURE_1,
+                    aid=201,
+                    ngw_aid=301,
+                    version=11,
+                    name="new-name",
+                    description=attachment.description,
+                    mime_type=attachment.mime_type,
+                    fileobj=attachment.fileobj,
+                )
+            )
+
+        self.assertEqual(extractor.extract_features_changes(), [])
+        self.assertEqual(len(extractor.extract_updated_descriptions()), 1)
+        self.assertEqual(len(extractor.extract_updated_attachments()), 1)
+
+    @mock_container(
+        TestData.Points,
+        is_versioning_enabled=True,
+        attachments=[
+            AttachmentMetadata(
+                fid=FEATURE_1,
+                aid=201,
+                ngw_aid=301,
+                version=11,
+                keyname="old-key",
+                name="old-name",
+                description="old-description",
+                mime_type="text/plain",
+                fileobj=901,
+            ),
+        ],
+    )
+    def test_extract_updated_attachments_preserves_server_attachment_id(
+        self, container_mock, _qgs_layer
+    ) -> None:
+        extractor = self._extractor(container_mock)
+
+        with ContainerReadWriteSession(container_mock.path) as cursor:
+            cursor.execute(
+                """
+                UPDATE ngw_features_attachments
+                SET name = ?
+                WHERE aid = ?
+                """,
+                ("new-name", 201),
+            )
+            cursor.execute(
+                """
+                INSERT INTO ngw_updated_attachments (aid, backup)
+                VALUES (?, ?)
+                """,
+                (201, None),
+            )
+
+        result = extractor.extract_updated_attachments()
+
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0].aid, 201)
+        self.assertEqual(result[0].ngw_aid, 301)
+        self.assertEqual(result[0].name, "new-name")
+
+    @mock_container(
+        TestData.Points,
+        is_versioning_enabled=True,
+        attachments=[
+            AttachmentMetadata(
+                fid=FEATURE_1,
+                aid=201,
+                ngw_aid=301,
+                version=11,
+                keyname="old-key",
+                name="old-name",
+                description="old-description",
+                mime_type="text/plain",
+                fileobj=901,
+            ),
+        ],
+    )
+    def test_extract_updated_attachments_returns_new_file_metadata(
+        self, container_mock, _qgs_layer
+    ) -> None:
+        extractor = self._extractor(container_mock)
+
+        with ContainerReadWriteSession(container_mock.path) as cursor:
+            cursor.execute(
+                """
+                UPDATE ngw_features_attachments
+                SET keyname = ?, fileobj = NULL, mime_type = ?
+                WHERE aid = ?
+                """,
+                ("photo", "image/png", 201),
+            )
+            cursor.execute(
+                """
+                INSERT INTO ngw_updated_attachments (aid, backup)
+                VALUES (?, ?)
+                """,
+                (201, None),
+            )
+
+        result = extractor.extract_updated_attachments()
+
+        self.assertEqual(len(result), 1)
+        self.assertTrue(result[0].is_file_new)
+        self.assertEqual(result[0].keyname, "photo")
+        self.assertIsNone(result[0].fileobj)
+        self.assertEqual(result[0].mime_type, "image/png")

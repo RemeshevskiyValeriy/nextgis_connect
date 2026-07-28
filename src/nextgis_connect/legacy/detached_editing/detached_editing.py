@@ -1,6 +1,6 @@
 import uuid
 from pathlib import Path
-from typing import Dict, List, Optional, cast
+from typing import Dict, List, Optional, Tuple, cast
 
 import qgis.utils
 from qgis.core import (
@@ -17,6 +17,9 @@ from qgis.PyQt.QtCore import QObject, QTimer, pyqtSlot
 from qgis.PyQt.QtWidgets import QAction
 
 from nextgis_connect.legacy.detached_editing import utils
+from nextgis_connect.legacy.detached_editing.container.cache_lifecycle import (
+    CachedDetachedContainerLifecycle,
+)
 from nextgis_connect.legacy.detached_editing.container.container import (
     DetachedContainer,
 )
@@ -41,6 +44,9 @@ from nextgis_connect.legacy.ngw_connection.application.connections_manager impor
     NgwConnectionsManager,
 )
 from nextgis_connect.legacy.settings import NgConnectSettings
+from nextgis_connect.legacy.settings.ng_connect_cache_manager import (
+    NgConnectCacheManager,
+)
 from nextgis_connect.ngw.core.ngw_resource_factory import (
     NGWResourceFactory,
 )
@@ -66,6 +72,8 @@ class DetachedEditing(QObject):
 
     __path_preprocessor: Optional[DetachedEditingPathPreprocessor]
     __path_preprocessor_id: Optional[str]
+    __is_unloaded: bool
+    __container_lifecycle: CachedDetachedContainerLifecycle
 
     def __init__(self, parent: Optional[QObject] = None) -> None:
         super().__init__(parent)
@@ -74,7 +82,9 @@ class DetachedEditing(QObject):
 
         self.__containers = {}
         self.__containers_by_layer_id = {}
+        self.__container_lifecycle = CachedDetachedContainerLifecycle()
         self.__is_synchronization_enabled = True
+        self.__is_unloaded = False
 
         self.__timer = QTimer(self)
         self.__timer.setInterval(settings.layer_check_period)
@@ -115,7 +125,26 @@ class DetachedEditing(QObject):
         QTimer.singleShot(0, self.__setup_layers)
 
     def unload(self) -> None:
+        if self.__is_unloaded:
+            return
+
+        self.__is_unloaded = True
         self.__timer.stop()
+        self.__safe_disconnect(self.__timer.timeout, self.synchronize_layers)
+
+        project = QgsProject.instance()
+        self.__safe_disconnect(project.layersAdded, self.__on_layers_added)
+        self.__safe_disconnect(
+            project.layersWillBeRemoved,
+            self.__on_layers_will_be_removed,
+        )
+
+        root = project.layerTreeRoot()
+        self.__safe_disconnect(root.addedChildren, self.__on_added_children)
+        self.__safe_disconnect(
+            root.willRemoveChildren,
+            self.__on_will_remove_children,
+        )
 
         self._identification_manager.unload()
 
@@ -136,6 +165,12 @@ class DetachedEditing(QObject):
         )
         del self.__properties_factory
 
+    def __safe_disconnect(self, signal, slot) -> None:
+        try:
+            signal.disconnect(slot)
+        except (RuntimeError, TypeError):
+            pass
+
     @property
     def is_sychronization_active(self) -> bool:
         return any(
@@ -149,6 +184,9 @@ class DetachedEditing(QObject):
 
     @pyqtSlot(name="synchronizeLayers")
     def synchronize_layers(self) -> None:
+        if self.__is_unloaded:
+            return
+
         self.__remove_empty_containers()
 
         if (
@@ -247,22 +285,38 @@ class DetachedEditing(QObject):
         if connection is None:
             return
 
-        handled_paths = set()
         project = QgsProject.instance()
-        for layer in project.mapLayers().values():
+        layers = list(project.mapLayers().values())
+        handled_paths = set()
+        for layer in layers:
             container_path = self.__layer_container_path(layer)
             if container_path is not None and container_path in handled_paths:
                 continue
 
-            is_handled = self.__handle_connection_updated_for_layer(
-                layer,
-                connection,
-                state == ConnectionUpdateState.CREATED,
+            restored_container_path = (
+                self.__handle_connection_updated_for_layer(
+                    layer,
+                    connection,
+                    state == ConnectionUpdateState.CREATED,
+                )
             )
-            if is_handled and container_path is not None:
-                handled_paths.add(container_path)
+            if restored_container_path is None or container_path is None:
+                continue
+
+            handled_paths.add(container_path)
+            handled_paths.add(restored_container_path)
+            self.__restore_related_layer_sources(
+                layers,
+                layer,
+                container_path,
+                restored_container_path,
+                connection,
+            )
 
     def __setup_layers(self) -> None:
+        if self.__is_unloaded:
+            return
+
         project = QgsProject.instance()
         assert project is not None
         root = project.layerTreeRoot()
@@ -316,6 +370,9 @@ class DetachedEditing(QObject):
 
     @pyqtSlot("QList<QgsMapLayer *>")
     def __on_layers_added(self, layers: List[QgsMapLayer]) -> None:
+        if self.__is_unloaded:
+            return
+
         for layer in layers:
             self.__setup_layer(layer)
 
@@ -323,6 +380,9 @@ class DetachedEditing(QObject):
 
     @pyqtSlot("QStringList")
     def __on_layers_will_be_removed(self, layer_ids: List[str]) -> None:
+        if self.__is_unloaded:
+            return
+
         for layer_id in layer_ids:
             if layer_id not in self.__containers_by_layer_id:
                 continue
@@ -341,6 +401,9 @@ class DetachedEditing(QObject):
     def __on_added_children(
         self, parent_node: QgsLayerTreeNode, index_from: int, index_to: int
     ) -> None:
+        if self.__is_unloaded:
+            return
+
         children = parent_node.children()
         for index in range(index_from, index_to + 1):
             node = children[index]
@@ -356,6 +419,9 @@ class DetachedEditing(QObject):
 
     @pyqtSlot()
     def __on_layer_loaded(self) -> None:
+        if self.__is_unloaded:
+            return
+
         node = self.sender()
         if not isinstance(node, QgsLayerTreeLayer):
             return
@@ -373,6 +439,9 @@ class DetachedEditing(QObject):
     def __on_will_remove_children(
         self, parent_node: QgsLayerTreeNode, index_from: int, index_to: int
     ) -> None:
+        if self.__is_unloaded:
+            return
+
         children = parent_node.children()
         for index in range(index_from, index_to + 1):
             node = children[index]
@@ -405,50 +474,68 @@ class DetachedEditing(QObject):
 
     def __handle_connection_updated_for_layer(
         self, layer: QgsMapLayer, connection: NgwConnection, is_new: bool
-    ) -> bool:
+    ) -> Optional[Path]:
         if not isinstance(layer, QgsVectorLayer):
-            return False
+            return None
 
-        container_path = self.__layer_container_path(layer)
-        if container_path is None:
-            return False
+        source_container_path = self.__layer_container_path(layer)
+        if source_container_path is None:
+            return None
 
-        instance_id = self.__layer_instance_id(layer, container_path)
-        if instance_id != connection.domain_uuid:
-            return False
+        if not self.__layer_belongs_to_connection(
+            layer,
+            source_container_path,
+            connection,
+        ):
+            return None
 
-        resource_id = self.__layer_resource_id(layer, container_path)
+        resource_id = self.__layer_resource_id(layer, source_container_path)
         if resource_id is None:
-            return False
+            return None
 
-        container_was_created = False
-        if not container_path.exists():
-            is_created = self.__create_empty_container(
-                connection.id, resource_id, container_path
-            )
-            if not is_created:
-                return False
+        container_path = self.__restored_container_path(
+            connection,
+            resource_id,
+            source_container_path,
+        )
+        if container_path is None:
+            return None
 
-            self.__restore_layer_source(layer, container_path)
-            container_was_created = True
+        (
+            is_prepared,
+            container_was_created,
+        ) = self.__prepare_connection_container(
+            connection,
+            resource_id,
+            container_path,
+        )
+        if not is_prepared:
+            return None
 
         if not utils.is_ngw_container(container_path, check_metadata=True):
-            return False
+            return None
+
+        if (
+            is_new
+            or container_was_created
+            or container_path != source_container_path
+        ):
+            self.__restore_layer_source(layer, container_path)
 
         if layer.id() not in self.__containers_by_layer_id:
             is_added = self.__setup_layer(layer)
             if not is_added:
-                return False
+                return None
 
             self.__add_indicator_if_needed(layer)
 
         container = self.__containers_by_layer_id.get(layer.id())
         if container is None:
-            return False
+            return None
 
         metadata = container.metadata
         if metadata is None:
-            return False
+            return None
 
         current_connection_id = metadata.connection_id
         connections_manager = NgwConnectionsManager()
@@ -461,19 +548,74 @@ class DetachedEditing(QObject):
         if container_was_created:
             container.update_connection(connection.id, connection.domain_uuid)
             container.synchronize(is_manual=True)
-            return True
+            return container_path
 
-        if current_connection_id == connection.id:
+        if connection.matches_id(current_connection_id):
             container.update_connection(connection.id, connection.domain_uuid)
             container.refresh_additional_data()
-            return True
+            return container_path
 
         if is_new and current_connection is None:
             container.update_connection(connection.id, connection.domain_uuid)
             container.refresh_additional_data()
+            return container_path
+
+        return None
+
+    def __restore_related_layer_sources(
+        self,
+        layers: List[QgsMapLayer],
+        handled_layer: QgsMapLayer,
+        source_container_path: Path,
+        restored_container_path: Path,
+        connection: NgwConnection,
+    ) -> None:
+        for layer in layers:
+            if layer is handled_layer:
+                continue
+
+            if not isinstance(layer, QgsVectorLayer):
+                continue
+
+            related_container_path = self.__layer_container_path(layer)
+            if related_container_path not in (
+                source_container_path,
+                restored_container_path,
+            ):
+                continue
+
+            if not self.__layer_belongs_to_connection(
+                layer,
+                related_container_path,
+                connection,
+            ):
+                continue
+
+            self.__restore_layer_source(layer, restored_container_path)
+            if layer.id() in self.__containers_by_layer_id:
+                continue
+
+            is_added = self.__setup_layer(layer)
+            if is_added:
+                self.__add_indicator_if_needed(layer)
+
+    def __layer_belongs_to_connection(
+        self,
+        layer: QgsMapLayer,
+        container_path: Path,
+        connection: NgwConnection,
+    ) -> bool:
+        instance_id = self.__layer_instance_id(layer, container_path)
+        if instance_id == connection.domain_uuid:
             return True
 
-        return False
+        connection_id = layer.customProperty("ngw_connection_id")
+        if connection_id is not None and connection.matches_id(
+            str(connection_id)
+        ):
+            return True
+
+        return connection.matches_id(container_path.parent.name)
 
     def __add_indicator_if_needed(self, layer: QgsMapLayer) -> None:
         root = QgsProject.instance().layerTreeRoot()
@@ -500,10 +642,14 @@ class DetachedEditing(QObject):
         if instance_id is not None and self.__is_uuid(str(instance_id)):
             return str(instance_id)
 
-        if container_path is not None and self.__is_uuid(
-            container_path.parent.name
-        ):
-            return container_path.parent.name
+        if container_path is not None:
+            candidates = []
+            if len(container_path.parts) >= 4:
+                candidates.append(container_path.parts[-4])
+            candidates.append(container_path.parent.name)
+            for candidate in candidates:
+                if self.__is_uuid(candidate):
+                    return candidate
 
         return None
 
@@ -524,20 +670,65 @@ class DetachedEditing(QObject):
 
         return None
 
-    def __create_empty_container(
-        self, connection_id: str, resource_id: int, container_path: Path
-    ) -> bool:
+    def __restored_container_path(
+        self,
+        connection: NgwConnection,
+        resource_id: int,
+        source_container_path: Path,
+    ) -> Optional[Path]:
+        return NgConnectCacheManager().canonical_detached_container_path(
+            connection,
+            resource_id,
+            source_container_path,
+        )
+
+    def __prepare_connection_container(
+        self,
+        connection: NgwConnection,
+        resource_id: int,
+        container_path: Path,
+    ) -> Tuple[bool, bool]:
+        ngw_layer = self.__ngw_layer(connection.id, resource_id)
+        if ngw_layer is None:
+            return (False, False)
+
+        if not container_path.exists():
+            return (
+                self.__create_empty_container(ngw_layer, container_path),
+                True,
+            )
+
+        if not utils.is_ngw_container(container_path, check_metadata=True):
+            return (False, False)
+
+        return (
+            self.__container_lifecycle.reconcile(
+                container_path,
+                ngw_layer,
+                connection,
+            ),
+            False,
+        )
+
+    def __ngw_layer(
+        self, connection_id: str, resource_id: int
+    ) -> Optional[NGWVectorLayer]:
         ngw_connection = QgsNgwConnection(connection_id)
         resources_factory = NGWResourceFactory(ngw_connection)
         try:
             ngw_layer = resources_factory.get_resource(resource_id)
         except Exception:
             logger.exception("Could not resolve resource for detached layer")
-            return False
+            return None
 
         if not isinstance(ngw_layer, NGWVectorLayer):
-            return False
+            return None
 
+        return ngw_layer
+
+    def __create_empty_container(
+        self, ngw_layer: NGWVectorLayer, container_path: Path
+    ) -> bool:
         detached_factory = DetachedContainerFactory()
         container_path.parent.mkdir(parents=True, exist_ok=True)
 

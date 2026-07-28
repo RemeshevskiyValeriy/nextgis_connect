@@ -281,6 +281,36 @@ def start_qgis() -> None:
     if APPLICATION_INFO is not None:
         return
 
+    existing_application = QgsApplication.instance()
+    if existing_application is not None:
+        qgis_custom_config_path = Path(os.environ["QGIS_CUSTOM_CONFIG_PATH"])
+        qgis_auth_db_path = Path(os.environ["QGIS_AUTH_DB_DIR_PATH"])
+        APPLICATION_INFO = ApplicationInfo(
+            application=existing_application,
+            qgis_custom_config_path=qgis_custom_config_path,
+            qgis_auth_db_path=qgis_auth_db_path,
+        )
+
+        init_interface()
+
+        auth_manager = QgsApplication.authManager()
+        assert not auth_manager.isDisabled(), auth_manager.disabledMessage()
+        assert (
+            Path(auth_manager.authenticationDatabasePath())
+            == APPLICATION_INFO.qgis_auth_db_path / "qgis-auth.db"
+        )
+        assert auth_manager.setMasterPassword("masterpassword", True)
+        return
+
+    qgis_custom_config_path = tempfile.mkdtemp(
+        prefix=f"{ApplicationInfo.APPLICATION_NAME}-config-"
+    )
+    qgis_auth_db_path = tempfile.mkdtemp(
+        prefix=f"{ApplicationInfo.APPLICATION_NAME}-authdb-"
+    )
+    os.environ["QGIS_CUSTOM_CONFIG_PATH"] = qgis_custom_config_path
+    os.environ["QGIS_AUTH_DB_DIR_PATH"] = qgis_auth_db_path
+
     # Application params
     QgsApplication.setAttribute(
         Qt.ApplicationAttribute.AA_ShareOpenGLContexts, True
@@ -299,16 +329,6 @@ def start_qgis() -> None:
     # Note: QGIS_PREFIX_PATH is evaluated in QgsApplication -
     # no need to mess with it here.
     application = QgsApplication(argvb, GUIenabled=True)
-
-    # Setup paths
-    qgis_custom_config_path = tempfile.mkdtemp(
-        prefix=f"{ApplicationInfo.APPLICATION_NAME}-config-"
-    )
-    qgis_auth_db_path = tempfile.mkdtemp(
-        prefix=f"{ApplicationInfo.APPLICATION_NAME}-authdb-"
-    )
-    os.environ["QGIS_CUSTOM_CONFIG_PATH"] = qgis_custom_config_path
-    os.environ["QGIS_AUTH_DB_DIR_PATH"] = qgis_auth_db_path
 
     # Save application info
     APPLICATION_INFO = ApplicationInfo(

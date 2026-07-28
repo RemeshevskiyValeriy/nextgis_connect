@@ -174,21 +174,21 @@ class NextgisDialogHeaderWidget(QWidget):
         title_palette = QPalette(self.__title_label.palette())
         title_palette.setColor(
             QPalette.ColorRole.WindowText,
-            NextgisDecorator.title_color(self.palette()),
+            NextgisDecorator.system_title_color(self.palette()),
         )
         self.__title_label.setPalette(title_palette)
 
         subtitle_palette = QPalette(self.__subtitle_label.palette())
         subtitle_palette.setColor(
             QPalette.ColorRole.WindowText,
-            NextgisDecorator.helper_text_color(self.palette()),
+            NextgisDecorator.system_muted_text_color(self.palette()),
         )
         self.__subtitle_label.setPalette(subtitle_palette)
 
         self.__sync_logo()
 
     def __sync_logo(self) -> None:
-        text_color = NextgisDecorator.text_color(self.palette())
+        text_color = NextgisDecorator.system_text_color(self.palette())
         self.__logo_renderer.set_replacements(
             {
                 "#231F20": text_color,

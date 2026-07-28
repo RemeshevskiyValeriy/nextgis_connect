@@ -1,4 +1,4 @@
-import uuid
+from dataclasses import replace
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
@@ -25,11 +25,19 @@ class NgwConnectionSettingsMigrator:
                 old_current_connection_id,
             )
         )
-
-        return (
+        (
+            migrated_connections,
+            migrated_current_connection_id,
+            id_changed,
+        ) = self.migrate_connection_ids_to_instance_ids(
             merged_connections,
             merged_current_connection_id,
-            old_changed or merge_changed,
+        )
+
+        return (
+            migrated_connections,
+            migrated_current_connection_id,
+            old_changed or merge_changed or id_changed,
         )
 
     def has_not_converted_connections(
@@ -59,6 +67,7 @@ class NgwConnectionSettingsMigrator:
         }
 
         connections = list(existing_connections)
+        connection_ids = {connection.id for connection in connections}
         new_current_connection_id = current_connection_id
         changed = False
 
@@ -66,9 +75,12 @@ class NgwConnectionSettingsMigrator:
             if old_connection_name in converted_connection_names:
                 continue
 
-            connection_id = str(uuid.uuid4())
             key = "/connections/" + old_connection_name
             url = old_settings.value(key + "/server_url", "", type=str)
+            connection_id = NgwConnection.suggested_id_for_url(
+                url,
+                connection_ids,
+            )
             username = old_settings.value(key + "/username", "", type=str)
             password = old_settings.value(key + "/password", "", type=str)
             is_oauth = old_settings.value(key + "/oauth", "", type=bool)
@@ -86,10 +98,15 @@ class NgwConnectionSettingsMigrator:
 
             connections.append(
                 NgwConnection(
-                    connection_id, old_connection_name, url, auth_config_id
+                    connection_id,
+                    old_connection_name,
+                    url,
+                    auth_config_id,
+                    self.__append_old_connection_id((), old_connection_name),
                 )
             )
             converted_connection_names.add(old_connection_name)
+            connection_ids.add(connection_id)
             changed = True
 
             if selected_name == old_connection_name:
@@ -162,6 +179,65 @@ class NgwConnectionSettingsMigrator:
                 )
 
         return merged_connections, new_current_connection_id, changed
+
+    def migrate_connection_ids_to_instance_ids(
+        self,
+        connections: List[NgwConnection],
+        current_connection_id: Optional[str],
+    ) -> Tuple[List[NgwConnection], Optional[str], bool]:
+        used_connection_ids = {
+            connection_id
+            for connection in connections
+            for connection_id in (
+                connection.id,
+                *connection.old_connection_ids,
+            )
+        }
+        migrated_connections: List[NgwConnection] = []
+        connection_id_mapping: Dict[str, str] = {}
+        changed = False
+
+        for connection in connections:
+            instance_connection_id = NgwConnection.domain_uuid_for_url(
+                connection.url
+            )
+            if connection.id == instance_connection_id:
+                migrated_connections.append(connection)
+                continue
+
+            if instance_connection_id in used_connection_ids:
+                migrated_connections.append(connection)
+                continue
+
+            used_connection_ids.add(instance_connection_id)
+            connection_id_mapping[connection.id] = instance_connection_id
+            migrated_connections.append(
+                replace(
+                    connection,
+                    id=instance_connection_id,
+                    old_connection_ids=self.__append_old_connection_id(
+                        connection.old_connection_ids,
+                        connection.id,
+                    ),
+                )
+            )
+            changed = True
+
+        new_current_connection_id = connection_id_mapping.get(
+            current_connection_id,
+            current_connection_id,
+        )
+        return migrated_connections, new_current_connection_id, changed
+
+    def __append_old_connection_id(
+        self,
+        old_connection_ids: Tuple[str, ...],
+        connection_id: str,
+    ) -> Tuple[str, ...]:
+        if connection_id in old_connection_ids:
+            return old_connection_ids
+
+        return (*old_connection_ids, connection_id)
 
     def ensure_auth_resource(
         self,

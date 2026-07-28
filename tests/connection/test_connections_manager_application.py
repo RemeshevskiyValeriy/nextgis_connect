@@ -12,6 +12,7 @@ from nextgis_connect.legacy.ngw_connection.domain.connection import (
 )
 from nextgis_connect.legacy.ngw_connection.infrastructure.settings_repository import (
     ConnectionSettingsSnapshot,
+    QgisConnectionSettingsRepository,
 )
 from tests.ng_connect_testcase import start_qgis
 
@@ -126,3 +127,25 @@ def test_manager_normalizes_missing_current_connection(qgis_app) -> None:
 
     assert manager.current_connection_id == alpha_connection.id
     assert manager.current_connection == alpha_connection
+
+
+def test_repository_persists_old_connection_ids(qgis_app) -> None:
+    del qgis_app
+    connection = NgwConnection(
+        "current-id",
+        "Current",
+        "https://current.nextgis.com",
+        None,
+        ("old-id-a", "old-id-b"),
+    )
+    repository = QgisConnectionSettingsRepository()
+
+    try:
+        repository.write_snapshot([connection], connection.id)
+
+        assert repository.read_snapshot() == ConnectionSettingsSnapshot(
+            (connection,),
+            connection.id,
+        )
+    finally:
+        repository.write_snapshot([], None)

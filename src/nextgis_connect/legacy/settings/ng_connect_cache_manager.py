@@ -4,7 +4,7 @@ import re
 import shutil
 from pathlib import Path
 from time import time
-from typing import List, Optional, Tuple, Union
+from typing import Dict, List, Optional, Tuple, Union
 
 from qgis.core import QgsProject
 from qgis.PyQt.QtCore import QMimeDatabase
@@ -13,6 +13,10 @@ from nextgis_connect.legacy.detached_editing.utils import (
     container_metadata,
     container_path,
     is_ngw_container,
+    make_connection,
+)
+from nextgis_connect.legacy.ngw_connection.domain.connection import (
+    NgwConnection,
 )
 from nextgis_connect.legacy.settings.ng_connect_settings import (
     NgConnectSettings,
@@ -84,17 +88,11 @@ class NgConnectCacheManager:
 
     @property
     def has_files_used_by_project(self) -> bool:
-        return any(
-            self.__is_file_used_by_project(file_path)
-            for file_path in Path(self.cache_directory).glob("**/*")
-        )
+        return len(self.containers_used_by_project()) > 0
 
     @property
     def has_containers_with_changes(self) -> bool:
-        return any(
-            self.__is_container_with_changes(file_path)
-            for file_path in Path(self.cache_directory).glob("**/*.gpkg")
-        )
+        return len(self.containers_with_changes()) > 0
 
     @property
     def need_migration(self) -> bool:
@@ -153,6 +151,47 @@ class NgConnectCacheManager:
             / sha1_hash_prefix
             / sha1_hash
             / f"{resource_id}.gpkg"
+        )
+
+    def canonical_detached_container_path(
+        self,
+        connection: NgwConnection,
+        resource_id: int,
+        source_container_path: Optional[Path] = None,
+    ) -> Optional[Path]:
+        canonical_container_path = self.detached_container_path(
+            connection.domain_uuid,
+            resource_id,
+        )
+        if source_container_path is None:
+            return canonical_container_path
+
+        if source_container_path == canonical_container_path:
+            return canonical_container_path
+
+        if not source_container_path.exists():
+            return canonical_container_path
+
+        if not self.__is_cache_path(source_container_path):
+            logger = logging.getLogger(PLUGIN_NAME)
+            logger.warning(
+                "Detached container source is outside cache and will not be "
+                f"moved: {source_container_path}"
+            )
+            return canonical_container_path
+
+        if canonical_container_path.exists():
+            logger = logging.getLogger(PLUGIN_NAME)
+            logger.warning(
+                "Detached container canonical cache path already exists: "
+                f"{canonical_container_path}"
+            )
+            return canonical_container_path
+
+        return self.__move_container_to_connection_cache(
+            source_container_path,
+            resource_id,
+            connection,
         )
 
     def attachment_directory(
@@ -248,9 +287,142 @@ class NgConnectCacheManager:
             # Reset if default value was stored in settings
             self.cache_directory = self.__settings.user_profile_cache_directory
 
+        self.__reassign_migrated_container_connection_ids()
+
         logger.debug("Cache migration completed")
 
         return True
+
+    def reassign_container_connection_ids(
+        self,
+        connections: List[NgwConnection],
+    ) -> bool:
+        connections_by_domain_uuid: Dict[str, List[NgwConnection]] = {}
+        for connection in connections:
+            connections_by_domain_uuid.setdefault(
+                connection.domain_uuid,
+                [],
+            ).append(connection)
+
+        for container_file in Path(self.cache_directory).glob("**/*.gpkg"):
+            try:
+                metadata = container_metadata(container_file)
+            except Exception:
+                continue
+
+            domain_connections = connections_by_domain_uuid.get(
+                metadata.instance_id,
+                [],
+            )
+            if len(domain_connections) != 1:
+                continue
+
+            connection = domain_connections[0]
+            container_file = self.__move_container_to_connection_cache(
+                container_file,
+                metadata.resource_id,
+                connection,
+            )
+            if container_file is None:
+                return False
+
+            if (
+                metadata.connection_id == connection.id
+                and metadata.instance_id == connection.domain_uuid
+            ):
+                continue
+
+            if not self.__update_container_connection_metadata(
+                container_file,
+                connection,
+            ):
+                return False
+
+        return True
+
+    def __move_container_to_connection_cache(
+        self,
+        container_file: Path,
+        resource_id: int,
+        connection: NgwConnection,
+    ) -> Optional[Path]:
+        canonical_container_file = self.detached_container_path(
+            connection.domain_uuid,
+            resource_id,
+        )
+        if container_file == canonical_container_file:
+            return container_file
+
+        logger = logging.getLogger(PLUGIN_NAME)
+        if canonical_container_file.exists():
+            logger.warning(
+                "Detached container canonical cache path already exists: "
+                f"{canonical_container_file}"
+            )
+            return container_file
+
+        try:
+            canonical_container_file.parent.mkdir(parents=True, exist_ok=True)
+            container_file.replace(canonical_container_file)
+            self.__move_detached_container_service_files(
+                container_file,
+                canonical_container_file,
+            )
+        except Exception:
+            logger.exception("Could not move detached container")
+            return None
+
+        return canonical_container_file
+
+    def __move_detached_container_service_files(
+        self,
+        old_container_file: Path,
+        new_container_file: Path,
+    ) -> None:
+        for service_file in old_container_file.parent.glob(
+            f"{old_container_file.name}-*"
+        ):
+            suffix = service_file.name[len(old_container_file.name) :]
+            target_file = new_container_file.parent / (
+                new_container_file.name + suffix
+            )
+            if target_file.exists():
+                continue
+            service_file.replace(target_file)
+
+    def __update_container_connection_metadata(
+        self,
+        container_file: Path,
+        connection: NgwConnection,
+    ) -> bool:
+        try:
+            with make_connection(container_file) as db_connection:
+                cursor = db_connection.cursor()
+                cursor.execute(
+                    """
+                    UPDATE ngw_metadata
+                    SET connection_id = ?, instance_id = ?
+                    """,
+                    (connection.id, connection.domain_uuid),
+                )
+                db_connection.commit()
+        except Exception:
+            logger = logging.getLogger(PLUGIN_NAME)
+            logger.exception(
+                "Could not reassign detached container connection id"
+            )
+            return False
+
+        return True
+
+    def __reassign_migrated_container_connection_ids(self) -> None:
+        from nextgis_connect.legacy.ngw_connection.application.connections_manager import (
+            NgwConnectionsManager,
+        )
+
+        self.reassign_container_connection_ids(
+            NgwConnectionsManager().connections
+        )
 
     def clear_cache(self) -> bool:
         cache_path = Path(self.cache_directory)
@@ -266,6 +438,98 @@ class NgConnectCacheManager:
         cache_path.mkdir()
 
         return True
+
+    def clear_connection_cache(self, connection) -> bool:
+        if len(self.containers_used_by_project(connection)) > 0:
+            return False
+
+        logger = logging.getLogger(PLUGIN_NAME)
+        has_errors = False
+        cache_paths = self.__connection_cache_paths(connection)
+
+        for cache_path in sorted(
+            cache_paths, key=lambda path: len(path.parts)
+        ):
+            if not cache_path.exists():
+                continue
+
+            try:
+                if cache_path.is_dir():
+                    shutil.rmtree(cache_path)
+                else:
+                    cache_path.unlink()
+            except Exception:
+                logger.exception(f"Could not delete cache path {cache_path}")
+                has_errors = True
+
+        self.__remove_empty_dirs(self.cache_directory)
+        return not has_errors
+
+    def containers_with_changes(
+        self, connection=None
+    ) -> List[Tuple[Path, str]]:
+        containers: List[Tuple[Path, str]] = []
+        for file_path in Path(self.cache_directory).glob("**/*.gpkg"):
+            try:
+                metadata = container_metadata(file_path)
+            except Exception:
+                continue
+
+            if not metadata.has_changes:
+                continue
+
+            if (
+                connection is not None
+                and not self.__is_container_for_connection(
+                    metadata,
+                    connection,
+                )
+            ):
+                continue
+
+            containers.append(
+                (
+                    file_path,
+                    f"{metadata.layer_name} (id={metadata.resource_id})",
+                )
+            )
+
+        return containers
+
+    def containers_used_by_project(
+        self, connection=None
+    ) -> List[Tuple[Path, str]]:
+        containers: List[Tuple[Path, str]] = []
+        for file_path in self.__project_container_paths():
+            if not self.__is_cache_path(file_path):
+                continue
+
+            try:
+                metadata = container_metadata(file_path)
+            except Exception:
+                if connection is not None:
+                    continue
+
+                containers.append((file_path, file_path.name))
+                continue
+
+            if (
+                connection is not None
+                and not self.__is_container_for_connection(
+                    metadata,
+                    connection,
+                )
+            ):
+                continue
+
+            containers.append(
+                (
+                    file_path,
+                    f"{metadata.layer_name} (id={metadata.resource_id})",
+                )
+            )
+
+        return containers
 
     def purge_cache(self) -> bool:
         logger = logging.getLogger(PLUGIN_NAME)
@@ -362,7 +626,51 @@ class NgConnectCacheManager:
 
         return metadata.has_changes
 
+    def __connection_cache_paths(self, connection) -> List[Path]:
+        cache_root = Path(self.cache_directory)
+        connection_ids = {
+            connection_id
+            for connection_id in (
+                connection.domain_uuid,
+                connection.id,
+                *connection.old_connection_ids,
+            )
+            if connection_id
+        }
+        result = {
+            cache_root / connection_id for connection_id in connection_ids
+        }
+
+        for file_path in cache_root.glob("**/*.gpkg"):
+            try:
+                metadata = container_metadata(file_path)
+            except Exception:
+                continue
+
+            if self.__is_container_for_connection(metadata, connection):
+                result.add(file_path)
+                result.update(file_path.parent.glob(f"{file_path.name}-*"))
+
+        return list(result)
+
+    def __is_container_for_connection(self, metadata, connection) -> bool:
+        connection_ids = {
+            connection_id
+            for connection_id in (
+                connection.id,
+                *connection.old_connection_ids,
+            )
+            if connection_id
+        }
+        return (
+            metadata.connection_id in connection_ids
+            or metadata.instance_id == connection.domain_uuid
+        )
+
     def __is_file_used_by_project(self, file_path: Path) -> bool:
+        return file_path in self.__project_container_paths()
+
+    def __project_container_paths(self) -> List[Path]:
         if self.__project_containers is None:
             self.__project_containers = [
                 container_path(layer)
@@ -370,7 +678,17 @@ class NgConnectCacheManager:
                 if is_ngw_container(layer)
             ]
 
-        return file_path in self.__project_containers
+        return self.__project_containers
+
+    def __is_cache_path(self, file_path: Path) -> bool:
+        try:
+            file_path.resolve().relative_to(
+                Path(self.cache_directory).resolve()
+            )
+        except ValueError:
+            return False
+
+        return True
 
     def __migrate(self, old_base: Path, new_base: Path) -> bool:
         if not old_base.exists():

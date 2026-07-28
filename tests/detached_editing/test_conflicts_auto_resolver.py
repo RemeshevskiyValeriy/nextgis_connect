@@ -666,3 +666,79 @@ class TestConflictsAutoResolver(NgConnectTestCase):
 
         self.assertEqual(result.resolved_conflicts, [])
         self.assertEqual(result.remaining_conflicts, [conflict])
+
+    def test_mixed_batch_preserves_resolved_and_remaining_order(
+        self,
+    ) -> None:
+        auto_description_conflict = DescriptionConflict(
+            local_change=DescriptionPut(
+                fid=self.LOCAL_FID,
+                ngw_fid=self.NGW_FID,
+                description="same-description",
+            ),
+            remote_action=DescriptionPutAction(
+                fid=self.NGW_FID,
+                vid=self.EXTENSION_VID,
+                value="same-description",
+            ),
+        )
+        manual_description_conflict = DescriptionConflict(
+            local_change=DescriptionPut(
+                fid=self.LOCAL_FID + 1,
+                ngw_fid=self.NGW_FID + 1,
+                description="local-description",
+            ),
+            remote_action=DescriptionPutAction(
+                fid=self.NGW_FID + 1,
+                vid=self.EXTENSION_VID + 1,
+                value="remote-description",
+            ),
+        )
+        auto_attachment_conflict = AttachmentDataConflict(
+            local_change=AttachmentUpdate(
+                fid=self.LOCAL_FID,
+                aid=self.LOCAL_AID,
+                ngw_fid=self.NGW_FID,
+                ngw_aid=self.NGW_AID,
+                name="same-name",
+            ),
+            remote_action=AttachmentUpdateAction(
+                fid=self.NGW_FID,
+                aid=self.NGW_AID,
+                vid=self.EXTENSION_VID + 2,
+                name="same-name",
+            ),
+        )
+        manual_attachment_conflict = AttachmentDataConflict(
+            local_change=AttachmentUpdate(
+                fid=self.LOCAL_FID,
+                aid=self.LOCAL_AID + 1,
+                ngw_fid=self.NGW_FID,
+                ngw_aid=self.NGW_AID + 1,
+                name="local-name",
+            ),
+            remote_action=AttachmentUpdateAction(
+                fid=self.NGW_FID,
+                aid=self.NGW_AID + 1,
+                vid=self.EXTENSION_VID + 3,
+                name="remote-name",
+            ),
+        )
+
+        result = self._resolve(
+            [
+                auto_description_conflict,
+                manual_description_conflict,
+                auto_attachment_conflict,
+                manual_attachment_conflict,
+            ]
+        )
+
+        self.assertEqual(
+            [resolution.conflict for resolution in result.resolved_conflicts],
+            [auto_description_conflict, auto_attachment_conflict],
+        )
+        self.assertEqual(
+            result.remaining_conflicts,
+            [manual_description_conflict, manual_attachment_conflict],
+        )

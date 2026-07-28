@@ -1,6 +1,6 @@
 import uuid
 from dataclasses import dataclass
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Iterable, Optional, Tuple
 from urllib.parse import quote, urlparse
 
 from qgis.core import QgsApplication, QgsAuthMethodConfig
@@ -15,6 +15,7 @@ class NgwConnection:
     name: str
     url: str
     auth_config_id: Optional[str]
+    old_connection_ids: Tuple[str, ...] = ()
 
     @property
     def method(self) -> str:
@@ -27,8 +28,7 @@ class NgwConnection:
 
     @property
     def domain_uuid(self) -> str:
-        domain = urlparse(self.normalize_url(self.url)).netloc
-        return str(uuid.uuid3(uuid.NAMESPACE_DNS, domain))
+        return self.domain_uuid_for_url(self.url)
 
     def update_network_request(self, request: QNetworkRequest) -> bool:
         if self.auth_config_id is None:
@@ -103,3 +103,35 @@ class NgwConnection:
             return url
 
         return f"{scheme}://{base_url}"
+
+    @classmethod
+    def domain_uuid_for_url(cls, url: str) -> str:
+        domain = urlparse(cls.normalize_url(url)).netloc
+        return str(uuid.uuid3(uuid.NAMESPACE_DNS, domain))
+
+    def matches_id(self, connection_id: str) -> bool:
+        return (
+            connection_id == self.id
+            or connection_id in self.old_connection_ids
+        )
+
+    @classmethod
+    def suggested_id_for_url(
+        cls,
+        url: str,
+        existing_connection_ids: Iterable[str],
+        *,
+        fallback_id: Optional[str] = None,
+    ) -> str:
+        existing_ids = set(existing_connection_ids)
+        connection_id = cls.domain_uuid_for_url(url)
+        if connection_id not in existing_ids:
+            return connection_id
+
+        if fallback_id is not None and fallback_id not in existing_ids:
+            return fallback_id
+
+        while True:
+            connection_id = str(uuid.uuid4())
+            if connection_id not in existing_ids:
+                return connection_id

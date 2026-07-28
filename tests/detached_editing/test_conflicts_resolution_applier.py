@@ -1,7 +1,7 @@
 from dataclasses import replace
 from typing import cast
 
-from qgis.core import QgsVectorLayer, edit
+from qgis.core import QgsGeometry, QgsVectorLayer, edit
 
 from nextgis_connect.legacy.detached_editing.conflicts.conflict_resolution import (
     AttachmentConflictResolution,
@@ -16,7 +16,10 @@ from nextgis_connect.legacy.detached_editing.conflicts.conflicts import (
     AttachmentDataConflict,
     DescriptionConflict,
     FeatureDataConflict,
+    LocalAttachmentDeletionConflict,
+    LocalFeatureDeletionConflict,
     RemoteAttachmentDeletionConflict,
+    RemoteFeatureDeletionConflict,
 )
 from nextgis_connect.legacy.detached_editing.conflicts.resolutions_applier import (
     ConflictsResolutionApplier,
@@ -38,12 +41,14 @@ from nextgis_connect.legacy.detached_editing.sync.versioned.actions import (
     AttachmentRestoreAction,
     AttachmentUpdateAction,
     DescriptionPutAction,
+    FeatureDeleteAction,
     FeatureRestoreAction,
     FeatureUpdateAction,
 )
 from nextgis_connect.legacy.detached_editing.utils import (
     AttachmentMetadata,
 )
+from nextgis_connect.shared.types import UnsetType
 from tests.detached_editing.utils import mock_container
 from tests.ng_connect_testcase import NgConnectTestCase, TestData
 
@@ -306,6 +311,488 @@ class TestConflictsResolutionApplier(NgConnectTestCase):
         self.assertEqual(status, ConflictsResolutionApplier.Status.Resolved)
         self.assertEqual(extractor.extract_updated_features()[0].version, 72)
 
+    @mock_container(TestData.Points, is_versioning_enabled=True)
+    def test_apply_feature_local_resolution_keeps_non_conflicting_remote_fields(
+        self,
+        container_mock,
+        qgs_layer: QgsVectorLayer,
+    ) -> None:
+        detached_layer = DetachedLayer(container_mock, qgs_layer)
+        extractor = self._extractor(container_mock)
+        string_field = container_mock.metadata.fields.get_with(
+            keyname="STRING"
+        )
+        integer_field = container_mock.metadata.fields.get_with(
+            keyname="INTEGER"
+        )
+
+        with edit(detached_layer.qgs_layer):
+            self.assertTrue(
+                detached_layer.qgs_layer.changeAttributeValue(
+                    self.FEATURE_ID,
+                    string_field.attribute,
+                    "local-string",
+                )
+            )
+
+        local_change = extractor.extract_updated_features()[0]
+        remote_action = FeatureUpdateAction(
+            fid=local_change.ngw_fid,
+            vid=73,
+            fields=[
+                (string_field.ngw_id, "remote-string"),
+                (integer_field.ngw_id, 999),
+            ],
+        )
+        conflict = FeatureDataConflict(
+            local_change=local_change,
+            remote_action=remote_action,
+        )
+        resolution = FeatureConflictResolution(
+            resolution_type=ResolutionType.Local,
+            conflict=conflict,
+        )
+
+        status, updated_actions = ConflictsResolutionApplier(
+            container_mock.context
+        ).apply([resolution], [remote_action])
+
+        self.assertEqual(status, ConflictsResolutionApplier.Status.Resolved)
+        updated_action = cast(FeatureUpdateAction, updated_actions[0])
+        self.assertEqual(
+            updated_action.fields,
+            [(integer_field.ngw_id, 999)],
+        )
+        updated_features = extractor.extract_updated_features()
+        self.assertEqual(len(updated_features), 1)
+        self.assertEqual(updated_features[0].version, 73)
+        self.assertEqual(
+            updated_features[0].fields_dict,
+            {string_field.ngw_id: "local-string"},
+        )
+
+    @mock_container(TestData.Points, is_versioning_enabled=True)
+    def test_apply_feature_local_resolution_with_field_and_geometry_conflict(
+        self,
+        container_mock,
+        qgs_layer: QgsVectorLayer,
+    ) -> None:
+        detached_layer = DetachedLayer(container_mock, qgs_layer)
+        extractor = self._extractor(container_mock)
+        string_field = container_mock.metadata.fields.get_with(
+            keyname="STRING"
+        )
+        local_geometry = QgsGeometry.fromWkt("Point (10 20)")
+        remote_geometry = QgsGeometry.fromWkt("Point (30 40)")
+
+        with edit(detached_layer.qgs_layer):
+            self.assertTrue(
+                detached_layer.qgs_layer.changeAttributeValue(
+                    self.FEATURE_ID,
+                    string_field.attribute,
+                    "local-value",
+                )
+            )
+            self.assertTrue(
+                detached_layer.qgs_layer.changeGeometry(
+                    self.FEATURE_ID,
+                    local_geometry,
+                )
+            )
+
+        local_change = extractor.extract_updated_features()[0]
+        remote_action = FeatureUpdateAction(
+            fid=local_change.ngw_fid,
+            vid=74,
+            fields=[(string_field.ngw_id, "remote-value")],
+            geom=remote_geometry,
+        )
+        conflict = FeatureDataConflict(
+            local_change=local_change,
+            remote_action=remote_action,
+        )
+        resolution = FeatureConflictResolution(
+            resolution_type=ResolutionType.Local,
+            conflict=conflict,
+            feature_data=FeatureResolutionData(
+                fields=[(string_field.ngw_id, "local-value")],
+                geom=serialize_geometry(local_geometry, True),
+            ),
+        )
+
+        status, updated_actions = ConflictsResolutionApplier(
+            container_mock.context
+        ).apply([resolution], [remote_action])
+
+        self.assertEqual(status, ConflictsResolutionApplier.Status.Resolved)
+        updated_action = cast(FeatureUpdateAction, updated_actions[0])
+        self.assertEqual(updated_action.fields, [])
+        self.assertIsInstance(updated_action.geom, UnsetType)
+        updated_features = extractor.extract_updated_features()
+        self.assertEqual(len(updated_features), 1)
+        self.assertEqual(updated_features[0].version, 74)
+        self.assertEqual(
+            updated_features[0].fields_dict,
+            {string_field.ngw_id: "local-value"},
+        )
+        self.assertTrue(updated_features[0].geometry.equals(local_geometry))
+
+    @mock_container(TestData.Points, is_versioning_enabled=True)
+    def test_apply_feature_remote_resolution_keeps_local_non_conflicting_fields(
+        self,
+        container_mock,
+        qgs_layer: QgsVectorLayer,
+    ) -> None:
+        detached_layer = DetachedLayer(container_mock, qgs_layer)
+        extractor = self._extractor(container_mock)
+        string_field = container_mock.metadata.fields.get_with(
+            keyname="STRING"
+        )
+        integer_field = container_mock.metadata.fields.get_with(
+            keyname="INTEGER"
+        )
+
+        with edit(detached_layer.qgs_layer):
+            self.assertTrue(
+                detached_layer.qgs_layer.changeAttributeValue(
+                    self.FEATURE_ID,
+                    string_field.attribute,
+                    "local-string",
+                )
+            )
+            self.assertTrue(
+                detached_layer.qgs_layer.changeAttributeValue(
+                    self.FEATURE_ID,
+                    integer_field.attribute,
+                    777,
+                )
+            )
+
+        local_change = extractor.extract_updated_features()[0]
+        remote_action = FeatureUpdateAction(
+            fid=local_change.ngw_fid,
+            vid=74,
+            fields=[(string_field.ngw_id, "remote-string")],
+        )
+        conflict = FeatureDataConflict(
+            local_change=local_change,
+            remote_action=remote_action,
+        )
+        resolution = FeatureConflictResolution(
+            resolution_type=ResolutionType.Remote,
+            conflict=conflict,
+        )
+
+        status, updated_actions = ConflictsResolutionApplier(
+            container_mock.context
+        ).apply([resolution], [remote_action])
+
+        self.assertEqual(status, ConflictsResolutionApplier.Status.Resolved)
+        self.assertEqual(updated_actions, [remote_action])
+        updated_features = extractor.extract_updated_features()
+        self.assertEqual(len(updated_features), 1)
+        self.assertEqual(
+            updated_features[0].fields_dict,
+            {integer_field.ngw_id: 777},
+        )
+
+    @mock_container(
+        TestData.Points,
+        is_versioning_enabled=True,
+        descriptions={FEATURE_ID: "before"},
+    )
+    def test_apply_no_resolution_returns_not_resolved_without_changes(
+        self,
+        container_mock,
+        qgs_layer: QgsVectorLayer,
+    ) -> None:
+        detached_layer = DetachedLayer(container_mock, qgs_layer)
+        extractor = self._extractor(container_mock)
+
+        with edit(detached_layer.qgs_layer):
+            detached_layer.set_feature_description(self.FEATURE_ID, "local")
+
+        local_change = extractor.extract_updated_descriptions()[0]
+        assert local_change.ngw_fid is not None
+        remote_action = DescriptionPutAction(
+            fid=local_change.ngw_fid,
+            vid=22,
+            value="remote",
+        )
+        conflict = DescriptionConflict(
+            local_change=local_change,
+            remote_action=remote_action,
+        )
+        resolution = ConflictResolution(
+            resolution_type=ResolutionType.NoResolution,
+            conflict=conflict,
+        )
+
+        status, updated_actions = ConflictsResolutionApplier(
+            container_mock.context
+        ).apply([resolution], [remote_action])
+
+        self.assertEqual(
+            status,
+            ConflictsResolutionApplier.Status.NotResolved,
+        )
+        self.assertEqual(updated_actions, [])
+        self.assertEqual(
+            extractor.extract_updated_descriptions()[0].description,
+            "local",
+        )
+
+    @mock_container(
+        TestData.Points,
+        is_versioning_enabled=True,
+        descriptions={FEATURE_ID: "before"},
+    )
+    def test_apply_no_resolution_after_resolved_returns_partially_resolved(
+        self,
+        container_mock,
+        qgs_layer: QgsVectorLayer,
+    ) -> None:
+        detached_layer = DetachedLayer(container_mock, qgs_layer)
+        extractor = self._extractor(container_mock)
+
+        with edit(detached_layer.qgs_layer):
+            detached_layer.set_feature_description(self.FEATURE_ID, "local")
+
+        local_change = extractor.extract_updated_descriptions()[0]
+        assert local_change.ngw_fid is not None
+        remote_action = DescriptionPutAction(
+            fid=local_change.ngw_fid,
+            vid=23,
+            value="remote",
+        )
+        conflict = DescriptionConflict(
+            local_change=local_change,
+            remote_action=remote_action,
+        )
+        resolved = DescriptionConflictResolution(
+            resolution_type=ResolutionType.Remote,
+            conflict=conflict,
+            value="remote",
+        )
+        unresolved = ConflictResolution(
+            resolution_type=ResolutionType.NoResolution,
+            conflict=conflict,
+        )
+
+        status, updated_actions = ConflictsResolutionApplier(
+            container_mock.context
+        ).apply([resolved, unresolved], [remote_action])
+
+        self.assertEqual(
+            status,
+            ConflictsResolutionApplier.Status.PartiallyResolved,
+        )
+        self.assertEqual(updated_actions, [])
+        self.assertEqual(extractor.extract_updated_descriptions(), [])
+
+    @mock_container(
+        TestData.Points,
+        is_versioning_enabled=True,
+        descriptions={FEATURE_ID: "before"},
+    )
+    def test_apply_description_custom_resolution_matching_remote_removes_marker(
+        self,
+        container_mock,
+        qgs_layer: QgsVectorLayer,
+    ) -> None:
+        detached_layer = DetachedLayer(container_mock, qgs_layer)
+        extractor = self._extractor(container_mock)
+
+        with edit(detached_layer.qgs_layer):
+            detached_layer.set_feature_description(self.FEATURE_ID, "local")
+
+        local_change = extractor.extract_updated_descriptions()[0]
+        assert local_change.ngw_fid is not None
+        remote_action = DescriptionPutAction(
+            fid=local_change.ngw_fid,
+            vid=24,
+            value="remote",
+        )
+        conflict = DescriptionConflict(
+            local_change=local_change,
+            remote_action=remote_action,
+        )
+        resolution = DescriptionConflictResolution(
+            resolution_type=ResolutionType.Custom,
+            conflict=conflict,
+            value="remote",
+        )
+
+        status, updated_actions = ConflictsResolutionApplier(
+            container_mock.context
+        ).apply([resolution], [remote_action])
+
+        self.assertEqual(status, ConflictsResolutionApplier.Status.Resolved)
+        updated_action = cast(DescriptionPutAction, updated_actions[0])
+        self.assertEqual(updated_action.value, "remote")
+        self.assertEqual(extractor.extract_updated_descriptions(), [])
+
+    @mock_container(TestData.Points, is_versioning_enabled=True)
+    def test_apply_local_feature_delete_with_remote_delete_cleans_local_marker(
+        self,
+        container_mock,
+        qgs_layer: QgsVectorLayer,
+    ) -> None:
+        _detached_layer = DetachedLayer(container_mock, qgs_layer)
+        extractor = self._extractor(container_mock)
+
+        with edit(qgs_layer):
+            self.assertTrue(qgs_layer.deleteFeature(self.FEATURE_ID))
+
+        local_change = extractor.extract_deleted_features()[0]
+        remote_action = FeatureDeleteAction(
+            fid=local_change.ngw_fid,
+            vid=91,
+        )
+        conflict = LocalFeatureDeletionConflict(
+            local_change=local_change,
+            remote_actions=[remote_action],
+        )
+        resolution = ConflictResolution(
+            resolution_type=ResolutionType.Remote,
+            conflict=conflict,
+        )
+
+        status, updated_actions = ConflictsResolutionApplier(
+            container_mock.context
+        ).apply([resolution], [remote_action])
+
+        self.assertEqual(status, ConflictsResolutionApplier.Status.Resolved)
+        self.assertEqual(updated_actions, [])
+        self.assertEqual(extractor.extract_deleted_features(), [])
+
+    @mock_container(TestData.Points, is_versioning_enabled=True)
+    def test_apply_local_feature_delete_remote_resolution_restores_feature_marker(
+        self,
+        container_mock,
+        qgs_layer: QgsVectorLayer,
+    ) -> None:
+        _detached_layer = DetachedLayer(container_mock, qgs_layer)
+        extractor = self._extractor(container_mock)
+        string_field = container_mock.metadata.fields.get_with(
+            keyname="STRING"
+        )
+
+        with edit(qgs_layer):
+            self.assertTrue(qgs_layer.deleteFeature(self.FEATURE_ID))
+
+        local_change = extractor.extract_deleted_features()[0]
+        remote_action = FeatureUpdateAction(
+            fid=local_change.ngw_fid,
+            vid=92,
+            fields=[(string_field.ngw_id, "remote-after-delete")],
+        )
+        conflict = LocalFeatureDeletionConflict(
+            local_change=local_change,
+            remote_actions=[remote_action],
+        )
+        resolution = ConflictResolution(
+            resolution_type=ResolutionType.Remote,
+            conflict=conflict,
+        )
+
+        status, updated_actions = ConflictsResolutionApplier(
+            container_mock.context
+        ).apply([resolution], [remote_action])
+
+        self.assertEqual(status, ConflictsResolutionApplier.Status.Resolved)
+        self.assertEqual(updated_actions, [remote_action])
+        self.assertEqual(extractor.extract_deleted_features(), [])
+
+    @mock_container(TestData.Points, is_versioning_enabled=True)
+    def test_apply_remote_feature_delete_remote_resolution_clears_local_updates(
+        self,
+        container_mock,
+        qgs_layer: QgsVectorLayer,
+    ) -> None:
+        detached_layer = DetachedLayer(container_mock, qgs_layer)
+        extractor = self._extractor(container_mock)
+        string_field = container_mock.metadata.fields.get_with(
+            keyname="STRING"
+        )
+
+        with edit(detached_layer.qgs_layer):
+            self.assertTrue(
+                detached_layer.qgs_layer.changeAttributeValue(
+                    self.FEATURE_ID,
+                    string_field.attribute,
+                    "local-string",
+                )
+            )
+
+        local_change = extractor.extract_updated_features()[0]
+        remote_action = FeatureDeleteAction(
+            fid=local_change.ngw_fid,
+            vid=93,
+        )
+        conflict = RemoteFeatureDeletionConflict(
+            local_changes=[local_change],
+            remote_action=remote_action,
+        )
+        resolution = ConflictResolution(
+            resolution_type=ResolutionType.Remote,
+            conflict=conflict,
+        )
+
+        status, updated_actions = ConflictsResolutionApplier(
+            container_mock.context
+        ).apply([resolution], [remote_action])
+
+        self.assertEqual(status, ConflictsResolutionApplier.Status.Resolved)
+        self.assertEqual(updated_actions, [remote_action])
+        self.assertEqual(extractor.extract_updated_features(), [])
+
+    @mock_container(TestData.Points, is_versioning_enabled=True)
+    def test_apply_remote_feature_delete_local_resolution_marks_feature_restored(
+        self,
+        container_mock,
+        qgs_layer: QgsVectorLayer,
+    ) -> None:
+        detached_layer = DetachedLayer(container_mock, qgs_layer)
+        extractor = self._extractor(container_mock)
+        string_field = container_mock.metadata.fields.get_with(
+            keyname="STRING"
+        )
+
+        with edit(detached_layer.qgs_layer):
+            self.assertTrue(
+                detached_layer.qgs_layer.changeAttributeValue(
+                    self.FEATURE_ID,
+                    string_field.attribute,
+                    "local-string",
+                )
+            )
+
+        local_change = extractor.extract_updated_features()[0]
+        remote_action = FeatureDeleteAction(
+            fid=local_change.ngw_fid,
+            vid=94,
+        )
+        conflict = RemoteFeatureDeletionConflict(
+            local_changes=[local_change],
+            remote_action=remote_action,
+        )
+        resolution = ConflictResolution(
+            resolution_type=ResolutionType.Local,
+            conflict=conflict,
+        )
+
+        status, updated_actions = ConflictsResolutionApplier(
+            container_mock.context
+        ).apply([resolution], [remote_action])
+
+        self.assertEqual(status, ConflictsResolutionApplier.Status.Resolved)
+        self.assertEqual(updated_actions, [])
+        self.assertEqual(extractor.extract_updated_features(), [])
+        restored_features = extractor.extract_restored_features()
+        self.assertEqual(len(restored_features), 1)
+        self.assertEqual(restored_features[0].version, 94)
+
     @mock_container(
         TestData.Points,
         is_versioning_enabled=True,
@@ -369,6 +856,236 @@ class TestConflictsResolutionApplier(NgConnectTestCase):
         self.assertEqual(
             extractor.extract_updated_attachments()[0].version, 41
         )
+
+    @mock_container(
+        TestData.Points,
+        is_versioning_enabled=True,
+        attachments=[
+            AttachmentMetadata(
+                fid=FEATURE_ID,
+                aid=ATTACHMENT_ID,
+                ngw_aid=301,
+                version=11,
+                name="base-attachment",
+                description="base-description",
+                mime_type="text/plain",
+                fileobj=901,
+            )
+        ],
+    )
+    def test_apply_attachment_local_resolution_keeps_non_conflicting_remote_fields(
+        self,
+        container_mock,
+        qgs_layer: QgsVectorLayer,
+    ) -> None:
+        detached_layer = DetachedLayer(container_mock, qgs_layer)
+        extractor = self._extractor(container_mock)
+
+        attachment = detached_layer.feature_attachment(
+            self.FEATURE_ID,
+            self.ATTACHMENT_ID,
+        )
+        assert attachment is not None
+
+        with edit(qgs_layer):
+            detached_layer.update_attachment(
+                replace(attachment, name="local-name")
+            )
+
+        local_change = extractor.extract_updated_attachments()[0]
+        remote_action = AttachmentUpdateAction(
+            fid=local_change.ngw_fid,
+            aid=local_change.ngw_aid,
+            vid=42,
+            keyname="remote-key",
+            name="remote-name",
+        )
+        conflict = AttachmentDataConflict(
+            local_change=local_change,
+            remote_action=remote_action,
+        )
+        resolution = AttachmentConflictResolution(
+            resolution_type=ResolutionType.Local,
+            conflict=conflict,
+        )
+
+        status, updated_actions = ConflictsResolutionApplier(
+            container_mock.context
+        ).apply([resolution], [remote_action])
+
+        self.assertEqual(status, ConflictsResolutionApplier.Status.Resolved)
+        updated_action = cast(AttachmentUpdateAction, updated_actions[0])
+        self.assertEqual(updated_action.keyname, "remote-key")
+        self.assertIsInstance(updated_action.name, UnsetType)
+        self.assertEqual(
+            extractor.extract_updated_attachments()[0].version,
+            42,
+        )
+
+    @mock_container(
+        TestData.Points,
+        is_versioning_enabled=True,
+        attachments=[
+            AttachmentMetadata(
+                fid=FEATURE_ID,
+                aid=ATTACHMENT_ID,
+                ngw_aid=301,
+                version=11,
+                name="base-attachment",
+                description="base-description",
+                mime_type="text/plain",
+                fileobj=901,
+            )
+        ],
+    )
+    def test_apply_remote_attachment_delete_remote_resolution_removes_local_marker(
+        self,
+        container_mock,
+        qgs_layer: QgsVectorLayer,
+    ) -> None:
+        detached_layer = DetachedLayer(container_mock, qgs_layer)
+        extractor = self._extractor(container_mock)
+
+        attachment = detached_layer.feature_attachment(
+            self.FEATURE_ID,
+            self.ATTACHMENT_ID,
+        )
+        assert attachment is not None
+
+        with edit(qgs_layer):
+            detached_layer.update_attachment(
+                replace(attachment, name="local-name")
+            )
+
+        local_change = extractor.extract_updated_attachments()[0]
+        remote_action = AttachmentDeleteAction(
+            fid=local_change.ngw_fid,
+            aid=local_change.ngw_aid,
+            vid=43,
+        )
+        conflict = RemoteAttachmentDeletionConflict(
+            local_change=local_change,
+            remote_action=remote_action,
+        )
+        resolution = ConflictResolution(
+            resolution_type=ResolutionType.Remote,
+            conflict=conflict,
+        )
+
+        status, updated_actions = ConflictsResolutionApplier(
+            container_mock.context
+        ).apply([resolution], [remote_action])
+
+        self.assertEqual(status, ConflictsResolutionApplier.Status.Resolved)
+        self.assertEqual(updated_actions, [remote_action])
+        self.assertEqual(extractor.extract_updated_attachments(), [])
+
+    @mock_container(
+        TestData.Points,
+        is_versioning_enabled=True,
+        attachments=[
+            AttachmentMetadata(
+                fid=FEATURE_ID,
+                aid=ATTACHMENT_ID,
+                ngw_aid=301,
+                version=11,
+                name="base-attachment",
+                description="base-description",
+                mime_type="text/plain",
+                fileobj=901,
+            )
+        ],
+    )
+    def test_apply_local_attachment_delete_with_remote_delete_cleans_local_marker(
+        self,
+        container_mock,
+        qgs_layer: QgsVectorLayer,
+    ) -> None:
+        detached_layer = DetachedLayer(container_mock, qgs_layer)
+        extractor = self._extractor(container_mock)
+
+        with edit(qgs_layer):
+            detached_layer.remove_attachment(
+                self.FEATURE_ID,
+                self.ATTACHMENT_ID,
+            )
+
+        local_change = extractor.extract_deleted_attachments()[0]
+        remote_action = AttachmentDeleteAction(
+            fid=local_change.ngw_fid,
+            aid=local_change.ngw_aid,
+            vid=44,
+        )
+        conflict = LocalAttachmentDeletionConflict(
+            local_change=local_change,
+            remote_action=remote_action,
+        )
+        resolution = ConflictResolution(
+            resolution_type=ResolutionType.Remote,
+            conflict=conflict,
+        )
+
+        status, updated_actions = ConflictsResolutionApplier(
+            container_mock.context
+        ).apply([resolution], [remote_action])
+
+        self.assertEqual(status, ConflictsResolutionApplier.Status.Resolved)
+        self.assertEqual(updated_actions, [])
+        self.assertEqual(extractor.extract_deleted_attachments(), [])
+
+    @mock_container(
+        TestData.Points,
+        is_versioning_enabled=True,
+        attachments=[
+            AttachmentMetadata(
+                fid=FEATURE_ID,
+                aid=ATTACHMENT_ID,
+                ngw_aid=301,
+                version=11,
+                name="base-attachment",
+                description="base-description",
+                mime_type="text/plain",
+                fileobj=901,
+            )
+        ],
+    )
+    def test_apply_local_attachment_delete_remote_resolution_keeps_remote_action(
+        self,
+        container_mock,
+        qgs_layer: QgsVectorLayer,
+    ) -> None:
+        detached_layer = DetachedLayer(container_mock, qgs_layer)
+        extractor = self._extractor(container_mock)
+
+        with edit(qgs_layer):
+            detached_layer.remove_attachment(
+                self.FEATURE_ID,
+                self.ATTACHMENT_ID,
+            )
+
+        local_change = extractor.extract_deleted_attachments()[0]
+        remote_action = AttachmentUpdateAction(
+            fid=local_change.ngw_fid,
+            aid=local_change.ngw_aid,
+            vid=45,
+            name="remote-name",
+        )
+        conflict = LocalAttachmentDeletionConflict(
+            local_change=local_change,
+            remote_action=remote_action,
+        )
+        resolution = ConflictResolution(
+            resolution_type=ResolutionType.Remote,
+            conflict=conflict,
+        )
+
+        status, updated_actions = ConflictsResolutionApplier(
+            container_mock.context
+        ).apply([resolution], [remote_action])
+
+        self.assertEqual(status, ConflictsResolutionApplier.Status.Resolved)
+        self.assertEqual(updated_actions, [remote_action])
+        self.assertEqual(extractor.extract_deleted_attachments(), [])
 
     @mock_container(TestData.Points, is_versioning_enabled=True)
     def test_apply_feature_local_resolution_for_restore_conflict_converts_to_update(
