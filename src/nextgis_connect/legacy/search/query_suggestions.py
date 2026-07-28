@@ -17,6 +17,18 @@ class OwnerSuggestionContext:
     value_prefix: str
 
 
+@dataclass(frozen=True)
+class SearchOperation:
+    name: str
+    completion_text: str
+
+
+@dataclass(frozen=True)
+class TagOperationSyntax:
+    tag_name: str
+    operations: Tuple[SearchOperation, ...]
+
+
 class TextSearchSuggestionBuilder:
     OWNER_ALIASES: Tuple[str, ...] = ("me",)
 
@@ -30,8 +42,70 @@ class TextSearchSuggestionBuilder:
         "keyname",
         "metadata",
     )
+    _EQUAL_OPERATION = SearchOperation("=", "= ")
+    _IN_OPERATION = SearchOperation("IN", "IN (")
+    _QUOTED_IN_OPERATION = SearchOperation("IN", 'IN ("')
+    _LIKE_OPERATION = SearchOperation("LIKE", 'LIKE "')
+    _ILIKE_OPERATION = SearchOperation("ILIKE", 'ILIKE "')
+    _OWNER_LIKE_OPERATION = SearchOperation("LIKE", "LIKE ")
+    _OWNER_ILIKE_OPERATION = SearchOperation("ILIKE", "ILIKE ")
+
+    _TAG_OPERATION_SYNTAXES: Tuple[TagOperationSyntax, ...] = (
+        TagOperationSyntax(
+            "id",
+            (_EQUAL_OPERATION, _IN_OPERATION),
+        ),
+        TagOperationSyntax(
+            "parent",
+            (_EQUAL_OPERATION, _IN_OPERATION),
+        ),
+        TagOperationSyntax(
+            "root",
+            (_EQUAL_OPERATION,),
+        ),
+        TagOperationSyntax(
+            "owner",
+            (
+                _EQUAL_OPERATION,
+                _OWNER_LIKE_OPERATION,
+                _OWNER_ILIKE_OPERATION,
+                _QUOTED_IN_OPERATION,
+            ),
+        ),
+        TagOperationSyntax(
+            "type",
+            (
+                _EQUAL_OPERATION,
+                _LIKE_OPERATION,
+                _ILIKE_OPERATION,
+                _QUOTED_IN_OPERATION,
+            ),
+        ),
+        TagOperationSyntax(
+            "name",
+            (
+                SearchOperation("=", '= "'),
+                _LIKE_OPERATION,
+                _ILIKE_OPERATION,
+                _QUOTED_IN_OPERATION,
+            ),
+        ),
+        TagOperationSyntax(
+            "keyname",
+            (
+                SearchOperation("=", '= "'),
+                _LIKE_OPERATION,
+                _ILIKE_OPERATION,
+                _QUOTED_IN_OPERATION,
+            ),
+        ),
+    )
 
     _KEYWORD_PATTERN = re.compile(r"^@(?P<prefix>[a-z_]*)$", re.IGNORECASE)
+    _OPERATION_PATTERN = re.compile(
+        r"^@(?P<tag>[a-z_]+)(?:\s+(?P<operation>[a-z]*))?$",
+        re.IGNORECASE,
+    )
     _TYPE_PATTERN = re.compile(
         r"^@type(?P<before_equals>\s*)=(?P<after_equals>\s*)"
         r"(?P<quote>['\"]?)(?P<value>[a-z0-9_]*)$",
@@ -60,6 +134,38 @@ class TextSearchSuggestionBuilder:
             if keyword.startswith(keyword_prefix)
         ]
         return suggestions
+
+    def operation_suggestions(self, search_string: str) -> Optional[List[str]]:
+        fragment = self._last_tag_fragment(search_string)
+        if fragment is None:
+            return None
+
+        prefix, tag_text = fragment
+        match = self._OPERATION_PATTERN.match(tag_text)
+        if match is None:
+            return None
+
+        tag_name = match.group("tag").lower()
+        tag_syntax = self._tag_operation_syntax(tag_name)
+        if tag_syntax is None:
+            return None
+
+        operation_prefix = (match.group("operation") or "").lower()
+        return [
+            f"{prefix}@{tag_syntax.tag_name} {operation.completion_text}"
+            for operation in tag_syntax.operations
+            if operation_prefix == ""
+            or operation.name.lower().startswith(operation_prefix)
+        ]
+
+    def _tag_operation_syntax(
+        self, tag_name: str
+    ) -> Optional[TagOperationSyntax]:
+        for syntax in self._TAG_OPERATION_SYNTAXES:
+            if syntax.tag_name == tag_name:
+                return syntax
+
+        return None
 
     def resource_type_context(
         self,

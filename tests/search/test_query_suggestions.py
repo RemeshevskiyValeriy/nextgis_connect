@@ -32,6 +32,64 @@ def test_keyword_suggestions_preserve_previous_query_text() -> None:
     assert suggestions == ["@owner = 1 AND @name"]
 
 
+def test_operation_suggestions_are_available_after_string_tag() -> None:
+    suggestions = TextSearchSuggestionBuilder().operation_suggestions("@name")
+
+    assert suggestions == [
+        '@name = "',
+        '@name LIKE "',
+        '@name ILIKE "',
+        '@name IN ("',
+    ]
+
+
+def test_operation_suggestions_are_available_after_numeric_tag() -> None:
+    suggestions = TextSearchSuggestionBuilder().operation_suggestions("@id")
+
+    assert suggestions == ["@id = ", "@id IN ("]
+
+
+def test_operation_suggestions_skip_unsupported_in_operation() -> None:
+    suggestions = TextSearchSuggestionBuilder().operation_suggestions("@root")
+
+    assert suggestions == ["@root = "]
+
+
+def test_operation_suggestions_for_owner_use_unquoted_values() -> None:
+    suggestions = TextSearchSuggestionBuilder().operation_suggestions("@owner")
+
+    assert suggestions == [
+        "@owner = ",
+        "@owner LIKE ",
+        "@owner ILIKE ",
+        '@owner IN ("',
+    ]
+
+
+def test_operation_suggestions_filter_by_operation_prefix() -> None:
+    suggestions = TextSearchSuggestionBuilder().operation_suggestions(
+        "@name i"
+    )
+
+    assert suggestions == ['@name ILIKE "', '@name IN ("']
+
+
+def test_operation_suggestions_preserve_previous_query_text() -> None:
+    suggestions = TextSearchSuggestionBuilder().operation_suggestions(
+        "@owner = me AND @id i"
+    )
+
+    assert suggestions == ["@owner = me AND @id IN ("]
+
+
+def test_operation_suggestions_ignore_metadata_tag() -> None:
+    suggestions = TextSearchSuggestionBuilder().operation_suggestions(
+        "@metadata"
+    )
+
+    assert suggestions is None
+
+
 def test_resource_type_suggestions_are_available_after_type_equals() -> None:
     suggestions = TextSearchSuggestionBuilder().resource_type_suggestions(
         "@type = ",

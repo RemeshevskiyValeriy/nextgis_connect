@@ -85,6 +85,12 @@ class TextSearchCompleterModel(QStringListModel):
 
         self.__prefix = prefix
 
+        if self.__update_operation_suggestions():
+            self.__stop_name_suggestion_fetching()
+            self.__discard_resource_type_fetching()
+            self.__discard_owner_fetching()
+            return
+
         if self.__update_keyword_suggestions():
             self.__stop_name_suggestion_fetching()
             self.__discard_resource_type_fetching()
@@ -169,6 +175,16 @@ class TextSearchCompleterModel(QStringListModel):
 
     def __update_keyword_suggestions(self) -> bool:
         suggestions = self.__suggestion_builder.keyword_suggestions(
+            self.__prefix
+        )
+        if suggestions is None:
+            return False
+
+        self.__set_syntax_suggestions(suggestions)
+        return True
+
+    def __update_operation_suggestions(self) -> bool:
+        suggestions = self.__suggestion_builder.operation_suggestions(
             self.__prefix
         )
         if suggestions is None:
