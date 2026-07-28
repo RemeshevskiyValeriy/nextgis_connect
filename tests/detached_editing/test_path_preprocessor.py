@@ -16,20 +16,20 @@ from qgis.core import (
 )
 from qgis.PyQt.QtCore import QDir
 
-from nextgis_connect.detached_editing.container.path_preprocessor import (
+from nextgis_connect.legacy.detached_editing.container.path_preprocessor import (
     DetachedEditingPathPreprocessor,
 )
-from nextgis_connect.platform.qgis.compat import WkbType
-from nextgis_connect.settings.ng_connect_cache_manager import (
+from nextgis_connect.legacy.settings.ng_connect_cache_manager import (
     NgConnectCacheManager,
 )
+from nextgis_connect.platform.filesystem import cp
+from nextgis_connect.platform.qgis.compat import WkbType
 from tests.detached_editing.utils import mock_container
 from tests.ng_connect_testcase import (
     NgConnectTestCase,
     TestConnection,
     TestData,
 )
-from tests.utils import safe_move
 
 
 class TestPathPreprocessor(NgConnectTestCase):
@@ -254,10 +254,10 @@ class TestPathPreprocessor(NgConnectTestCase):
             self._assert_no_error_emitted()
 
     @patch(
-        "nextgis_connect.detached_editing.container.path_preprocessor.NGWResourceFactory"
+        "nextgis_connect.legacy.detached_editing.container.path_preprocessor.NGWResourceFactory"
     )
     @patch(
-        "nextgis_connect.detached_editing.container.path_preprocessor.QgsNgwConnection"
+        "nextgis_connect.legacy.detached_editing.container.path_preprocessor.QgsNgwConnection"
     )
     def test_not_existed(
         self, connection_mock: MagicMock, factory_mock: MagicMock
@@ -639,7 +639,7 @@ class TestPathPreprocessor(NgConnectTestCase):
         )
         container_path.parent.mkdir(exist_ok=True, parents=True)
 
-        safe_move(container_mock.path, container_path)
+        cp(container_mock.path, container_path)
 
         container_mock.path = container_path
 

@@ -24,8 +24,8 @@ from nextgis_connect.ngw.qgis.raster_upload_preparer import (
     PreparedRasterFile,
     RasterUploadPreparer,
 )
+from nextgis_connect.platform.filesystem import rm
 from tests.ng_connect_testcase import NgConnectTestCase, TestConnection
-from tests.utils import safe_remove
 
 LOCAL_PROJ = (
     "+proj=tmerc +lat_0=0 +lon_0=37 +k=1 +x_0=500000 +y_0=0 "
@@ -206,7 +206,7 @@ class TestRasterUploadPreparer(NgConnectTestCase):
         self, prepared_file: PreparedRasterFile
     ) -> None:
         if prepared_file.is_temporary:
-            self.addCleanup(safe_remove, prepared_file.upload_path)
+            self.addCleanup(rm, prepared_file.upload_path)
 
     def _sandbox_factory(self) -> NGWResourceFactory:
         connection_id = self.connection_id(TestConnection.SandboxGuest)

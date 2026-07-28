@@ -26,13 +26,16 @@ from qgis.PyQt.QtCore import QSize, Qt
 from qgis.PyQt.QtWidgets import QMainWindow
 from qgis.testing import QgisTestCase
 
+from nextgis_connect.legacy.ngw_connection import (
+    NgwConnection,
+    NgwConnectionsManager,
+)
 from nextgis_connect.ngw.core import NGWResource
 from nextgis_connect.ngw.core.ngw_resource_factory import (
     NGWResourceFactory,
 )
 from nextgis_connect.ngw.qgis.qgis_ngw_connection import QgsNgwConnection
-from nextgis_connect.ngw_connection import NgwConnection, NgwConnectionsManager
-from tests.utils import safe_remove
+from nextgis_connect.platform.filesystem import rm
 
 
 class TestData(str, Enum):
@@ -81,7 +84,7 @@ class NgConnectTestCase(QgisTestCase):
         cls._clear_auth_configs()
 
         for path in cls._temp_paths:
-            safe_remove(path)
+            rm(path)
 
         super().tearDownClass()
 
@@ -356,13 +359,13 @@ def stop_qgis() -> None:
     APPLICATION_INFO.application.exitQgis()
     del APPLICATION_INFO.application
 
-    safe_remove(APPLICATION_INFO.qgis_custom_config_path)
-    safe_remove(APPLICATION_INFO.qgis_auth_db_path)
+    rm(APPLICATION_INFO.qgis_custom_config_path)
+    rm(APPLICATION_INFO.qgis_auth_db_path)
 
     for path in Path(tempfile.gettempdir()).glob(
         f"{ApplicationInfo.APPLICATION_NAME}*"
     ):
-        safe_remove(path)
+        rm(path)
 
 
 def init_interface() -> None:
