@@ -1,8 +1,8 @@
 from typing import Optional
 
 from qgis.core import QgsApplication
-from qgis.PyQt.QtCore import Qt, QUrl, pyqtSlot
-from qgis.PyQt.QtGui import QDesktopServices, QIcon, QMovie
+from qgis.PyQt.QtCore import QSize, Qt, QUrl, pyqtSlot
+from qgis.PyQt.QtGui import QDesktopServices
 from qgis.PyQt.QtWidgets import QAction, QLineEdit, QWidget
 
 from nextgis_connect.legacy.ngw_connection.application.connections_manager import (
@@ -17,6 +17,9 @@ from nextgis_connect.legacy.search.text_search_completer_model import (
     TextSearchCompleterModel,
 )
 from nextgis_connect.platform.qgis.utils import nextgis_domain, utm_tags
+from nextgis_connect.ui_kit.widgets.loading_indicator import (
+    LoadingIndicatorIconAnimator,
+)
 
 
 class TextSearchLineEdit(AbstractSearchLineEdit):
@@ -24,7 +27,7 @@ class TextSearchLineEdit(AbstractSearchLineEdit):
 
     __loading_action: Optional[QAction]
     __open_help_action: Optional[QAction]
-    __loading_icon_movie: QMovie
+    __loading_icon: LoadingIndicatorIconAnimator
 
     __connection_id: Optional[str]
     __resource_url_parser: SearchResourceUrlParser
@@ -39,10 +42,11 @@ class TextSearchLineEdit(AbstractSearchLineEdit):
 
         # Animation
         self.__loading_action = None
-        self.__loading_icon_movie = QMovie(self)
-        self.__loading_icon_movie.setFileName(
-            ":images/themes/default/mIconLoading.gif"
+        self.__loading_icon = LoadingIndicatorIconAnimator(
+            QSize(16, 16),
+            parent=self,
         )
+        self.__loading_icon.frame_changed.connect(self.__update_loading_icon)
 
         # Help action
         self.__open_help_action = None
@@ -119,15 +123,25 @@ class TextSearchLineEdit(AbstractSearchLineEdit):
             return
 
         self.__loading_action = self.addAction(
-            QIcon(self.__loading_icon_movie.currentPixmap()),
+            self.__loading_icon.current_icon(
+                palette=self.palette(),
+                device_pixel_ratio=self.devicePixelRatioF(),
+            ),
             QLineEdit.ActionPosition.TrailingPosition,
         )
-        self.__loading_icon_movie.frameChanged.connect(
-            lambda: self.__loading_action.setIcon(
-                QIcon(self.__loading_icon_movie.currentPixmap())
+        self.__loading_icon.start()
+
+    @pyqtSlot()
+    def __update_loading_icon(self) -> None:
+        if self.__loading_action is None:
+            return
+
+        self.__loading_action.setIcon(
+            self.__loading_icon.current_icon(
+                palette=self.palette(),
+                device_pixel_ratio=self.devicePixelRatioF(),
             )
         )
-        self.__loading_icon_movie.start()
 
     @pyqtSlot()
     def __change_state_help_action(self) -> None:
@@ -157,7 +171,7 @@ class TextSearchLineEdit(AbstractSearchLineEdit):
 
     @pyqtSlot()
     def __hide_loading_icon(self) -> None:
-        self.__loading_icon_movie.stop()
+        self.__loading_icon.stop()
         if self.__loading_action is not None:
             self.__loading_action.deleteLater()
             self.__loading_action = None
