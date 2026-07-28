@@ -1033,6 +1033,16 @@ Please be aware that your current connections will be converted to the new forma
         <translation>Ресурс &quot;{}&quot; будет перезаписан слоем QGIS &quot;{}&quot; . Текущие данные будут потеряны.&lt;br/&gt;Вы уверены, что хотите перезаписать его?</translation>
     </message>
     <message>
+        <location filename="../ng_connect_dock.py" line="1636"/>
+        <source>Resource &quot;{}&quot; will be overwritten with QGIS layer &quot;{}&quot;. Current data and layer history will be lost.&lt;br/&gt;&lt;br/&gt;Are you ready to lose the layer history and overwrite it?</source>
+        <translation>Ресурс &quot;{}&quot; будет перезаписан слоем QGIS &quot;{}&quot;. Текущие данные и история слоя будут потеряны.&lt;br/&gt;&lt;br/&gt;Вы готовы потерять историю слоя и перезаписать его?</translation>
+    </message>
+    <message>
+        <location filename="../ng_connect_dock.py" line="1636"/>
+        <source>Overwrite</source>
+        <translation>Перезаписать</translation>
+    </message>
+    <message>
         <location filename="../ng_connect_dock.py" line="1667"/>
         <source>Get resource metadata</source>
         <translation>Получение метаданных ресурса</translation>

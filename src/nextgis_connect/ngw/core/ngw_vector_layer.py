@@ -204,6 +204,23 @@ class NGWVectorLayer(NGWAbstractVectorResource):
 
         self.update()
 
+    def set_versioning_enabled(self, enabled: bool) -> None:
+        connection = self.res_factory.connection
+        url = self.get_relative_api_url()
+        params = dict(
+            feature_layer=dict(
+                versioning=dict(
+                    enabled=enabled,
+                )
+            )
+        )
+
+        connection.put(url, params=params)
+
+        feature_layer = self._json.setdefault("feature_layer", {})
+        versioning = feature_layer.setdefault("versioning", {})
+        versioning["enabled"] = enabled
+
     def export(self, path: str, format: str = "GPKG", srs: int = 3857) -> None:
         url = self.get_relative_api_url()
         export_url = (

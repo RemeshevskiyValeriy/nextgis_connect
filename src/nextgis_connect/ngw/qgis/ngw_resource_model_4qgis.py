@@ -1890,7 +1890,29 @@ class NGWUpdateVectorLayer(QGISResourceJob):
             QgsApplication.translate("QGISResourceJob", "replacing features"),
         )
 
-        connection.put(url, params=params, is_lunkwill=True)
+        was_versioning_enabled = self.ngw_layer.is_versioning_enabled
+        if was_versioning_enabled:
+            self.ngw_layer.set_versioning_enabled(False)
+
+        replace_error: Optional[BaseException] = None
+        try:
+            connection.put(url, params=params, is_lunkwill=True)
+        except Exception as error:
+            replace_error = error
+            raise
+        finally:
+            if was_versioning_enabled:
+                try:
+                    self.ngw_layer.set_versioning_enabled(True)
+                except Exception as error:
+                    if replace_error is None:
+                        raise
+
+                    logger.exception(
+                        "Failed to restore versioning after vector layer "
+                        "replacement error"
+                    )
+                    self.warningOccurred.emit(error)
 
         self.ngw_layer = self.ngw_layer.res_factory.get_resource(
             self.ngw_layer.resource_id

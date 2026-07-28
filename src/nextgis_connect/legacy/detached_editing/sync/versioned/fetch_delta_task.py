@@ -1,7 +1,7 @@
 import urllib.parse
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from nextgis_connect.legacy.detached_editing.sync.common.detached_editing_task import (
     DetachedEditingTask,
@@ -27,6 +27,9 @@ from nextgis_connect.platform.qgis.errors import (
 
 
 class FetchDeltaTask(DetachedEditingTask):
+    _VERSIONING_NOT_ENABLED = "FVersioningNotEnabled"
+    _VERSIONING_EPOCH_MISMATCH = "FVersioningEpochMismatch"
+
     __target: int
     __timestamp: datetime
     __delta: List[VersioningAction]
@@ -83,18 +86,11 @@ class FetchDeltaTask(DetachedEditingTask):
             try:
                 check_result = ngw_connection.get(check_url)
             except NgwError as error:
-                if (
-                    error.ngw_exception_class is None
-                    or error.ngw_exception_class.split(".")[-1]
-                    != "FVersioningNotEnabled"
-                ):
+                synchronization_error = self._synchronization_error(error)
+                if synchronization_error is None:
                     raise
 
-                error = SynchronizationError(
-                    "Versioning is not enabled",
-                    code=ErrorCode.VersioningDisabled,
-                )
-                raise error
+                raise synchronization_error from error
 
             if check_result is None:
                 self.__delta = []
@@ -137,6 +133,31 @@ class FetchDeltaTask(DetachedEditingTask):
             return False
 
         return True
+
+    def _synchronization_error(
+        self,
+        error: NgwError,
+    ) -> Optional[SynchronizationError]:
+        exception_class = self._ngw_exception_class_name(error)
+        if exception_class == self._VERSIONING_NOT_ENABLED:
+            return SynchronizationError(
+                "Versioning is not enabled",
+                code=ErrorCode.VersioningDisabled,
+            )
+
+        if exception_class == self._VERSIONING_EPOCH_MISMATCH:
+            return SynchronizationError(
+                "Epoch changed",
+                code=ErrorCode.EpochChanged,
+            )
+
+        return None
+
+    def _ngw_exception_class_name(self, error: NgwError) -> Optional[str]:
+        if error.ngw_exception_class is None:
+            return None
+
+        return error.ngw_exception_class.split(".")[-1]
 
     def _check_compatibility(self, answer: Dict[str, Any]) -> None:
         if self._metadata.epoch != answer["epoch"]:

@@ -1,0 +1,201 @@
+from contextlib import ExitStack, contextmanager
+from typing import Iterator, Tuple
+from unittest import mock
+
+import pytest
+
+from nextgis_connect.ngw.core.ngw_vector_layer import NGWVectorLayer
+from nextgis_connect.ngw.qgis.ngw_resource_model_4qgis import (
+    NGWUpdateVectorLayer,
+)
+
+
+def test_set_versioning_enabled_puts_minimal_payload(qgis_app) -> None:
+    del qgis_app
+
+    ngw_layer, connection = _vector_layer(is_versioning_enabled=True)
+
+    ngw_layer.set_versioning_enabled(False)
+
+    connection.put.assert_called_once_with(
+        "/api/resource/7",
+        params={
+            "feature_layer": {
+                "versioning": {
+                    "enabled": False,
+                },
+            },
+        },
+    )
+    assert not ngw_layer.is_versioning_enabled
+
+
+def test_update_vector_layer_restores_versioning_around_replace(
+    qgis_app,
+) -> None:
+    del qgis_app
+
+    ngw_layer, connection = _vector_layer(is_versioning_enabled=True)
+    job = NGWUpdateVectorLayer(ngw_layer, _qgis_layer())
+
+    with _prepared_update_job(job):
+        job._do()
+
+    put_calls = connection.put.call_args_list
+    assert len(put_calls) == 3
+    assert put_calls[0] == _versioning_put_call(False)
+    assert put_calls[1].args[0] == "https://example.test/api/resource/7"
+    assert put_calls[1].kwargs["is_lunkwill"] is True
+    assert put_calls[2] == _versioning_put_call(True)
+    assert ngw_layer.is_versioning_enabled
+
+
+def test_update_vector_layer_restores_versioning_after_replace_error(
+    qgis_app,
+) -> None:
+    del qgis_app
+
+    ngw_layer, connection = _vector_layer(is_versioning_enabled=True)
+    connection.put.side_effect = [None, RuntimeError("replace failed"), None]
+    job = NGWUpdateVectorLayer(ngw_layer, _qgis_layer())
+
+    with pytest.raises(RuntimeError, match="replace failed"):
+        with _prepared_update_job(job):
+            job._do()
+
+    put_calls = connection.put.call_args_list
+    assert len(put_calls) == 3
+    assert put_calls[0] == _versioning_put_call(False)
+    assert put_calls[2] == _versioning_put_call(True)
+    assert ngw_layer.is_versioning_enabled
+
+
+def test_update_vector_layer_keeps_replace_error_when_restore_fails(
+    qgis_app,
+) -> None:
+    del qgis_app
+
+    ngw_layer, connection = _vector_layer(is_versioning_enabled=True)
+    restore_error = RuntimeError("restore failed")
+    connection.put.side_effect = [
+        None,
+        RuntimeError("replace failed"),
+        restore_error,
+    ]
+    job = NGWUpdateVectorLayer(ngw_layer, _qgis_layer())
+    warnings = []
+    job.warningOccurred.connect(warnings.append)
+
+    with pytest.raises(RuntimeError, match="replace failed"):
+        with _prepared_update_job(job):
+            job._do()
+
+    assert warnings == [restore_error]
+
+
+def test_update_vector_layer_does_not_toggle_disabled_versioning(
+    qgis_app,
+) -> None:
+    del qgis_app
+
+    ngw_layer, connection = _vector_layer(is_versioning_enabled=False)
+    job = NGWUpdateVectorLayer(ngw_layer, _qgis_layer())
+
+    with _prepared_update_job(job):
+        job._do()
+
+    put_calls = connection.put.call_args_list
+    assert len(put_calls) == 1
+    assert put_calls[0].args[0] == "https://example.test/api/resource/7"
+    assert put_calls[0].kwargs["is_lunkwill"] is True
+
+
+def _vector_layer(
+    is_versioning_enabled: bool,
+) -> Tuple[NGWVectorLayer, mock.Mock]:
+    connection = mock.Mock()
+    connection.connection_id = "test-connection"
+    connection.server_url = "https://example.test/"
+    connection.tus_upload_file.return_value = {"id": "upload"}
+
+    factory = mock.Mock()
+    factory.connection = connection
+
+    ngw_layer = NGWVectorLayer(
+        factory,
+        {
+            "resource": {
+                "id": 7,
+                "cls": "vector_layer",
+                "parent": None,
+                "owner_user": None,
+                "display_name": "Remote layer",
+                "description": "",
+                "children": False,
+                "interfaces": [],
+            },
+            "feature_layer": {
+                "fields": [],
+                "versioning": {
+                    "enabled": is_versioning_enabled,
+                },
+            },
+            "vector_layer": {
+                "srs": {
+                    "id": 3857,
+                },
+                "geometry_type": "POINT",
+            },
+        },
+    )
+    factory.get_resource.return_value = ngw_layer
+
+    return ngw_layer, connection
+
+
+def _qgis_layer() -> mock.Mock:
+    qgis_layer = mock.Mock()
+    qgis_layer.name.return_value = "Local layer"
+    qgis_layer.fields.return_value = []
+    return qgis_layer
+
+
+@contextmanager
+def _prepared_update_job(job: NGWUpdateVectorLayer) -> Iterator[None]:
+    with ExitStack() as stack:
+        stack.enter_context(
+            mock.patch.object(job, "_ensure_no_geometry_supported")
+        )
+        stack.enter_context(
+            mock.patch.object(
+                job,
+                "isSuitableLayer",
+                return_value=job.SUITABLE_LAYER,
+            )
+        )
+        stack.enter_context(
+            mock.patch.object(
+                job,
+                "prepareImportVectorFile",
+                return_value=("/tmp/fake.gpkg", None, None),
+            )
+        )
+        stack.enter_context(
+            mock.patch(
+                "nextgis_connect.ngw.qgis.ngw_resource_model_4qgis.os.remove"
+            )
+        )
+        yield
+
+
+def _versioning_put_call(enabled: bool) -> object:
+    return mock.call(
+        "/api/resource/7",
+        params={
+            "feature_layer": {
+                "versioning": {
+                    "enabled": enabled,
+                },
+            },
+        },
+    )

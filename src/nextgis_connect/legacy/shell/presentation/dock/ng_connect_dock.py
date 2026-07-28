@@ -74,6 +74,7 @@ from qgis.PyQt.QtGui import (
 )
 from qgis.PyQt.QtNetwork import QNetworkReply, QNetworkRequest
 from qgis.PyQt.QtWidgets import (
+    QAbstractButton,
     QAction,
     QActionGroup,
     QApplication,
@@ -2897,21 +2898,14 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
             self.resources_tree_view.selectionModel().currentIndex()
         )
         qgs_map_layer = self.iface.mapCanvas().currentLayer()
+        ngw_resource = index.data(QNGWResourceItem.NGWResourceRole)
 
-        result = QMessageBox.question(
-            self,
-            self.tr("Overwrite resource"),
-            self.tr(
-                'Resource "{}" will be overwritten with QGIS layer "{}". '
-                "Current data will be lost.<br/>Are you sure you want to "
-                "overwrite it?"
-            ).format(
-                index.data(Qt.ItemDataRole.DisplayRole),
-                html.escape(qgs_map_layer.name()),
-            ),
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-        )
-        if result != QMessageBox.StandardButton.Yes:
+        if not self.__confirm_resource_overwrite(
+            str(index.data(Qt.ItemDataRole.DisplayRole)),
+            qgs_map_layer.name(),
+            isinstance(ngw_resource, NGWVectorLayer)
+            and ngw_resource.is_versioning_enabled,
+        ):
             return
 
         if isinstance(qgs_map_layer, QgsVectorLayer):
@@ -2919,6 +2913,82 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
 
         if isinstance(qgs_map_layer, QgsRasterLayer):
             self.resource_model.updateNGWRasterLayer(index, qgs_map_layer)
+
+    def __confirm_resource_overwrite(
+        self,
+        resource_name: str,
+        qgis_layer_name: str,
+        is_versioning_enabled: bool,
+    ) -> bool:
+        message = self.tr(
+            'Resource "{}" will be overwritten with QGIS layer "{}". '
+            "Current data will be lost.<br/>Are you sure you want to "
+            "overwrite it?"
+        )
+        if is_versioning_enabled:
+            message = self.tr(
+                'Resource "{}" will be overwritten with QGIS layer "{}". '
+                "Current data and layer history will be lost.<br/><br/>"
+                "Are you ready to lose the layer history and overwrite it?"
+            )
+
+        box = QMessageBox(self)
+        box.setIcon(
+            QMessageBox.Icon.Warning
+            if is_versioning_enabled
+            else QMessageBox.Icon.Question
+        )
+        box.setWindowTitle(self.tr("Overwrite resource"))
+        box.setText(
+            message.format(
+                html.escape(resource_name),
+                html.escape(qgis_layer_name),
+            )
+        )
+        box.setTextFormat(Qt.TextFormat.RichText)
+        box.setStandardButtons(
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+        )
+        box.setDefaultButton(QMessageBox.StandardButton.No)
+
+        confirm_button = box.button(QMessageBox.StandardButton.Yes)
+        assert confirm_button is not None
+        confirm_button.setText(self.tr("Overwrite"))
+
+        if is_versioning_enabled:
+            self.__start_overwrite_confirmation_countdown(confirm_button, box)
+
+        return box.exec() == QMessageBox.StandardButton.Yes
+
+    def __start_overwrite_confirmation_countdown(
+        self,
+        confirm_button: QAbstractButton,
+        box: QMessageBox,
+    ) -> None:
+        seconds_left = 5
+        confirm_text = self.tr("Overwrite")
+
+        def update_button_text() -> None:
+            confirm_button.setText(f"{confirm_text} {seconds_left}")
+
+        def tick() -> None:
+            nonlocal seconds_left
+            seconds_left -= 1
+            if seconds_left <= 0:
+                timer.stop()
+                confirm_button.setText(confirm_text)
+                confirm_button.setEnabled(True)
+                return
+
+            update_button_text()
+
+        confirm_button.setEnabled(False)
+        update_button_text()
+
+        timer = QTimer(box)
+        timer.setInterval(1000)
+        timer.timeout.connect(tick)
+        timer.start()
 
     def edit_metadata(self):
         """Edit metadata table"""
