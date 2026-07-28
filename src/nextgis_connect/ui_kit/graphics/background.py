@@ -4,11 +4,11 @@ from typing import Optional
 from qgis.PyQt.QtCore import QObject, QRect, QRectF
 from qgis.PyQt.QtGui import QColor, QLinearGradient, QPainter, QPalette, QPen
 
-from nextgis_connect.ui_kit.rendering.graphics.decorator import (
+from nextgis_connect.ui_kit.graphics.decorator import (
     NextgisDecorator,
     mix_colors,
 )
-from nextgis_connect.ui_kit.rendering.graphics.svg_renderer import (
+from nextgis_connect.ui_kit.graphics.svg_renderer import (
     CustomSvgRenderer,
 )
 

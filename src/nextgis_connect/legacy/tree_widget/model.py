@@ -92,7 +92,7 @@ from nextgis_connect.platform.qgis.errors import (
     NgwConnectionError,
     NgwError,
 )
-from nextgis_connect.ui_kit.rendering.graphics import (
+from nextgis_connect.ui_kit.graphics import (
     NextgisDecorator,
     mix_colors,
 )

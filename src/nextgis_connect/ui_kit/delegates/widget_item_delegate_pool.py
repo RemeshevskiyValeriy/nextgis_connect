@@ -27,7 +27,7 @@ from qgis.PyQt.QtWidgets import (
 from nextgis_connect.platform.logging import logger
 
 if TYPE_CHECKING:
-    from src.nextgis_connect.ui_kit.delegates.widget_item_delegate import (
+    from nextgis_connect.ui_kit.delegates.widget_item_delegate import (
         WidgetItemDelegate,
     )
 

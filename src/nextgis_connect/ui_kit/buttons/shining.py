@@ -4,12 +4,12 @@ from qgis.PyQt.QtCore import QEasingCurve, QVariantAnimation
 from qgis.PyQt.QtGui import QColor, QLinearGradient, QPainter
 from qgis.PyQt.QtWidgets import QWidget
 
-from nextgis_connect.ui_kit.rendering.graphics.decorator import (
+from nextgis_connect.ui_kit.buttons.animated import ButtonVisualState
+from nextgis_connect.ui_kit.buttons.primary import PrimaryButton
+from nextgis_connect.ui_kit.graphics.decorator import (
     NextgisBrandColor,
     NextgisDecorator,
 )
-from nextgis_connect.ui_kit.widgets.buttons.animated import ButtonVisualState
-from nextgis_connect.ui_kit.widgets.buttons.primary import PrimaryButton
 
 
 class ShiningButton(PrimaryButton):

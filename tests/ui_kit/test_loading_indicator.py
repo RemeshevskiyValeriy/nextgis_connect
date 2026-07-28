@@ -1,7 +1,7 @@
 from qgis.PyQt.QtCore import QSize
 from qgis.PyQt.QtGui import QColor, QIcon, QPalette
 
-from nextgis_connect.ui_kit.rendering.graphics.loading_indicator import (
+from nextgis_connect.ui_kit.graphics.loading_indicator import (
     LoadingIndicatorRenderer,
 )
 from nextgis_connect.ui_kit.widgets.loading_indicator import (

@@ -27,7 +27,7 @@ from nextgis_connect.legacy.ngw_connection.presentation.connection_edit_dialog i
 from nextgis_connect.legacy.settings.ng_connect_cache_manager import (
     NgConnectCacheManager,
 )
-from nextgis_connect.ui_kit.rendering.graphics.decorator import (
+from nextgis_connect.ui_kit.graphics.decorator import (
     NextgisBrandColor,
     NextgisDecorator,
 )

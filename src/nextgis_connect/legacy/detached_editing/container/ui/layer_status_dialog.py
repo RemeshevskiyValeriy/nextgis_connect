@@ -15,8 +15,8 @@ from qgis.PyQt.QtWidgets import (
 )
 
 from nextgis_connect.legacy.detached_editing.utils import DetachedLayerState
+from nextgis_connect.ui_kit.buttons.loading import LoadingToolButton
 from nextgis_connect.ui_kit.icons.icon import material_icon
-from nextgis_connect.ui_kit.widgets.buttons.loading import LoadingToolButton
 
 if TYPE_CHECKING:
     from nextgis_connect.legacy.detached_editing.container.container import (

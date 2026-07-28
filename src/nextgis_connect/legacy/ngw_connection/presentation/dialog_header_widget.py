@@ -18,11 +18,11 @@ from qgis.PyQt.QtWidgets import (
     QWidget,
 )
 
-from nextgis_connect.ui_kit.rendering.graphics import (
+from nextgis_connect.ui_kit.graphics import (
     NextgisBackgroundPainter,
     NextgisDecorator,
 )
-from nextgis_connect.ui_kit.rendering.graphics.svg_renderer import (
+from nextgis_connect.ui_kit.graphics.svg_renderer import (
     CustomSvgRenderer,
 )
 

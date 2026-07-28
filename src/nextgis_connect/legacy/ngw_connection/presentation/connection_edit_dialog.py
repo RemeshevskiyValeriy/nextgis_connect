@@ -65,11 +65,11 @@ from nextgis_connect.legacy.ngw_connection.presentation.dialog_header_widget imp
     NextgisDialogHeaderWidget,
 )
 from nextgis_connect.platform.qgis.utils import nextgis_domain
-from nextgis_connect.ui_kit.icons.icon import material_icon
-from nextgis_connect.ui_kit.widgets.buttons.loading import (
+from nextgis_connect.ui_kit.buttons.loading import (
     LoadingPushButton,
     LoadingToolButton,
 )
+from nextgis_connect.ui_kit.icons.icon import material_icon
 
 HAS_NGSTD = importlib.util.find_spec("ngstd") is not None
 NGAccess = None

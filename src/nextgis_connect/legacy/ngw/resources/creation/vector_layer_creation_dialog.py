@@ -39,13 +39,13 @@ from nextgis_connect.legacy.settings.ng_connect_settings import (
 )
 from nextgis_connect.legacy.tree_widget.item import QNGWResourceItem
 from nextgis_connect.platform.qgis.compat import WkbType
+from nextgis_connect.ui_kit.buttons.loading import LoadingPushButton
 from nextgis_connect.ui_kit.delegates.checkbox_delegate import (
     CheckBoxDelegate,
 )
-from nextgis_connect.ui_kit.delegates.header_with_cenetered_icon_proxy_style import (
+from nextgis_connect.ui_kit.delegates.header_with_centered_icon_proxy_style import (
     HeaderWithCenteredIconProxyStyle,
 )
-from nextgis_connect.ui_kit.widgets.buttons.loading import LoadingPushButton
 
 VectorLayerCreationDialogBase, _ = uic.loadUiType(
     str(Path(__file__).parent / "vector_layer_creation_dialog_base.ui")

@@ -22,11 +22,11 @@ from nextgis_connect.legacy.tree_widget.model import (
     NGWResourceModelResponse,
     QNGWResourceTreeModel,
 )
-from nextgis_connect.ui_kit.icons import material_icon
-from nextgis_connect.ui_kit.rendering.graphics import (
+from nextgis_connect.ui_kit.buttons.loading import LoadingPushButton
+from nextgis_connect.ui_kit.graphics import (
     NextgisDecorator,
 )
-from nextgis_connect.ui_kit.widgets.buttons.loading import LoadingPushButton
+from nextgis_connect.ui_kit.icons import material_icon
 
 
 class ResourceDeleteConfirmationDialog(QDialog):

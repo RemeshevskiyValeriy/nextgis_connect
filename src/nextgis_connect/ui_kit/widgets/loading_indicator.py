@@ -29,7 +29,7 @@ from qgis.PyQt.QtCore import (
 from qgis.PyQt.QtGui import QIcon, QPainter, QPalette
 from qgis.PyQt.QtWidgets import QSizePolicy, QWidget
 
-from nextgis_connect.ui_kit.rendering.graphics.loading_indicator import (
+from nextgis_connect.ui_kit.graphics.loading_indicator import (
     LoadingIndicatorRenderer,
 )
 

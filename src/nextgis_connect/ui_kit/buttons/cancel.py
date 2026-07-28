@@ -5,9 +5,9 @@ from qgis.PyQt.QtCore import QRect, QRectF, QSize
 from qgis.PyQt.QtGui import QPainter
 from qgis.PyQt.QtWidgets import QWidget
 
-from nextgis_connect.ui_kit.rendering.graphics import CustomSvgRenderer
-from nextgis_connect.ui_kit.widgets.buttons.animated import ButtonVisualState
-from nextgis_connect.ui_kit.widgets.buttons.secondary import SecondaryButton
+from nextgis_connect.ui_kit.buttons.animated import ButtonVisualState
+from nextgis_connect.ui_kit.buttons.secondary import SecondaryButton
+from nextgis_connect.ui_kit.graphics import CustomSvgRenderer
 
 
 class CancelButton(SecondaryButton):

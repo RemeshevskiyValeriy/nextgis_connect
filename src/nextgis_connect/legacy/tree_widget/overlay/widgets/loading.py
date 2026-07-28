@@ -17,10 +17,10 @@ from nextgis_connect.legacy.tree_widget.overlay.state import (
 from nextgis_connect.legacy.tree_widget.overlay.widgets.surface import (
     OverlaySurfaceWidget,
 )
-from nextgis_connect.ui_kit.rendering.graphics.decorator import (
+from nextgis_connect.ui_kit.buttons import CancelButton
+from nextgis_connect.ui_kit.graphics.decorator import (
     NextgisDecorator,
 )
-from nextgis_connect.ui_kit.widgets.buttons import CancelButton
 
 
 class LoadingOverlayWidget(OverlaySurfaceWidget):

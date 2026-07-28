@@ -5,7 +5,7 @@ from qgis.PyQt.QtGui import QBrush, QColor, QPalette
 
 from nextgis_connect.legacy.tree_widget.item import QNGWResourceItem
 from nextgis_connect.legacy.tree_widget.model import QNGWResourceTreeModelBase
-from nextgis_connect.ui_kit.rendering.graphics import (
+from nextgis_connect.ui_kit.graphics import (
     NextgisDecorator,
     mix_colors,
 )

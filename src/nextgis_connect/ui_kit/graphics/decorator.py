@@ -184,7 +184,7 @@ class NextgisDecorator:
         QPalette.ColorGroup.Disabled,
     )
     _THEME_PATH = (
-        Path(__file__).resolve().parents[3]
+        Path(__file__).resolve().parents[2]
         / "assets"
         / "themes"
         / "nextgis.json"

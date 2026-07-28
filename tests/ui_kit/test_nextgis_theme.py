@@ -8,7 +8,8 @@ except ImportError:
 
 from qgis.PyQt.QtGui import QColor, QPalette
 
-from nextgis_connect.ui_kit.rendering.graphics.decorator import (
+from nextgis_connect.ui_kit.buttons.primary import PrimaryButton
+from nextgis_connect.ui_kit.graphics.decorator import (
     NextgisBrandColor,
     NextgisDecorator,
     NextgisRadius,
@@ -16,7 +17,6 @@ from nextgis_connect.ui_kit.rendering.graphics.decorator import (
     NextgisSpacing,
     mix_colors,
 )
-from nextgis_connect.ui_kit.widgets.buttons.primary import PrimaryButton
 
 ROOT = Path(__file__).resolve().parents[2]
 THEME_PATH = (

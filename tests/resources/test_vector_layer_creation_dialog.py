@@ -19,7 +19,7 @@ from nextgis_connect.legacy.ngw.resources.creation.vector_layer_creation_dialog 
 )
 from nextgis_connect.legacy.tree_widget.item import QNGWResourceItem
 from nextgis_connect.platform.qgis.compat import WkbType
-from nextgis_connect.ui_kit.widgets.buttons.loading import LoadingPushButton
+from nextgis_connect.ui_kit.buttons.loading import LoadingPushButton
 
 
 class _CreateResourceResponse(QObject):

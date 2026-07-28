@@ -215,13 +215,13 @@ from nextgis_connect.platform.qgis.errors import (
     NgwError,
 )
 from nextgis_connect.shared.constants import PACKAGE_NAME, PLUGIN_NAME
+from nextgis_connect.ui_kit.buttons.shining import ShiningButton
 from nextgis_connect.ui_kit.icons.icon import (
     icon_to_base64,
     material_icon,
     plugin_icon,
     qgis_icon,
 )
-from nextgis_connect.ui_kit.widgets.buttons.shining import ShiningButton
 
 HAS_NGSTD = importlib.util.find_spec("ngstd") is not None
 if HAS_NGSTD:

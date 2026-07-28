@@ -13,7 +13,7 @@ from qgis.PyQt.QtCore import (
 from qgis.PyQt.QtGui import QColor, QPainter, QPalette, QPen
 from qgis.PyQt.QtWidgets import QPushButton, QSizePolicy, QWidget
 
-from nextgis_connect.ui_kit.rendering.graphics.decorator import (
+from nextgis_connect.ui_kit.graphics.decorator import (
     NextgisDecorator,
     NextgisRadius,
     NextgisSize,

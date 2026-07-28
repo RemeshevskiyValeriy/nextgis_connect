@@ -3,12 +3,12 @@ from typing import Optional
 from qgis.PyQt.QtGui import QColor
 from qgis.PyQt.QtWidgets import QWidget
 
-from nextgis_connect.ui_kit.rendering.graphics.decorator import (
-    NextgisDecorator,
-)
-from nextgis_connect.ui_kit.widgets.buttons.animated import (
+from nextgis_connect.ui_kit.buttons.animated import (
     AnimatedButtonBase,
     ButtonVisualState,
+)
+from nextgis_connect.ui_kit.graphics.decorator import (
+    NextgisDecorator,
 )
 
 

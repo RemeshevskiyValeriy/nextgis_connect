@@ -30,7 +30,7 @@ from nextgis_connect.legacy.tree_widget.overlay.state import (
     OverlayAction,
     OverlayButtonState,
 )
-from nextgis_connect.ui_kit.rendering.graphics import (
+from nextgis_connect.ui_kit.graphics import (
     CustomSvgRenderer,
     NextgisBackgroundPainter,
     NextgisDecorator,

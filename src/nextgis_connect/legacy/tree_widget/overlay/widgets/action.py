@@ -15,15 +15,15 @@ from nextgis_connect.legacy.tree_widget.overlay.widgets.surface import (
     MaterialIllustrationWidget,
     OverlaySurfaceWidget,
 )
-from nextgis_connect.ui_kit.icons.icon import material_icon
-from nextgis_connect.ui_kit.rendering.graphics.decorator import (
-    NextgisDecorator,
-)
-from nextgis_connect.ui_kit.widgets.buttons import (
+from nextgis_connect.ui_kit.buttons import (
     PrimaryButton,
     SecondaryButton,
     ShiningButton,
 )
+from nextgis_connect.ui_kit.graphics.decorator import (
+    NextgisDecorator,
+)
+from nextgis_connect.ui_kit.icons.icon import material_icon
 
 
 class ActionOverlayWidget(OverlaySurfaceWidget):

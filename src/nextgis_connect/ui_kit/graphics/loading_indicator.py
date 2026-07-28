@@ -19,7 +19,7 @@ from typing import Optional
 from qgis.PyQt.QtCore import QRectF, QSize, Qt
 from qgis.PyQt.QtGui import QColor, QIcon, QPainter, QPalette, QPen, QPixmap
 
-from nextgis_connect.ui_kit.rendering.graphics.decorator import (
+from nextgis_connect.ui_kit.graphics.decorator import (
     NextgisDecorator,
     mix_colors,
 )
