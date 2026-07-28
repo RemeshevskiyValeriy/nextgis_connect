@@ -17,7 +17,7 @@ def create_plugin(iface: QgisInterface) -> NgConnectInterface:
 
     try:
         with QgsRuntimeProfiler.profile("Import plugin"):  # type: ignore
-            from nextgis_connect.plugin import NgConnectPlugin
+            from nextgis_connect.bootstrap.plugin import NgConnectPlugin
 
         plugin = NgConnectPlugin(iface)
         plugin.bootstrap()
