@@ -27,7 +27,7 @@ from nextgis_connect.legacy.ngw_connection.domain.parsers import (
     suggested_connection_name,
 )
 from nextgis_connect.platform.logging import logger
-from nextgis_connect.platform.tasks.ng_connect_task import NgConnectTask
+from nextgis_connect.platform.tasks import NgConnectTask
 
 from .checks import build_connection_checks
 from .checks.base import CheckCancelledError

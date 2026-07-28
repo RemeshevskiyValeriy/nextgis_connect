@@ -1,7 +1,7 @@
 from copy import deepcopy
 from typing import Optional, Union
 
-from qgis.core import QgsTask
+from qgis.core import QgsTask, QgsTaskManager
 
 from nextgis_connect.legacy.settings import NgConnectSettings
 from nextgis_connect.platform.logging import logger
@@ -53,3 +53,7 @@ class NgConnectTask(QgsTask):
             return False
 
         return True
+
+
+class NgConnectTaskManager(QgsTaskManager):
+    pass

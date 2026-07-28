@@ -66,7 +66,7 @@ from nextgis_connect.legacy.ngw_connection import (
 from nextgis_connect.platform.filesystem import reveal_in_file_manager
 from nextgis_connect.platform.logging import logger
 from nextgis_connect.platform.qgis.compat import QgsFeatureId
-from nextgis_connect.platform.tasks.ng_connect_task import NgConnectTask
+from nextgis_connect.platform.tasks import NgConnectTask
 from nextgis_connect.shared.types import AttachmentId
 from nextgis_connect.ui_kit.icons.icon import material_icon, qgis_icon
 

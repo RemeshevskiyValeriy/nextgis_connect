@@ -2,23 +2,25 @@ import html
 import logging
 import re
 from pprint import pformat
-from typing import TYPE_CHECKING, Dict, List, Optional, Set, Union, cast
+from typing import Dict, List, Optional, Set, Union, cast
 
+import qgis.utils
 from qgis.core import Qgis, QgsApplication
+from qgis.gui import QgisInterface
 from qgis.PyQt.QtWidgets import QPlainTextEdit, QTabWidget
-from qgis.utils import iface
 
 from nextgis_connect.legacy.settings import NgConnectSettings
 from nextgis_connect.platform.qgis.compat import QGIS_3_42_2
 from nextgis_connect.shared.constants import PLUGIN_NAME
 
-if TYPE_CHECKING:
-    from qgis.gui import QgisInterface
-
-    assert isinstance(iface, QgisInterface)
-
 SUCCESS_LEVEL = logging.INFO + 1
 logging.addLevelName(SUCCESS_LEVEL, "SUCCESS")
+
+
+def _iface() -> QgisInterface:
+    iface = qgis.utils.iface
+    assert isinstance(iface, QgisInterface)
+    return iface
 
 
 def map_logging_level_to_qgis(level: int) -> Qgis.MessageLevel:
@@ -228,6 +230,7 @@ def extract_plugin_logs() -> str:
     :returns: Log messages as a single string.
     :rtype: str
     """
+    iface = _iface()
     log_viewer = iface.mainWindow().logViewer()
     tab_widget: QTabWidget = log_viewer.findChild(QTabWidget)
     assert tab_widget is not None
@@ -248,6 +251,7 @@ def open_plugin_logs() -> None:
     """
     Open QGIS log viewer with the plugin tab selected.
     """
+    iface = _iface()
     if Qgis.versionInt() >= 34400:
         iface.openMessageLog(PLUGIN_NAME)
     else:

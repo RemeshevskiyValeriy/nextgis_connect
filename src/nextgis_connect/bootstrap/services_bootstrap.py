@@ -10,7 +10,7 @@ from nextgis_connect.legacy.ngw_connection.application.connections_manager impor
 from nextgis_connect.legacy.settings.tasks.purge_ng_connect_cache_task import (
     PurgeNgConnectCacheTask,
 )
-from nextgis_connect.platform.tasks.ng_connect_task_manager import (
+from nextgis_connect.platform.tasks import (
     NgConnectTaskManager,
 )
 

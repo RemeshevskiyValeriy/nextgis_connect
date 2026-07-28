@@ -2,9 +2,11 @@ from unittest.mock import Mock
 
 import pytest
 
-from nextgis_connect.platform.filesystem import cp, mv, rm
-from nextgis_connect.platform.filesystem.operations import (
+from nextgis_connect.platform.filesystem import (
     _retry_on_permission_error,
+    cp,
+    mv,
+    rm,
 )
 
 
@@ -69,7 +71,7 @@ def test_filesystem_retry_uses_exponential_delay(monkeypatch) -> None:
     sleep = Mock()
     action = Mock(side_effect=[PermissionError, PermissionError, None])
     monkeypatch.setattr(
-        "nextgis_connect.platform.filesystem.operations.time.sleep",
+        "nextgis_connect.platform.filesystem.time.sleep",
         sleep,
     )
 
@@ -84,7 +86,7 @@ def test_filesystem_retry_raises_after_max_tries(monkeypatch) -> None:
     sleep = Mock()
     action = Mock(side_effect=PermissionError)
     monkeypatch.setattr(
-        "nextgis_connect.platform.filesystem.operations.time.sleep",
+        "nextgis_connect.platform.filesystem.time.sleep",
         sleep,
     )
 

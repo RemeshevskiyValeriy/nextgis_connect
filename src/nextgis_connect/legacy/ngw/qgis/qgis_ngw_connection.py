@@ -46,7 +46,7 @@ from nextgis_connect.platform.qgis.errors import (
     NgwConnectionError,
     NgwError,
 )
-from nextgis_connect.platform.qt.network_error import QtNetworkError
+from nextgis_connect.platform.qt import QtNetworkError
 from qgis.core import Enum, QgsFeedback, QgsNetworkAccessManager
 from qgis.PyQt.QtCore import (
     QBuffer,

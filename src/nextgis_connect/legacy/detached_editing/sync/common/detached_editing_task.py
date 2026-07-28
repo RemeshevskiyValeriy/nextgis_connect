@@ -31,7 +31,7 @@ from nextgis_connect.platform.qgis.errors import (
     default_user_message,
 )
 from nextgis_connect.platform.qgis.utils import wrap_sql_value
-from nextgis_connect.platform.tasks.ng_connect_task import NgConnectTask
+from nextgis_connect.platform.tasks import NgConnectTask
 
 
 class DetachedEditingTask(NgConnectTask):

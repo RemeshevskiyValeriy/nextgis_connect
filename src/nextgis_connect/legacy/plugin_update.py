@@ -18,7 +18,7 @@ from nextgis_connect.legacy.ngw_connection.application.diagnostics.parsers impor
 )
 from nextgis_connect.platform.logging import logger
 from nextgis_connect.platform.qgis.compat import parse_version
-from nextgis_connect.platform.tasks.ng_connect_task import NgConnectTask
+from nextgis_connect.platform.tasks import NgConnectTask
 
 PLUGIN_REPOSITORIES_GROUP = "app/plugin_repositories"
 OFFICIAL_REPOSITORY_NAME = "QGIS Official Plugin Repository"

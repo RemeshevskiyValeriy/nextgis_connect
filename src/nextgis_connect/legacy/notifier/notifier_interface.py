@@ -3,7 +3,7 @@ from abc import abstractmethod
 from qgis.core import Qgis
 from qgis.PyQt.QtCore import QObject
 
-from nextgis_connect.platform.qt.qobject_metaclass import QObjectMetaClass
+from nextgis_connect.platform.qt import QObjectMetaClass
 
 
 class NotifierInterface(QObject, metaclass=QObjectMetaClass):

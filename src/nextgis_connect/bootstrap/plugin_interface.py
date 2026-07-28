@@ -8,7 +8,7 @@ from qgis.core import QgsApplication
 from qgis.PyQt.QtCore import QObject, QTranslator, pyqtSignal
 
 from nextgis_connect.platform.logging import logger, unload_logger
-from nextgis_connect.platform.qt.qobject_metaclass import QObjectMetaClass
+from nextgis_connect.platform.qt import QObjectMetaClass
 from nextgis_connect.shared.constants import PACKAGE_NAME
 
 if TYPE_CHECKING:

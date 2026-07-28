@@ -1,10 +1,21 @@
+from abc import ABCMeta
 from dataclasses import dataclass
 from enum import Enum
 from typing import Optional
 
+from qgis.PyQt.QtCore import QObject
 from qgis.PyQt.QtNetwork import QNetworkReply
 
 from nextgis_connect.platform.qgis.errors import NgConnectExceptionInfoMixin
+
+
+class QObjectMetaClass(ABCMeta, type(QObject)):
+    """Defines a metaclass for QObject-based classes.
+
+    QObjectMetaClass: A metaclass that combines ABCMeta (for abstract base
+    classes) and the metaclass of QObject, allowing for the creation of
+    abstract Qt objects.
+    """
 
 
 @dataclass
