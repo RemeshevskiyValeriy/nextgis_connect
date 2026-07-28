@@ -33,6 +33,7 @@ class ApplicationInfo:
     application: QgsApplication
     qgis_auth_db_path: Path
     qgis_custom_config_path: Path
+    owns_application: bool
 
 
 APPLICATION_INFO: Optional[ApplicationInfo] = None
@@ -53,6 +54,20 @@ def start_qgis() -> QgsApplication:
         return APPLICATION_INFO.application
 
     os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+
+    existing_application = QgsApplication.instance()
+    if existing_application is not None:
+        APPLICATION_INFO = ApplicationInfo(
+            application=existing_application,
+            qgis_auth_db_path=Path(os.environ["QGIS_AUTH_DB_DIR_PATH"]),
+            qgis_custom_config_path=Path(
+                os.environ["QGIS_CUSTOM_CONFIG_PATH"]
+            ),
+            owns_application=False,
+        )
+        init_interface()
+        _install_plugin_metadata()
+        return existing_application
 
     qgis_custom_config_path = Path(
         tempfile.mkdtemp(prefix="TestNextGISConnect-config-")
@@ -81,17 +96,27 @@ def start_qgis() -> QgsApplication:
         application=application,
         qgis_auth_db_path=qgis_auth_db_path,
         qgis_custom_config_path=qgis_custom_config_path,
+        owns_application=True,
     )
     return application
 
 
 def stop_qgis() -> None:
+    global APPLICATION_INFO
+
     if APPLICATION_INFO is None:
         return
 
+    application_info = APPLICATION_INFO
     QgsSettings().clear()
-    shutil.rmtree(APPLICATION_INFO.qgis_custom_config_path, ignore_errors=True)
-    shutil.rmtree(APPLICATION_INFO.qgis_auth_db_path, ignore_errors=True)
+    if application_info.owns_application:
+        shutil.rmtree(
+            application_info.qgis_custom_config_path,
+            ignore_errors=True,
+        )
+        shutil.rmtree(application_info.qgis_auth_db_path, ignore_errors=True)
+
+    APPLICATION_INFO = None
 
 
 def init_interface() -> QgisInterface:

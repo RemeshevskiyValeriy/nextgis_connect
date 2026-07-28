@@ -30,6 +30,9 @@ pythonVersion = "3.8"
 reportOptionalCall = false
 reportOptionalMemberAccess = false
 
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
 [tool.ruff]
 line-length = 79
 target-version = "py38"

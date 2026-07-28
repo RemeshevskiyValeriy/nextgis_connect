@@ -1,4 +1,5 @@
 from pathlib import Path
+from unittest.mock import patch
 
 import qgis.utils
 from qgis.utils import updateAvailablePlugins
@@ -18,18 +19,31 @@ from tests.ng_connect_testcase import NgConnectTestCase, TestConnection
 class TestNgConnectPlugin(NgConnectTestCase):
     def test_plugin_deprecation(self) -> None:
         settings = NgConnectSettings()
-        suppoted_version_for_connect = parse_version(
+        supported_version_for_connect = parse_version(
             settings.supported_ngw_version
         )
 
         connection_id = self.connection_id(TestConnection.DemoGuest)
         connection = QgsNgwConnection(connection_id)
-        data = connection.get("api/component/pyramid/pkg_version")
+        version_response = {
+            "nextgisweb": (
+                f"{supported_version_for_connect.major}."
+                f"{supported_version_for_connect.minor}.0"
+            )
+        }
+        with patch.object(
+            QgsNgwConnection,
+            "get",
+            return_value=version_response,
+        ) as get:
+            data = connection.get("api/component/pyramid/pkg_version")
+
+        get.assert_called_once_with("api/component/pyramid/pkg_version")
         ngw_version = parse_version(data["nextgisweb"])
 
         self.assertTrue(
-            suppoted_version_for_connect.major == ngw_version.major
-            and suppoted_version_for_connect.minor == ngw_version.minor
+            supported_version_for_connect.major == ngw_version.major
+            and supported_version_for_connect.minor == ngw_version.minor
         )
 
     def test_plugin_creation(self) -> None:

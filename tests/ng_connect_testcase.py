@@ -1,5 +1,4 @@
 import atexit
-import gc
 import json
 import os
 import sys
@@ -65,9 +64,11 @@ class ApplicationInfo:
     application: QgsApplication
     qgis_custom_config_path: Path
     qgis_auth_db_path: Path
+    owns_application: bool = True
 
 
 APPLICATION_INFO: Optional[ApplicationInfo] = None
+TEST_BASIC_AUTH_CONFIG_ID = "ngtest1"
 
 
 class NgConnectTestCase(QgisTestCase):
@@ -226,6 +227,7 @@ class NgConnectTestCase(QgisTestCase):
             None,
         )
 
+        basic_connection_url = "https://sandbox-login.nextgis.com/"
         basic_connection_id = cls._connections_id.get(
             TestConnection.SandboxWithLogin
         )
@@ -245,16 +247,23 @@ class NgConnectTestCase(QgisTestCase):
             not in auth_manager.availableAuthMethodConfigs()
         ):
             auth_config = QgsAuthMethodConfig("Basic")
+            auth_config.setId(
+                basic_auth_config_id or TEST_BASIC_AUTH_CONFIG_ID
+            )
             auth_config.setName("test_auth_config")
+            auth_config.setUri(basic_connection_url)
             auth_config.setConfig("username", "administrator")
             auth_config.setConfig("password", "demodemo")
-            assert auth_manager.storeAuthenticationConfig(auth_config)[0]
+            assert auth_manager.storeAuthenticationConfig(
+                auth_config,
+                overwrite=True,
+            )[0]
             basic_auth_config_id = auth_config.id()
 
         upsert_test_connection(
             TestConnection.SandboxWithLogin,
             "TEST_SANDBOX_LOGIN_CONNECTION",
-            "https://sandbox-login.nextgis.com/",
+            basic_connection_url,
             basic_auth_config_id,
         )
 
@@ -291,6 +300,7 @@ def start_qgis() -> None:
             application=existing_application,
             qgis_custom_config_path=qgis_custom_config_path,
             qgis_auth_db_path=qgis_auth_db_path,
+            owns_application=False,
         )
 
         init_interface()
@@ -337,6 +347,7 @@ def start_qgis() -> None:
         application=application,
         qgis_custom_config_path=Path(qgis_custom_config_path),
         qgis_auth_db_path=Path(qgis_auth_db_path),
+        owns_application=True,
     )
 
     # Initialize qgis
@@ -371,23 +382,23 @@ def stop_qgis() -> None:
     Cleans up and exits QGIS
     """
 
+    global APPLICATION_INFO
+
     if APPLICATION_INFO is None:
         return
 
-    for _ in range(3):
-        gc.collect()
-        QgsApplication.processEvents()
+    application_info = APPLICATION_INFO
 
-    APPLICATION_INFO.application.exitQgis()
-    del APPLICATION_INFO.application
+    if application_info.owns_application:
+        rm(application_info.qgis_custom_config_path)
+        rm(application_info.qgis_auth_db_path)
 
-    rm(APPLICATION_INFO.qgis_custom_config_path)
-    rm(APPLICATION_INFO.qgis_auth_db_path)
+        for path in Path(tempfile.gettempdir()).glob(
+            f"{ApplicationInfo.APPLICATION_NAME}*"
+        ):
+            rm(path)
 
-    for path in Path(tempfile.gettempdir()).glob(
-        f"{ApplicationInfo.APPLICATION_NAME}*"
-    ):
-        rm(path)
+    APPLICATION_INFO = None
 
 
 def init_interface() -> None:

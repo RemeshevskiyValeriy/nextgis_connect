@@ -1,9 +1,11 @@
+import os
 import time
 import uuid
 import zipfile
 from pathlib import Path
 from typing import Set
 
+import pytest
 from osgeo import gdal
 from qgis.core import (
     QgsCoordinateReferenceSystem,
@@ -627,6 +629,10 @@ class TestRasterUploadPreparer(NgConnectTestCase):
         self.assertTrue(bool(restored_dataset.GetProjection()))
         restored_dataset = None
 
+    @pytest.mark.skipif(
+        os.environ.get("NEXTGIS_CONNECT_RUN_NETWORK_TESTS") != "1",
+        reason="requires live NextGIS sandbox access",
+    )
     def test_prepare_vsicurl_cog_can_be_uploaded_again(self) -> None:
         sandbox_group = self._create_sandbox_group()
 
