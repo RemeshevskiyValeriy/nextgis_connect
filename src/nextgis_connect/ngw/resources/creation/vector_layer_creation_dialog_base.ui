@@ -141,12 +141,22 @@
        <item>
         <layout class="QHBoxLayout" name="versioning_layout">
          <property name="spacing">
-          <number>3</number>
+          <number>10</number>
          </property>
          <item>
-          <widget class="QCheckBox" name="versioning_checkbox">
+          <widget class="QLabel" name="versioning_label">
            <property name="text">
             <string>Feature versioning</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QComboBox" name="versioning_combobox">
+           <property name="sizePolicy">
+            <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
+             <horstretch>0</horstretch>
+             <verstretch>0</verstretch>
+            </sizepolicy>
            </property>
           </widget>
          </item>

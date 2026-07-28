@@ -20,8 +20,6 @@
 
 from typing import Any, Dict, Iterable
 
-from nextgis_connect.legacy.settings import NgConnectSettings
-
 from .ngw_group_resource import NGWGroupResource
 from .ngw_ogcf_service import NGWOgcfService
 from .ngw_raster_layer import NGWRasterLayer
@@ -107,9 +105,6 @@ class ResourceCreator:
                 fid_field=",".join(fid_fields),
             ),
         )
-        if NgConnectSettings().upload_vector_with_versioning:
-            params["feature_layer"] = dict(versioning=dict(enabled=True))
-
         create_callback()  # show "Create" status
 
         # Use "lunkwill" layer creation request (specific type of long request) by default.

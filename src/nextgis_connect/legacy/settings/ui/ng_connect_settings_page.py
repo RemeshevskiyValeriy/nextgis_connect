@@ -1,4 +1,3 @@
-from datetime import timedelta
 from pathlib import Path
 from typing import ClassVar, List, Optional, cast
 
@@ -17,7 +16,6 @@ from qgis.PyQt.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QMessageBox,
-    QSpinBox,
     QVBoxLayout,
     QWidget,
 )
@@ -120,11 +118,9 @@ class NgConnectOptionsPageWidget(QgsOptionsPageWidget):
 
         self.__connections_manager.save()
         self.__save_current_connection()
-        self.__save_uploading_settings(settings)
         self.__save_resources_settings(settings)
         self.__save_search_settings(settings)
-        self.__save_sync_settings(settings)
-        self.__save_editing_settings(settings)
+        self.__save_notification_settings(settings)
         self.__save_cache_settings()
         self.__save_other_settings(settings)
 
@@ -137,11 +133,9 @@ class NgConnectOptionsPageWidget(QgsOptionsPageWidget):
     def __init_settings(self) -> None:
         settings = NgConnectSettings()
         self.__init_connections()
-        self.__init_uploading_settings(settings)
         self.__init_resources_settings(settings)
         self.__init_search_settings(settings)
-        self.__init_sync_settings(settings)
-        self.__init_editing_settings(settings)
+        self.__init_notification_settings(settings)
         self.__init_cache_settings()
         self.__init_other_settings(settings)
 
@@ -157,22 +151,12 @@ class NgConnectOptionsPageWidget(QgsOptionsPageWidget):
 
         self.__need_reinit = False
 
-    def __init_uploading_settings(self, settings: NgConnectSettings) -> None:
-        self.__widget.fixGeometryCheckBox.setChecked(
-            settings.fix_incorrect_geometries
-        )
-        self.__widget.fixGeometryCheckBox.hide()  # Rely on NGW
-
-        self.__widget.openWebMapAfterCreationCheckBox.setChecked(
-            settings.open_web_map_after_creation
-        )
-        self.__widget.versioningCheckBox.setChecked(
-            settings.upload_vector_with_versioning
-        )
-
     def __init_resources_settings(self, settings: NgConnectSettings) -> None:
         self.__widget.addWfsLayerAfterServiceCreationCheckBox.setChecked(
             settings.add_layer_after_service_creation
+        )
+        self.__widget.openWebMapAfterCreationCheckBox.setChecked(
+            settings.open_web_map_after_creation
         )
 
     def __init_search_settings(self, settings: NgConnectSettings) -> None:
@@ -180,44 +164,9 @@ class NgConnectOptionsPageWidget(QgsOptionsPageWidget):
             ", ".join(settings.search.metadata_keys)
         )
 
-    def __init_sync_settings(self, settings: NgConnectSettings) -> None:
-        period = settings.synchronization_period
-
-        if period // timedelta(minutes=1) < 59:
-            value = period // timedelta(minutes=1)
-            index = 0
-        else:
-            value = period // timedelta(hours=1)
-            index = 1
-
-        self.__widget.syncPeriodSpinBox.setValue(value)
-        self.__widget.syncPeriodSpinBox.valueChanged.connect(
-            self.__update_sync_combobox
-        )
-
-        period_combobox = cast(QComboBox, self.__widget.syncPeriodComboBox)
-        period_combobox.addItem("", "minutes")
-        period_combobox.addItem("", "hours")
-        self.__update_sync_combobox(value)
-
-        period_combobox.setCurrentIndex(index)
-
-    def __update_sync_combobox(self, value: int) -> None:
-        period_combobox = cast(QComboBox, self.__widget.syncPeriodComboBox)
-
-        minute_string = self.tr("%n$minute", None, value)
-        if minute_string == f"{value}$minute" and value != 1:
-            minute_string += "s"
-        minute_string = minute_string[minute_string.find("$") + 1 :]
-        period_combobox.setItemText(0, minute_string)
-
-        hour_string = self.tr("%n$hour", None, value)
-        if hour_string == f"{value}$hour" and value != 1:
-            hour_string += "s"
-        hour_string = hour_string[hour_string.find("$") + 1 :]
-        period_combobox.setItemText(1, hour_string)
-
-    def __init_editing_settings(self, settings: NgConnectSettings) -> None:
+    def __init_notification_settings(
+        self, settings: NgConnectSettings
+    ) -> None:
         attachments_checkbox = (
             self.__widget.deletingFeaturesWithAttachmentsCheckbox
         )
@@ -368,22 +317,12 @@ class NgConnectOptionsPageWidget(QgsOptionsPageWidget):
     def __reset_cache_directory(self) -> None:
         self.__widget.cacheDirectoryLineEdit.setText("")
 
-    def __save_uploading_settings(self, settings: NgConnectSettings) -> None:
-        settings.fix_incorrect_geometries = (
-            self.__widget.fixGeometryCheckBox.isChecked()
-        )
-
-        settings.upload_vector_with_versioning = (
-            self.__widget.versioningCheckBox.isChecked()
-        )
-
-        settings.open_web_map_after_creation = (
-            self.__widget.openWebMapAfterCreationCheckBox.isChecked()
-        )
-
     def __save_resources_settings(self, settings: NgConnectSettings) -> None:
         settings.add_layer_after_service_creation = (
             self.__widget.addWfsLayerAfterServiceCreationCheckBox.isChecked()
+        )
+        settings.open_web_map_after_creation = (
+            self.__widget.openWebMapAfterCreationCheckBox.isChecked()
         )
 
     def __save_search_settings(self, settings: NgConnectSettings) -> None:
@@ -393,14 +332,9 @@ class NgConnectOptionsPageWidget(QgsOptionsPageWidget):
         ]
         settings.search.metadata_keys = [key for key in keys if len(key) != 0]
 
-    def __save_sync_settings(self, settings: NgConnectSettings) -> None:
-        period_spinbox = cast(QSpinBox, self.__widget.syncPeriodSpinBox)
-        period_combobox = cast(QComboBox, self.__widget.syncPeriodComboBox)
-
-        param = {period_combobox.currentData(): period_spinbox.value()}
-        settings.synchronization_period = timedelta(**param)
-
-    def __save_editing_settings(self, settings: NgConnectSettings) -> None:
+    def __save_notification_settings(
+        self, settings: NgConnectSettings
+    ) -> None:
         attachments_checkbox = (
             self.__widget.deletingFeaturesWithAttachmentsCheckbox
         )

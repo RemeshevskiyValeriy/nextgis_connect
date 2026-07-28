@@ -1,3 +1,4 @@
+from enum import Enum
 from pathlib import Path
 from typing import Any, Callable, ClassVar, Dict, List, Optional, cast
 
@@ -49,6 +50,12 @@ VectorLayerCreationDialogBase, _ = uic.loadUiType(
 )
 
 
+class VersioningMode(Enum):
+    AUTO = "auto"
+    ENABLED = "enabled"
+    DISABLED = "disabled"
+
+
 class VectorLayerCreationDialog(QDialog, VectorLayerCreationDialogBase):
     SUPPORTED_WKB_TYPES: ClassVar[List[WkbType]] = [
         WkbType.Point,
@@ -98,11 +105,19 @@ class VectorLayerCreationDialog(QDialog, VectorLayerCreationDialogBase):
         )
         display_name = self.layer_name_lineedit.text()
         fields = self.fields_view.model().fields.to_json()
-        is_versioning_enabled = self.versioning_checkbox.isChecked()
+        versioning_mode = VersioningMode(
+            self.versioning_combobox.currentData()
+        )
         geometry_type = WkbType(self.geometry_combobox.currentData())
         if self.z_checkbox.isChecked():
             geometry_type = QgsWkbTypes.addZ(geometry_type)
         geometry_type = QgsWkbTypes.displayString(geometry_type).upper()
+
+        feature_layer: Dict[str, Any] = dict(fields=fields)
+        if versioning_mode != VersioningMode.AUTO:
+            feature_layer["versioning"] = dict(
+                enabled=versioning_mode == VersioningMode.ENABLED
+            )
 
         return dict(
             resource=dict(
@@ -110,10 +125,7 @@ class VectorLayerCreationDialog(QDialog, VectorLayerCreationDialogBase):
                 parent=dict(id=parent_id),
                 display_name=display_name,
             ),
-            feature_layer=dict(
-                fields=fields,
-                versioning=dict(enabled=is_versioning_enabled),
-            ),
+            feature_layer=feature_layer,
             vector_layer=dict(
                 srs=dict(id=3857),
                 geometry_type=geometry_type,
@@ -211,10 +223,25 @@ class VectorLayerCreationDialog(QDialog, VectorLayerCreationDialogBase):
         # Set invalid geometry type for conscious choice
         self.geometry_combobox.setCurrentIndex(-1)
 
-        # Versioning
-        self.versioning_checkbox.setChecked(
-            NgConnectSettings().upload_vector_with_versioning
+        versioning_tooltip = self.tr(
+            "In auto mode, NextGIS Web decides whether to enable feature "
+            "versioning."
         )
+        self.versioning_label.setToolTip(versioning_tooltip)
+        self.versioning_combobox.setToolTip(versioning_tooltip)
+        self.versioning_combobox.addItem(
+            self.tr("Auto"),
+            VersioningMode.AUTO.value,
+        )
+        self.versioning_combobox.addItem(
+            self.tr("Enabled"),
+            VersioningMode.ENABLED.value,
+        )
+        self.versioning_combobox.addItem(
+            self.tr("Disabled"),
+            VersioningMode.DISABLED.value,
+        )
+        self.versioning_combobox.setCurrentIndex(0)
 
     def __setup_new_field_ui(self) -> None:
         # Init warning

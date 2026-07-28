@@ -21,7 +21,6 @@
 """
 
 import json
-from datetime import timedelta
 from pathlib import Path
 from typing import ClassVar, Optional
 
@@ -245,7 +244,7 @@ class NgConnectSettings:
 
     @property
     def layer_check_period(self) -> int:
-        return int(timedelta(seconds=15) / timedelta(milliseconds=1))
+        return 15 * 1000
 
     @property
     def notify_when_deleting_features_with_attachments(self) -> bool:
@@ -265,22 +264,6 @@ class NgConnectSettings:
             self.__plugin_group
             + "/editing/notifyWhenDeletingFeaturesWithAttachments",
             value,
-        )
-
-    @property
-    def synchronization_period(self) -> timedelta:
-        value = self.__settings.value(
-            self.__plugin_group + "/synchronization/period",
-            defaultValue=60,
-            type=int,
-        )
-        return timedelta(seconds=value)
-
-    @synchronization_period.setter
-    def synchronization_period(self, value: timedelta) -> None:
-        self.__settings.setValue(
-            self.__plugin_group + "/synchronization/period",
-            value.total_seconds(),
         )
 
     @property
@@ -426,11 +409,15 @@ class NgConnectSettings:
         self.__settings.endGroup()
 
     def __remove_old_settings(self) -> None:
-        self.__settings.remove(f"{self.__plugin_group}/uploading/rasterAsCog")
+        obsolete_keys = (
+            "synchronization/period",
+            "uploading/rasterAsCog",
+            "uploading/vectorWithVersioning",
+            "uploading/renameForbiddenFields",
+        )
+        for key in obsolete_keys:
+            self.__settings.remove(f"{self.__plugin_group}/{key}")
 
         old_settings = QSettings("NextGIS", "NextGIS WEB API")
         old_settings.remove("upload_cog_rasters")
-
-        self.__settings.value(
-            f"{self.__plugin_group}/uploading/renameForbiddenFields"
-        )
+        old_settings.remove("upload_vector_with_versioning")

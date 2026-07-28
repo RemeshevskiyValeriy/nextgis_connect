@@ -1520,21 +1520,6 @@ Are you sure you want to continue?</source>
         <translation>Соединения</translation>
     </message>
     <message>
-        <location filename="../settings/ui/settings_dialog_base.ui" line="59"/>
-        <source>Uploading</source>
-        <translation>Загрузка</translation>
-    </message>
-    <message>
-        <location filename="../settings/ui/settings_dialog_base.ui" line="65"/>
-        <source>Fix incorrect geometries</source>
-        <translation>Исправлять некорректные геометрии</translation>
-    </message>
-    <message>
-        <location filename="../settings/ui/settings_dialog_base.ui" line="75"/>
-        <source>Upload rasters as Cloud Optimized GeoTIFF (COG)</source>
-        <translation>Загружать растры как Cloud Optimized GeoTIFF (COG)</translation>
-    </message>
-    <message>
         <location filename="../settings/ui/settings_dialog_base.ui" line="122"/>
         <source>Resources</source>
         <translation>Ресурсы</translation>
@@ -1550,14 +1535,14 @@ Are you sure you want to continue?</source>
         <translation>Открывать Веб-карту автоматически после создания</translation>
     </message>
     <message>
-        <location filename="../settings/ui/settings_dialog_base.ui" line="178"/>
-        <source>Synchronization</source>
-        <translation>Синхронизация</translation>
+        <location filename="../settings/ui/settings_dialog_base.ui" line="122"/>
+        <source>Notifications</source>
+        <translation>Уведомления</translation>
     </message>
     <message>
-        <location filename="../settings/ui/settings_dialog_base.ui" line="184"/>
-        <source>Update check frequency</source>
-        <translation>Частота проверки обновлений</translation>
+        <location filename="../settings/ui/settings_dialog_base.ui" line="128"/>
+        <source>Show notification when deleting features with attachments</source>
+        <translation>Показывать уведомление при удалении объектов с вложениями</translation>
     </message>
     <message>
         <location filename="../settings/ui/settings_dialog_base.ui" line="231"/>
@@ -1628,11 +1613,6 @@ Are you sure you want to continue?</source>
         <location filename="../settings/ui/settings_dialog_base.ui" line="273"/>
         <source>Storage duration</source>
         <translation>Длительность хранения</translation>
-    </message>
-    <message>
-        <location filename="../settings/ui/settings_dialog_base.ui" line="90"/>
-        <source>Enable feature versioning for vector layers when uploading</source>
-        <translation>Включить версионирование объектов для загружаемых векторных слоёв</translation>
     </message>
     <message>
         <location filename="../settings/ui/settings_dialog_base.ui" line="151"/>
@@ -2327,6 +2307,26 @@ NextGIS Web version: {}</source>
         <location filename="../resources/creation/vector_layer_creation_dialog.py" line="385"/>
         <source>Logical field, possible values are &quot;TRUE&quot; and &quot;FALSE&quot;.</source>
         <translation>Логическое поле, возможные значения: &quot;TRUE&quot; и &quot;FALSE&quot;.</translation>
+    </message>
+    <message>
+        <location filename="../resources/creation/vector_layer_creation_dialog.py" line="226"/>
+        <source>In auto mode, NextGIS Web decides whether to enable feature versioning.</source>
+        <translation>В автоматическом режиме NextGIS Web сам решает, включать ли версионирование объектов.</translation>
+    </message>
+    <message>
+        <location filename="../resources/creation/vector_layer_creation_dialog.py" line="232"/>
+        <source>Auto</source>
+        <translation>Авто</translation>
+    </message>
+    <message>
+        <location filename="../resources/creation/vector_layer_creation_dialog.py" line="236"/>
+        <source>Enabled</source>
+        <translation>Включено</translation>
+    </message>
+    <message>
+        <location filename="../resources/creation/vector_layer_creation_dialog.py" line="240"/>
+        <source>Disabled</source>
+        <translation>Выключено</translation>
     </message>
 </context>
 <context>
