@@ -1,4 +1,3 @@
-import re
 from typing import Optional
 
 from qgis.core import QgsApplication
@@ -12,6 +11,7 @@ from nextgis_connect.legacy.ngw_connection.application.connections_manager impor
 from nextgis_connect.legacy.search.abstract_search_line_edit import (
     AbstractSearchLineEdit,
 )
+from nextgis_connect.legacy.search.resource_url import SearchResourceUrlParser
 from nextgis_connect.legacy.search.search_settings import SearchSettings
 from nextgis_connect.legacy.search.text_search_completer_model import (
     TextSearchCompleterModel,
@@ -27,6 +27,7 @@ class TextSearchLineEdit(AbstractSearchLineEdit):
     __loading_icon_movie: QMovie
 
     __connection_id: Optional[str]
+    __resource_url_parser: SearchResourceUrlParser
 
     def __init__(
         self, connection_id: Optional[str], parent: Optional[QWidget] = None
@@ -34,6 +35,7 @@ class TextSearchLineEdit(AbstractSearchLineEdit):
         super().__init__(parent)
         self.setPlaceholderText(self.tr("Resource name…"))
         self.__connection_id = connection_id
+        self.__resource_url_parser = SearchResourceUrlParser()
 
         # Animation
         self.__loading_action = None
@@ -92,11 +94,13 @@ class TextSearchLineEdit(AbstractSearchLineEdit):
             connection = NgwConnectionsManager().connection(
                 self.__connection_id
             )
-            match = re.search(
-                rf"{connection.url}/resource/(\d+)", search_string
-            )
-            if match:
-                search_string = f"@id = {match.group(1)}"
+            if connection is not None:
+                resource_id = self.__resource_url_parser.resource_id(
+                    search_string,
+                    connection,
+                )
+                if resource_id is not None:
+                    search_string = f"@id = {resource_id}"
 
         self.search_requested.emit(search_string)
 
