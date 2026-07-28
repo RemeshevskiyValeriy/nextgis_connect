@@ -113,6 +113,7 @@ class IdentificationResultsWidget(QgsDockWidget, ResultsDialogBase):
         self._editing_stopped_connection = None
         self._editing_started_connection = None
         self._layer_state_changed_connection = None
+        self._is_changing_tab_availability = False
 
         self._tracked_layers: Dict[str, QgsVectorLayer] = {}
         self._feature_deleted_connections: Dict[str, object] = {}
@@ -600,6 +601,35 @@ class IdentificationResultsWidget(QgsDockWidget, ResultsDialogBase):
 
         self.__insert_no_features_widget()
 
+    def __set_feature_data_tabs_enabled(self, enabled: bool) -> None:
+        feature_data_tabs = (
+            IdentificationTab.ATTACHMENTS,
+            IdentificationTab.DESCRIPTION,
+        )
+        needs_fallback_tab = (
+            not enabled and self.tab_widget.currentIndex() in feature_data_tabs
+        )
+
+        self._is_changing_tab_availability = needs_fallback_tab
+        try:
+            for tab_index in feature_data_tabs:
+                self.tab_widget.setTabEnabled(tab_index, enabled)
+
+            if enabled:
+                self.tab_widget.setCurrentIndex(
+                    IdentificationSettings().last_used_tab
+                )
+                return
+
+            if not needs_fallback_tab:
+                return
+
+            self.tab_widget.setCurrentIndex(IdentificationTab.ATTRIBUTES)
+        finally:
+            self._is_changing_tab_availability = False
+
+        self._update_overlay_geometry()
+
     def __insert_no_features_widget(self) -> None:
         self._overlay_widget = NoFeaturesWidget(self.tab_widget)
         self._overlay_widget.hide()
@@ -667,8 +697,16 @@ class IdentificationResultsWidget(QgsDockWidget, ResultsDialogBase):
         )
         detached_layer = detached_editing_manager.layer(layer)
 
-        self._attachments_tab.set_feature(layer, feature_id)
-        self._description_tab.set_feature(layer, feature_id)
+        is_feature_data_enabled = (
+            detached_layer.container.metadata.is_versioning_enabled
+        )
+        self.__set_feature_data_tabs_enabled(is_feature_data_enabled)
+        if is_feature_data_enabled:
+            self._attachments_tab.set_feature(layer, feature_id)
+            self._description_tab.set_feature(layer, feature_id)
+        else:
+            self._attachments_tab.clear_feature()
+            self._description_tab.clear_feature()
 
         self._editing_started_connection = layer.editingStarted.connect(
             self.__on_editing_started
@@ -846,6 +884,9 @@ class IdentificationResultsWidget(QgsDockWidget, ResultsDialogBase):
 
     @pyqtSlot(int)
     def __on_tab_changed(self, selected_tab: int) -> None:
+        if self._is_changing_tab_availability:
+            return
+
         IdentificationSettings().last_used_tab = IdentificationTab(
             selected_tab
         )

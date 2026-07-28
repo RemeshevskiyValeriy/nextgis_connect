@@ -41,6 +41,9 @@ from nextgis_connect.legacy.detached_editing.conflicts.ui.resolving_dialog impor
 from nextgis_connect.legacy.detached_editing.container.container_factory import (
     DetachedContainerFactory,
 )
+from nextgis_connect.legacy.detached_editing.container.layer_update_polling_policy import (
+    LayerUpdatePollingPolicy,
+)
 from nextgis_connect.legacy.detached_editing.container.ui.layer_indicator import (
     DetachedLayerIndicator,
 )
@@ -77,7 +80,6 @@ from nextgis_connect.legacy.detached_editing.utils import (
 from nextgis_connect.legacy.ngw_connection.application.connections_manager import (
     NgwConnectionsManager,
 )
-from nextgis_connect.legacy.settings import NgConnectSettings
 from nextgis_connect.ngw.core import NGWVectorLayer
 from nextgis_connect.ngw.core.ngw_error import NGWError
 from nextgis_connect.ngw.core.ngw_resource_factory import (
@@ -115,6 +117,8 @@ class DetachedContainer(QObject):
     __is_silent_sync: bool
 
     __check_date: Optional[datetime]
+    __polling_policy: LayerUpdatePollingPolicy
+    __network_error_count: int
     __additional_data_fetch_date: Optional[datetime]
     __is_edit_allowed: bool
 
@@ -146,6 +150,8 @@ class DetachedContainer(QObject):
         self.__is_silent_sync = False
 
         self.__check_date = None
+        self.__polling_policy = LayerUpdatePollingPolicy()
+        self.__network_error_count = 0
         self.__additional_data_fetch_date = None
         self.__is_edit_allowed = True
         self.__is_project_container = parent is not None
@@ -389,6 +395,8 @@ class DetachedContainer(QObject):
         if self.metadata is None:
             return False
 
+        current_date = datetime.now()
+        is_network_error_retry = False
         self.__is_silent_sync = False
 
         if update_additional_only:
@@ -408,18 +416,35 @@ class DetachedContainer(QObject):
                     and not self.metadata.has_changes
                 ):
                     self.__is_silent_sync = True
+                    is_network_error_retry = True
                 else:
                     return False
 
-            if self.check_date is not None and not self.metadata.has_changes:
-                period = NgConnectSettings().synchronization_period
-                if datetime.now() - self.check_date < period:
+            if not self.metadata.has_changes:
+                if is_network_error_retry:
+                    if not (
+                        self.__polling_policy.should_retry_after_network_error(
+                            last_attempt_date=self.check_date,
+                            consecutive_error_count=(
+                                self.__network_error_count
+                            ),
+                            current_date=current_date,
+                        )
+                    ):
+                        return False
+                elif not (
+                    self.__polling_policy.should_poll(
+                        last_check_date=self.check_date,
+                        last_change_date=self.sync_date,
+                        current_date=current_date,
+                    )
+                ):
                     return False
 
             sync_task = self.__init_sync_task()
 
         if sync_task is None:
-            self.__check_date = datetime.now()
+            self.__check_date = current_date
             return False
 
         self.__lock_layers()
@@ -678,6 +703,7 @@ class DetachedContainer(QObject):
             assert self.__sync_task.error is not None
 
             error = self.__sync_task.error
+            self.__record_sync_error(error)
             if self.__is_network_error(error):
                 self.__sync_task.error.try_again = lambda: self.synchronize(
                     is_manual=True
@@ -703,6 +729,8 @@ class DetachedContainer(QObject):
                 self.reset_container()
 
             return
+
+        self.__reset_network_error_count()
 
         self.__state = DetachedLayerState.Synchronized
         self.__versioning_state = VersioningSynchronizationState.Synchronized
@@ -730,6 +758,7 @@ class DetachedContainer(QObject):
         result = self.__sync_task.status() == QgsTask.TaskStatus.Complete
         assert isinstance(self.__sync_task, FetchAdditionalDataTask)
         if result:
+            self.__reset_network_error_count()
             self.__additional_data_fetch_date = datetime.now()
             self.__is_edit_allowed = self.__sync_task.is_edit_allowed
             self.__update_state()
@@ -748,6 +777,7 @@ class DetachedContainer(QObject):
             self.__check_date = datetime.now()
 
             error = self.__sync_task.error
+            self.__record_sync_error(error)
             if self.__is_network_error(error):
                 self.__sync_task.error.try_again = lambda: self.synchronize(
                     is_manual=True
@@ -780,6 +810,7 @@ class DetachedContainer(QObject):
             self.__on_synchronization_finished(False)
             return
 
+        self.__reset_network_error_count()
         self.__update_state()
 
         if len(self.__sync_task.delta) > 0:
@@ -837,6 +868,7 @@ class DetachedContainer(QObject):
             self.__on_synchronization_finished(False)
             return
 
+        self.__reset_network_error_count()
         self.__update_state()
 
         if not self.metadata.has_changes:
@@ -869,6 +901,7 @@ class DetachedContainer(QObject):
             self.__on_synchronization_finished(False)
             return
 
+        self.__reset_network_error_count()
         self.__update_state()
 
         task = FetchDeltaTask(self.path)
@@ -1138,6 +1171,16 @@ class DetachedContainer(QObject):
             self.__error.error_id
         )
         self.__error = None
+
+    def __record_sync_error(self, error: Exception) -> None:
+        if self.__is_network_error(error):
+            self.__network_error_count += 1
+            return
+
+        self.__reset_network_error_count()
+
+    def __reset_network_error_count(self) -> None:
+        self.__network_error_count = 0
 
     def __is_network_error(self, error: Optional[Exception]) -> bool:
         if error is None:
