@@ -25,13 +25,13 @@ if TYPE_CHECKING:
 
 
 class NgConnectInterface(QObject, metaclass=QObjectMetaClass):
-    """
-    Interface for the NextGIS Connect plugin.
+    """Define the shared NextGIS Connect plugin interface.
 
-    This abstract base class provides singleton access to the plugin
-    instance, exposes plugin metadata, version, and path, and defines
-    abstract properties and methods that must be implemented by concrete
-    subclasses.
+    Expose plugin metadata, lifecycle hooks, UI services, detached
+    editing services, and shared synchronization signals.
+
+    :ivar settings_changed: Signal emitted when plugin settings change.
+    :ivar connection_updated: Signal emitted when a connection changes.
     """
 
     settings_changed = pyqtSignal()
@@ -39,11 +39,9 @@ class NgConnectInterface(QObject, metaclass=QObjectMetaClass):
 
     @classmethod
     def instance(cls) -> "NgConnectInterface":
-        """
-        Get the singleton instance of the NextGIS Connect plugin.
+        """Return the registered plugin instance.
 
-        :returns: The singleton instance of the plugin.
-        :rtype: NgConnectInterface
+        :return: Registered plugin instance.
         :raises AssertionError: If the plugin instance is not yet created.
         """
         plugin = utils.plugins.get(PACKAGE_NAME)
@@ -52,11 +50,9 @@ class NgConnectInterface(QObject, metaclass=QObjectMetaClass):
 
     @property
     def metadata(self) -> configparser.ConfigParser:
-        """
-        Get the metadata for the NextGIS Connect plugin.
+        """Return plugin metadata.
 
-        :returns: Metadata of the plugin as a ConfigParser object.
-        :rtype: configparser.ConfigParser
+        :return: Parsed plugin metadata.
         :raises AssertionError: If the plugin metadata is not available.
         """
         metadata = utils.plugins_metadata_parser.get(PACKAGE_NAME)
@@ -65,65 +61,91 @@ class NgConnectInterface(QObject, metaclass=QObjectMetaClass):
 
     @property
     def version(self) -> str:
-        """
-        Return the plugin version.
+        """Return the plugin version.
 
-        :returns: Plugin version string.
-        :rtype: str
+        :return: Plugin version string.
         """
         return self.metadata.get("general", "version")
 
     @property
     def path(self) -> "Path":
-        """
-        Return the plugin path.
+        """Return the plugin path.
 
-        :returns: Path to the plugin directory.
-        :rtype: Path
+        :return: Plugin directory path.
         """
         return Path(__file__).resolve().parents[1]
 
     @property
     @abstractmethod
-    def toolbar(self) -> "QToolBar": ...
+    def toolbar(self) -> "QToolBar":
+        """Return the plugin toolbar.
+
+        :return: Plugin toolbar.
+        """
+        ...
 
     @property
     @abstractmethod
-    def resource_model(self) -> "QAbstractItemModel": ...
+    def resource_model(self) -> "QAbstractItemModel":
+        """Return the resource tree model.
+
+        :return: Resource tree model.
+        """
+        ...
 
     @property
     @abstractmethod
-    def resource_selection_model(self) -> "QItemSelectionModel": ...
+    def resource_selection_model(self) -> "QItemSelectionModel":
+        """Return the resource selection model.
+
+        :return: Resource selection model.
+        """
+        ...
 
     @property
     @abstractmethod
-    def task_manager(self) -> "QgsTaskManager": ...
+    def task_manager(self) -> "QgsTaskManager":
+        """Return the plugin task manager.
+
+        :return: Plugin task manager.
+        """
+        ...
 
     @property
     @abstractmethod
-    def detached_editing(self) -> "DetachedEditing": ...
+    def detached_editing(self) -> "DetachedEditing":
+        """Return the detached editing service.
+
+        :return: Detached editing service.
+        """
+        ...
 
     @abstractmethod
-    def synchronize_layers(self) -> None: ...
+    def synchronize_layers(self) -> None:
+        """Schedule detached layer synchronization."""
+        ...
 
     @abstractmethod
-    def enable_synchronization(self) -> None: ...
+    def enable_synchronization(self) -> None:
+        """Enable detached layer synchronization."""
+        ...
 
     @abstractmethod
-    def disable_synchronization(self) -> None: ...
+    def disable_synchronization(self) -> None:
+        """Disable detached layer synchronization."""
+        ...
 
     @property
     @abstractmethod
     def notifier(self) -> "NotifierInterface":
-        """Return the notifier for displaying messages to the user.
+        """Return the plugin notifier.
 
-        :returns: Notifier interface instance.
-        :rtype: NotifierInterface
+        :return: Notifier interface instance.
         """
         ...
 
     def initGui(self) -> None:
-        """Initialize the GUI components and load necessary resources."""
+        """Initialize plugin GUI components."""
         self.__translators = list()
 
         try:
@@ -132,7 +154,7 @@ class NgConnectInterface(QObject, metaclass=QObjectMetaClass):
             logger.exception("An error occurred while plugin loading")
 
     def unload(self) -> None:
-        """Unload the plugin and perform cleanup operations."""
+        """Unload plugin components."""
         try:
             self._unload()
         except Exception:
@@ -143,25 +165,18 @@ class NgConnectInterface(QObject, metaclass=QObjectMetaClass):
 
     @abstractmethod
     def _load(self) -> None:
-        """Load the plugin resources and initialize components.
-
-        This method must be implemented by subclasses.
-        """
+        """Load plugin resources and components."""
         ...
 
     @abstractmethod
     def _unload(self) -> None:
-        """Unload the plugin resources and clean up components.
-
-        This method must be implemented by subclasses.
-        """
+        """Unload plugin resources and components."""
         ...
 
     def _add_translator(self, translator_path: Path) -> None:
         """Add a translator for the plugin.
 
         :param translator_path: Path to the translation file.
-        :type translator_path: Path
         """
         translator = QTranslator()
         is_loaded = translator.load(str(translator_path))

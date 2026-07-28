@@ -32,9 +32,17 @@ if TYPE_CHECKING:
 
 
 class NgConnectPluginStub(NgConnectInterface):
-    """NextGIS Connect Plugin stub for exceptions processing"""
+    """Handle plugin startup failures.
+
+    Provide a minimal plugin interface that can show startup exceptions
+    without loading the full plugin UI.
+    """
 
     def __init__(self, startup_error: Optional[Exception] = None) -> None:
+        """Initialize the startup failure handler.
+
+        :param startup_error: Startup exception to display after loading.
+        """
         super().__init__()
         plugin_dir = Path(__file__).parents[1]
         self.__startup_error = startup_error
@@ -58,10 +66,10 @@ class NgConnectPluginStub(NgConnectInterface):
 
     @property
     def notifier(self) -> "NotifierInterface":
-        """Return the notifier for displaying messages to the user.
+        """Return the plugin notifier.
 
-        :returns: Notifier interface instance.
-        :rtype: NotifierInterface
+        :return: Notifier interface instance.
+        :raises AssertionError: If the notifier is not initialized.
         """
         assert self.__notifier is not None, "Notifier is not initialized"
         return self.__notifier
@@ -98,29 +106,66 @@ class NgConnectPluginStub(NgConnectInterface):
 
     @property
     def toolbar(self) -> QToolBar:
+        """Return the plugin toolbar.
+
+        :return: Plugin toolbar.
+        :raises NotImplementedError: Always raised because the full UI is unavailable.
+        """
         raise NotImplementedError
 
     @property
     def resource_model(self) -> QAbstractItemModel:
+        """Return the resource tree model.
+
+        :return: Resource tree model.
+        :raises NotImplementedError: Always raised because the full UI is unavailable.
+        """
         raise NotImplementedError
 
     @property
     def resource_selection_model(self) -> QItemSelectionModel:
+        """Return the resource selection model.
+
+        :return: Resource selection model.
+        :raises NotImplementedError: Always raised because the full UI is unavailable.
+        """
         raise NotImplementedError
 
     @property
     def task_manager(self) -> QgsTaskManager:
+        """Return the plugin task manager.
+
+        :return: Plugin task manager.
+        :raises NotImplementedError: Always raised because the full UI is unavailable.
+        """
         raise NotImplementedError
 
     def synchronize_layers(self) -> None:
+        """Schedule detached layer synchronization.
+
+        :raises NotImplementedError: Always raised because the full UI is unavailable.
+        """
         raise NotImplementedError
 
     @property
     def detached_editing(self) -> "DetachedEditing":
+        """Return the detached editing service.
+
+        :return: Detached editing service.
+        :raises NotImplementedError: Always raised because the full UI is unavailable.
+        """
         raise NotImplementedError
 
     def enable_synchronization(self) -> None:
+        """Enable detached layer synchronization.
+
+        :raises NotImplementedError: Always raised because the full UI is unavailable.
+        """
         raise NotImplementedError
 
     def disable_synchronization(self) -> None:
+        """Disable detached layer synchronization.
+
+        :raises NotImplementedError: Always raised because the full UI is unavailable.
+        """
         raise NotImplementedError

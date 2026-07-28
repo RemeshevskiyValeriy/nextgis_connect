@@ -318,6 +318,12 @@ class _AboutTab(str, Enum):
 
 
 class AboutDialog(QDialog):
+    """Show plugin information and component metadata.
+
+    Display package metadata, license text, component information, and
+    contributor links in a tabbed dialog.
+    """
+
     _COMPONENT_ITEM_HEIGHT = 64
     _COMPONENT_BUTTON_ICON_SIZE = 16
     _COMPONENT_BUTTON_SIZE = 22
@@ -329,6 +335,12 @@ class AboutDialog(QDialog):
         parent: Optional[QWidget] = None,
         components_path: Optional[Union[Path, str]] = None,
     ) -> None:
+        """Initialize the about dialog.
+
+        :param package_name: Python package name used for metadata lookup.
+        :param parent: Parent widget.
+        :param components_path: Path to component metadata JSON.
+        """
         super().__init__(parent)
         self._package_name = package_name
         self._components_path = (

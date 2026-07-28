@@ -9,6 +9,11 @@ def initialize_translator(
     plugin: NgConnectInterface,
     plugin_dir: Path,
 ) -> None:
+    """Initialize plugin translation resources.
+
+    :param plugin: Plugin interface that owns translators.
+    :param plugin_dir: Plugin installation directory.
+    """
     application = QgsApplication.instance()
     assert application is not None
     locale = application.locale()

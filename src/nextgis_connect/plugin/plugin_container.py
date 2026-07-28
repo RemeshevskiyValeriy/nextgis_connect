@@ -1,25 +1,3 @@
-"""
-/***************************************************************************
- NgConnectPlugin
-                                 A QGIS plugin
- NGW Connect
-                              -------------------
-        begin                : 2015-01-30
-        git sha              : $Format:%H$
-        copyright            : (C) 2014 by NextGIS
-        email                : info@nextgis.com
- ***************************************************************************/
-
-/***************************************************************************
- *                                                                         *
- *   This program is free software; you can redistribute it and/or modify  *
- *   it under the terms of the GNU General Public License as published by  *
- *   the Free Software Foundation; either version 2 of the License, or     *
- *   (at your option) any later version.                                   *
- *                                                                         *
- ***************************************************************************/
-"""
-
 import sys
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -79,7 +57,14 @@ if TYPE_CHECKING:
 
 
 class PluginContainer:
-    """Owns plugin services and wires startup/unload order."""
+    """Own plugin services and lifecycle wiring.
+
+    Initialize and unload QGIS UI objects, actions, services, detached
+    editing, cache maintenance, and notifications in a controlled order.
+
+    :ivar iface: QGIS interface supplied by the plugin host.
+    :ivar plugin_dir: Plugin installation directory.
+    """
 
     iface: QgisInterface
     plugin_dir: Path
@@ -89,6 +74,11 @@ class PluginContainer:
         plugin: "NgConnectInterface",
         iface: QgisInterface,
     ) -> None:
+        """Initialize the plugin container.
+
+        :param plugin: Plugin interface instance.
+        :param iface: QGIS interface supplied by the plugin host.
+        """
         self._plugin = plugin
         self.iface = iface
         self.plugin_dir = plugin.path
@@ -132,6 +122,7 @@ class PluginContainer:
                     raise exception
 
     def load(self) -> None:
+        """Load plugin services and user interface objects."""
         with QgsRuntimeProfiler.profile("Plugin initialization"):  # type: ignore
             logger.debug("<b>◴ Start interface initialization</b>...")
 
@@ -159,6 +150,7 @@ class PluginContainer:
             logger.debug("<b>✓ End plugin initialization</b>")
 
     def unload(self) -> None:
+        """Unload plugin services and user interface objects."""
         logger.debug("<b>Start plugin unloading</b>")
 
         unload_steps = [
@@ -182,40 +174,62 @@ class PluginContainer:
 
     @property
     def notifier(self) -> "NotifierInterface":
-        """
-        Return the notifier for displaying messages to the user.
+        """Return the plugin notifier.
 
-        :returns: Notifier interface instance.
-        :rtype: NotifierInterface
-        :raises AssertionError: If notifier is not initialized.
+        :return: Notifier interface instance.
+        :raises AssertionError: If the notifier is not initialized.
         """
         assert self.__notifier is not None, "Notifier is not initialized"
         return self.__notifier
 
     @property
     def toolbar(self) -> QToolBar:
+        """Return the plugin toolbar.
+
+        :return: Plugin toolbar.
+        :raises AssertionError: If the toolbar is not initialized.
+        """
         assert self.__ng_connect_toolbar is not None
         return self.__ng_connect_toolbar
 
     @property
     def resource_model(self) -> QAbstractItemModel:
+        """Return the resource tree model.
+
+        :return: Resource tree model.
+        """
         return self.__ng_resources_tree_dock.resource_model
 
     @property
     def resource_selection_model(self) -> QItemSelectionModel:
+        """Return the resource selection model.
+
+        :return: Resource selection model.
+        """
         return None  # type: ignore
 
     @property
     def task_manager(self) -> QgsTaskManager:
+        """Return the plugin task manager.
+
+        :return: Plugin task manager.
+        :raises AssertionError: If the task manager is not initialized.
+        """
         assert self.__task_manager is not None
         return self.__task_manager
 
     @property
     def detached_editing(self) -> DetachedEditing:
+        """Return the detached editing service.
+
+        :return: Detached editing service.
+        :raises AssertionError: If detached editing is not initialized.
+        """
         assert self.__detached_editing is not None
         return self.__detached_editing
 
     def synchronize_layers(self) -> None:
+        """Schedule detached layer synchronization."""
         assert self.__detached_editing is not None
         QMetaObject.invokeMethod(
             self.__detached_editing,
@@ -224,11 +238,13 @@ class PluginContainer:
         )
 
     def enable_synchronization(self) -> None:
+        """Enable detached layer synchronization."""
         assert self.__detached_editing is not None
         self.__detached_editing.enable_synchronization()
         self.synchronize_layers()
 
     def disable_synchronization(self) -> None:
+        """Disable detached layer synchronization."""
         assert self.__detached_editing is not None
         self.__detached_editing.disable_synchronization()
 

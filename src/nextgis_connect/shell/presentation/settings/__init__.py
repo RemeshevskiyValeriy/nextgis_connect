@@ -1,1 +1,0 @@
-"""Shell settings entry points."""

@@ -13,6 +13,11 @@ from nextgis_connect.plugin.plugin_interface import NgConnectInterface
 
 
 def create_plugin(iface: QgisInterface) -> NgConnectInterface:
+    """Create the plugin interface for QGIS.
+
+    :param iface: QGIS interface supplied by the plugin host.
+    :return: Plugin interface instance.
+    """
     settings = NgConnectSettings()
 
     try:
