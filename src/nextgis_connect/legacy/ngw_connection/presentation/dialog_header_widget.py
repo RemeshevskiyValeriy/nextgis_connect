@@ -75,13 +75,13 @@ class NextgisDialogHeaderWidget(QWidget):
     def __init__(self, parent: Optional[QWidget] = None) -> None:
         super().__init__(parent)
 
-        plugin_path = Path(__file__).parents[2]
+        icons_path = Path(__file__).parents[3] / "assets" / "icons"
         self.__background_painter = NextgisBackgroundPainter(
-            plugin_path / "icons" / "branding" / "isolines.svg",
+            icons_path / "branding" / "isolines.svg",
             self,
         )
         self.__logo_renderer = CustomSvgRenderer(
-            plugin_path / "icons" / "branding" / "nextgis_full_logo.svg",
+            icons_path / "branding" / "nextgis_full_logo.svg",
             self,
         )
 

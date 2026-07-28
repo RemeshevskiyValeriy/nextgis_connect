@@ -136,11 +136,13 @@ class AboutDialog(QDialog, Ui_AboutDialogBase):
 
     def __fill_get_involved(self, metadata: Dict[str, Optional[str]]) -> None:
         file_path = str(
-            self.__package_path / "icons" / "branding" / "nextgis_logo.svg"
+            self.__package_path
+            / "assets"
+            / "icons"
+            / "branding"
+            / "nextgis_logo.svg"
         )
-        resources_path = (
-            f":/plugins/{self.__package_name}/icons/branding/nextgis_logo.svg"
-        )
+        resources_path = f":/plugins/{self.__package_name}/assets/icons/branding/nextgis_logo.svg"
 
         if QFile(resources_path).exists():
             self.get_involved_button.setIcon(QIcon(resources_path))

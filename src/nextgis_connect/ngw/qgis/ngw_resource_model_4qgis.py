@@ -115,6 +115,10 @@ from qgis.PyQt.QtCore import QCoreApplication, QVariant
 
 from .compat_qgis import CompatQt
 
+DEFAULT_QGIS_STYLES_DIR = (
+    Path(__file__).parents[2] / "assets" / "styles" / "default"
+)
+
 
 def getQgsMapLayerEPSG(qgs_map_layer):
     crs = qgs_map_layer.crs().authid()
@@ -994,17 +998,11 @@ class QGISResourceJob(NGWResourceModelJob):
         gtype = self.ngw_layer._json[self.ngw_layer.type_id]["geometry_type"]
 
         if gtype in ["LINESTRING", "MULTILINESTRING"]:
-            return os.path.join(
-                os.path.dirname(__file__), "qgis_styles", "line_style.qml"
-            )
+            return str(DEFAULT_QGIS_STYLES_DIR / "line_style.qml")
         if gtype in ["POINT", "MULTIPOINT"]:
-            return os.path.join(
-                os.path.dirname(__file__), "qgis_styles", "point_style.qml"
-            )
+            return str(DEFAULT_QGIS_STYLES_DIR / "point_style.qml")
         if gtype in ["POLYGON", "MULTIPOLYGON"]:
-            return os.path.join(
-                os.path.dirname(__file__), "qgis_styles", "polygon_style.qml"
-            )
+            return str(DEFAULT_QGIS_STYLES_DIR / "polygon_style.qml")
 
         return None
 

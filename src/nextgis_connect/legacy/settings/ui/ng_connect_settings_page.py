@@ -552,7 +552,7 @@ class NgConnectOptionsErrorPageWidget(QgsOptionsPageWidget):
 
 class NgConnectOptionsWidgetFactory(QgsOptionsWidgetFactory):
     def __init__(self):
-        icons_path = Path(__file__).parents[2] / "icons"
+        icons_path = Path(__file__).parents[3] / "assets" / "icons"
         super().__init__(
             "NextGIS Connect",
             QIcon(str(icons_path / "branding/connect_logo.svg")),

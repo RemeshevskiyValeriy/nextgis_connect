@@ -8,9 +8,8 @@ license = { file = "LICENSE" }
 dev = ["ruff", "pre-commit", "pytest"]
 
 [tool.qgspb.package-data]
-"nextgis_connect.icons" = ["**/*.svg", "**/*.png"]
-"nextgis_connect.ngw.icons" = ["*.svg"]
-"nextgis_connect.ngw.qgis.qgis_styles" = ["*.qml"]
+"nextgis_connect.assets.icons" = ["**/*.svg", "**/*.png"]
+"nextgis_connect.assets.styles" = ["**/*.qml"]
 
 [tool.qgspb.forms]
 ui-files = ["src/nextgis_connect/**/*.ui"]

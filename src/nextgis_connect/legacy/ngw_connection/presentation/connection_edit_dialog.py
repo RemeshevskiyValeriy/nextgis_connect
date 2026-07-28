@@ -258,7 +258,8 @@ class NgwConnectionEditDialog(QDialog, WIDGET):
             help_button.setIcon(
                 QIcon(
                     str(
-                        PLUGIN_PATH.parents[1]
+                        PLUGIN_PATH.parents[2]
+                        / "assets"
                         / "icons"
                         / "branding"
                         / "nextgis_logo.svg"

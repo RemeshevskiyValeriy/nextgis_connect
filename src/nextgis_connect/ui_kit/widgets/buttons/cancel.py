@@ -12,7 +12,7 @@ from nextgis_connect.ui_kit.widgets.buttons.secondary import SecondaryButton
 
 class CancelButton(SecondaryButton):
     _MATERIAL_ICONS_DIR = (
-        Path(__file__).resolve().parents[2] / "icons" / "material"
+        Path(__file__).resolve().parents[3] / "assets" / "icons" / "material"
     )
 
     def __init__(
