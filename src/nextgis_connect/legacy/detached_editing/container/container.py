@@ -24,7 +24,6 @@ from qgis.gui import QgisInterface
 from qgis.PyQt.QtCore import QObject, Qt, pyqtSignal, pyqtSlot
 from qgis.utils import iface
 
-from nextgis_connect.bootstrap.plugin_interface import NgConnectInterface
 from nextgis_connect.legacy.detached_editing import utils
 from nextgis_connect.legacy.detached_editing.conflicts.auto_resolver import (
     ConflictsAutoResolver,
@@ -98,6 +97,7 @@ from nextgis_connect.platform.qgis.errors import (
     SynchronizationError,
 )
 from nextgis_connect.platform.qgis.utils import wrap_sql_value
+from nextgis_connect.plugin.plugin_interface import NgConnectInterface
 
 if TYPE_CHECKING:
     assert isinstance(iface, QgisInterface)

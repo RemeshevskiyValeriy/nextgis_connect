@@ -21,7 +21,6 @@ from qgis.PyQt.QtCore import QEventLoop, QModelIndex, QObject, QTimer
 from qgis.PyQt.QtWidgets import QMessageBox
 from qgis.utils import iface
 
-from nextgis_connect.bootstrap.plugin_interface import NgConnectInterface
 from nextgis_connect.legacy.detached_editing.container.cache_lifecycle import (
     CachedDetachedContainerLifecycle,
 )
@@ -76,6 +75,7 @@ from nextgis_connect.platform.qgis.errors import (
     NgwError,
 )
 from nextgis_connect.platform.tasks import NgConnectTask
+from nextgis_connect.plugin.plugin_interface import NgConnectInterface
 
 if TYPE_CHECKING:
     assert isinstance(iface, QgisInterface)

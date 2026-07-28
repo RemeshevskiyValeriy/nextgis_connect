@@ -32,7 +32,6 @@ from qgis.PyQt.QtCore import (
 from qgis.PyQt.QtGui import QDesktopServices
 from qgis.PyQt.QtWidgets import QAction
 
-from nextgis_connect.bootstrap.plugin_interface import NgConnectInterface
 from nextgis_connect.legacy.detached_editing.identification.identification_tool import (
     IdentificationTool,
 )
@@ -53,6 +52,7 @@ from nextgis_connect.platform.qgis.compat import (
     GeometryType,
     LayerType,
 )
+from nextgis_connect.plugin.plugin_interface import NgConnectInterface
 from nextgis_connect.ui_kit.icons.icon import plugin_icon, qgis_icon
 
 if TYPE_CHECKING:

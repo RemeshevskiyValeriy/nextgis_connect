@@ -14,7 +14,6 @@ from qgis.PyQt.QtCore import (
 from qgis.PyQt.QtWidgets import QToolBar
 from qgis.utils import iface
 
-from nextgis_connect.bootstrap.plugin_interface import NgConnectInterface
 from nextgis_connect.legacy.notifier.message_bar_notifier import (
     MessageBarNotifier,
 )
@@ -22,6 +21,7 @@ from nextgis_connect.legacy.notifier.notifier_interface import (
     NotifierInterface,
 )
 from nextgis_connect.platform.logging import logger
+from nextgis_connect.plugin.plugin_interface import NgConnectInterface
 
 if TYPE_CHECKING:
     from nextgis_connect.legacy.detached_editing.detached_editing import (

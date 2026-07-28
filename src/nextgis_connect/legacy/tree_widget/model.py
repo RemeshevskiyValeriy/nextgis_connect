@@ -27,7 +27,6 @@ from qgis.PyQt.QtCore import (
 )
 from qgis.PyQt.QtGui import QBrush, QFont
 
-from nextgis_connect.bootstrap.plugin_interface import NgConnectInterface
 from nextgis_connect.features.search.domain.query import (
     NgwSearchQueryBuilder,
     SearchQueryParser,
@@ -92,6 +91,7 @@ from nextgis_connect.platform.qgis.errors import (
     NgwConnectionError,
     NgwError,
 )
+from nextgis_connect.plugin.plugin_interface import NgConnectInterface
 from nextgis_connect.ui_kit.graphics import (
     NextgisDecorator,
     mix_colors,

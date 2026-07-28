@@ -3,7 +3,6 @@ from typing import List, Optional, Tuple, cast
 from qgis.core import QgsApplication, QgsFeedback
 from qgis.PyQt.QtCore import QObject, pyqtSignal
 
-from nextgis_connect.bootstrap.plugin_interface import NgConnectInterface
 from nextgis_connect.legacy.ngw.qgis.qgis_ngw_connection import (
     QgsNgwConnection,
 )
@@ -28,6 +27,7 @@ from nextgis_connect.legacy.ngw_connection.domain.parsers import (
 )
 from nextgis_connect.platform.logging import logger
 from nextgis_connect.platform.tasks import NgConnectTask
+from nextgis_connect.plugin.plugin_interface import NgConnectInterface
 
 from .checks import build_connection_checks
 from .checks.base import CheckCancelledError

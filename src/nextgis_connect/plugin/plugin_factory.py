@@ -3,13 +3,13 @@ import copy
 from qgis.core import QgsRuntimeProfiler
 from qgis.gui import QgisInterface
 
-from nextgis_connect.bootstrap.plugin_interface import NgConnectInterface
 from nextgis_connect.legacy.settings.ng_connect_settings import (
     NgConnectSettings,
 )
 from nextgis_connect.platform.qgis.errors import (
     NgConnectReloadAfterUpdateWarning,
 )
+from nextgis_connect.plugin.plugin_interface import NgConnectInterface
 
 
 def create_plugin(iface: QgisInterface) -> NgConnectInterface:
@@ -17,15 +17,15 @@ def create_plugin(iface: QgisInterface) -> NgConnectInterface:
 
     try:
         with QgsRuntimeProfiler.profile("Import plugin"):  # type: ignore
-            from nextgis_connect.bootstrap.plugin import NgConnectPlugin
+            from nextgis_connect.plugin.plugin import NgConnectPlugin
 
         plugin = NgConnectPlugin(iface)
-        plugin.bootstrap()
+        plugin.initialize()
 
         settings.did_last_launch_fail = False
 
     except Exception as error:
-        from nextgis_connect.bootstrap.startup_stub import NgConnectPluginStub
+        from nextgis_connect.plugin.startup_stub import NgConnectPluginStub
 
         error_copy = copy.deepcopy(error)
         exception = error_copy

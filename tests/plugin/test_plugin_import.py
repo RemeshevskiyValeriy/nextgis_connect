@@ -10,7 +10,7 @@ from nextgis_connect.shared.constants import PACKAGE_NAME
 def test_plugin_package_imports(qgis_iface) -> None:
     del qgis_iface
 
-    plugin_module = importlib.import_module("nextgis_connect.bootstrap.plugin")
+    plugin_module = importlib.import_module("nextgis_connect.plugin.plugin")
 
     assert callable(nextgis_connect.classFactory)
     assert plugin_module.NgConnectPlugin is not None

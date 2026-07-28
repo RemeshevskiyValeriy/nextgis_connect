@@ -1,6 +1,5 @@
 from qgis.core import QgsApplication
 
-from nextgis_connect.bootstrap.service_container import ServiceContainer
 from nextgis_connect.legacy.detached_editing.detached_editing import (
     DetachedEditing,
 )
@@ -13,6 +12,7 @@ from nextgis_connect.legacy.settings.tasks.purge_ng_connect_cache_task import (
 from nextgis_connect.platform.tasks import (
     NgConnectTaskManager,
 )
+from nextgis_connect.plugin.service_container import ServiceContainer
 
 
 def initialize_connections() -> None:

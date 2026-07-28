@@ -48,7 +48,6 @@ from qgis.PyQt.QtWidgets import (
 )
 from qgis.utils import iface
 
-from nextgis_connect.bootstrap.plugin_interface import NgConnectInterface
 from nextgis_connect.legacy.detached_editing.identification.highlight_handler import (
     HighlightHandler,
 )
@@ -70,6 +69,7 @@ from nextgis_connect.legacy.detached_editing.identification.ui.no_features_widge
 )
 from nextgis_connect.legacy.detached_editing.utils import DetachedLayerState
 from nextgis_connect.platform.qgis.compat import GeometryType, QgsFeatureId
+from nextgis_connect.plugin.plugin_interface import NgConnectInterface
 from nextgis_connect.shared.constants import PLUGIN_NAME
 from nextgis_connect.ui_kit.icons.icon import (
     material_icon,

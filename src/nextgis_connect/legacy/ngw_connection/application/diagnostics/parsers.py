@@ -3,8 +3,8 @@ import xml.etree.ElementTree as ET
 from pathlib import Path
 from typing import Optional
 
-from nextgis_connect.bootstrap.plugin_interface import NgConnectInterface
 from nextgis_connect.platform.qgis.compat import parse_version
+from nextgis_connect.plugin.plugin_interface import NgConnectInterface
 from nextgis_connect.shared.constants import PACKAGE_NAME, PLUGIN_NAME
 
 

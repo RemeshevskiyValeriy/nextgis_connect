@@ -1,4 +1,4 @@
-from nextgis_connect.bootstrap.plugin_container import PluginContainer
+from nextgis_connect.plugin.plugin_container import PluginContainer
 
 
 def init_processing(container: PluginContainer) -> None:

@@ -40,13 +40,6 @@ from qgis.PyQt.QtCore import (
 from qgis.PyQt.QtGui import QIcon
 from qgis.PyQt.QtWidgets import QAction, QToolBar
 
-from nextgis_connect.bootstrap.gui_bootstrap import initialize_translator
-from nextgis_connect.bootstrap.services_bootstrap import (
-    create_detached_editing,
-    create_service_container,
-    initialize_connections,
-    schedule_cache_purging,
-)
 from nextgis_connect.legacy.detached_editing.detached_editing import (
     DetachedEditing,
 )
@@ -71,11 +64,18 @@ from nextgis_connect.platform.qgis.errors import (
     NgConnectError,
     NgConnectReloadAfterUpdateWarning,
 )
+from nextgis_connect.plugin.services import (
+    create_detached_editing,
+    create_service_container,
+    initialize_connections,
+    schedule_cache_purging,
+)
+from nextgis_connect.plugin.translator import initialize_translator
 from nextgis_connect.shared.constants import PLUGIN_NAME
 from nextgis_connect.shell.presentation.about.about_dialog import AboutDialog
 
 if TYPE_CHECKING:
-    from nextgis_connect.bootstrap.plugin_interface import NgConnectInterface
+    from nextgis_connect.plugin.plugin_interface import NgConnectInterface
 
 
 class PluginContainer:

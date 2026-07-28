@@ -14,7 +14,6 @@ from qgis.PyQt.QtCore import (
     pyqtSlot,
 )
 
-from nextgis_connect.bootstrap.plugin_interface import NgConnectInterface
 from nextgis_connect.legacy.detached_editing.utils import AttachmentMetadata
 from nextgis_connect.legacy.settings.ng_connect_cache_manager import (
     NgConnectCacheManager,
@@ -23,6 +22,7 @@ from nextgis_connect.legacy.settings.ng_connect_settings import (
     NgConnectSettings,
 )
 from nextgis_connect.platform.qgis.compat import QgsFeatureId, QgsFeatureList
+from nextgis_connect.plugin.plugin_interface import NgConnectInterface
 from nextgis_connect.shared.types import AttachmentId
 
 if TYPE_CHECKING:

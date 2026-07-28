@@ -40,7 +40,6 @@ from qgis.PyQt.QtWidgets import (
     QWidget,
 )
 
-from nextgis_connect.bootstrap.plugin_interface import NgConnectInterface
 from nextgis_connect.legacy.ngw_connection.application.connections_manager import (
     NgwConnectionsManager,
 )
@@ -65,6 +64,7 @@ from nextgis_connect.legacy.ngw_connection.presentation.dialog_header_widget imp
     NextgisDialogHeaderWidget,
 )
 from nextgis_connect.platform.qgis.utils import nextgis_domain
+from nextgis_connect.plugin.plugin_interface import NgConnectInterface
 from nextgis_connect.ui_kit.buttons.loading import (
     LoadingPushButton,
     LoadingToolButton,

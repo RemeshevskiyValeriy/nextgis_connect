@@ -2,7 +2,7 @@ from pathlib import Path
 
 from qgis.core import QgsApplication
 
-from nextgis_connect.bootstrap.plugin_interface import NgConnectInterface
+from nextgis_connect.plugin.plugin_interface import NgConnectInterface
 
 
 def initialize_translator(

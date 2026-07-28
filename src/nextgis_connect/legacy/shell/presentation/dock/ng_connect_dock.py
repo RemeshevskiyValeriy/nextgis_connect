@@ -94,7 +94,6 @@ from qgis.PyQt.QtWidgets import (
 )
 from qgis.PyQt.QtXml import QDomDocument
 
-from nextgis_connect.bootstrap.plugin_interface import NgConnectInterface
 from nextgis_connect.legacy.action_style_import_or_update import (
     ActionStyleImportUpdate,
 )
@@ -214,6 +213,7 @@ from nextgis_connect.platform.qgis.errors import (
     NgConnectError,
     NgwError,
 )
+from nextgis_connect.plugin.plugin_interface import NgConnectInterface
 from nextgis_connect.shared.constants import PACKAGE_NAME, PLUGIN_NAME
 from nextgis_connect.ui_kit.buttons.shining import ShiningButton
 from nextgis_connect.ui_kit.icons.icon import (

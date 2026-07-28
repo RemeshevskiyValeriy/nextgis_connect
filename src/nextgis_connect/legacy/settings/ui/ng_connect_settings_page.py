@@ -21,7 +21,6 @@ from qgis.PyQt.QtWidgets import (
 )
 from qgis.utils import iface
 
-from nextgis_connect.bootstrap.plugin_interface import NgConnectInterface
 from nextgis_connect.legacy.ngw_connection.application.connections_manager import (
     NgwConnectionsManager,
 )
@@ -43,6 +42,7 @@ from nextgis_connect.legacy.shell.presentation.dock.ng_connect_dock import (
 )
 from nextgis_connect.platform.logging import logger, update_logging_level
 from nextgis_connect.platform.qgis.utils import human_readable_size
+from nextgis_connect.plugin.plugin_interface import NgConnectInterface
 from nextgis_connect.ui_kit.widgets.labeled_slider import LabeledSlider
 
 
