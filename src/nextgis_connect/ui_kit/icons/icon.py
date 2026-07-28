@@ -5,6 +5,7 @@ from qgis.core import QgsApplication
 from qgis.PyQt.QtCore import (
     QBuffer,
     QByteArray,
+    QFile,
     QIODevice,
     QRectF,
     QSize,
@@ -23,15 +24,16 @@ def qgis_icon(icon_name: str) -> QIcon:
     """Return a QGIS theme icon by name.
 
     :param icon_name: Name of the icon.
-    :type icon_name: str
+
     :returns: QIcon instance for the QGIS theme icon.
-    :rtype: QIcon
     """
     icon = QgsApplication.getThemeIcon(icon_name)
     if icon.isNull():
         icon = QIcon(f":images/themes/default/{icon_name}")
     if icon.isNull():
         icon = QIcon(f":images/themes/default/propertyicons/{icon_name}")
+    if icon.isNull():
+        icon = QIcon(f":images/themes/default/console/{icon_name}")
     return icon
 
 
@@ -44,32 +46,38 @@ def plugin_icon(
     """Return the plugin icon as QIcon.
 
     :param icon_path: Path or name of the icon file.
-    :type icon_path: Union[Path, str, None]
     :param color: Color to apply instead of white fill for SVG icons.
         If None, keep the original fills unchanged.
-    :type color: Optional[str]
+
     :returns: QIcon instance for the plugin icon.
-    :rtype: QIcon
     """
     plugin = NgConnectInterface.instance()
     icons_path = plugin.path / "assets" / "icons"
     if icon_path is None:
         icon_path = f"{PACKAGE_NAME}_logo.svg"
 
-    full_path = icons_path / icon_path
-    if not full_path.exists():
+    result_path: Optional[str] = None
+    filesystem_path = icons_path / icon_path
+    qrc_path = f":/plugins/{PACKAGE_NAME}/icons/{icon_path}"
+
+    if filesystem_path.exists():
+        result_path = str(filesystem_path)
+    elif QFile(qrc_path).exists():
+        result_path = qrc_path
+
+    if result_path is None:
         logger.warning(f"Icon {icon_path} does not exist")
-        return QIcon(str(full_path))
+        return QIcon(str(filesystem_path))
 
     # Repaint only when needed and only for SVG icons
-    if full_path.suffix.lower() == ".svg" and (
+    if result_path.lower().endswith(".svg") and (
         color is not None or size is not None or replacements is not None
     ):
         return render_svg_icon(
-            full_path, color=color, size=size, replacements=replacements
+            result_path, color=color, size=size, replacements=replacements
         )
 
-    return QIcon(str(full_path))
+    return QIcon(result_path)
 
 
 def material_icon(
@@ -78,13 +86,11 @@ def material_icon(
     """Return a material icon as QIcon, optionally recolored and resized.
 
     :param name: Name of the material icon (without .svg extension).
-    :type name: str
     :param color: Color to apply to the icon (hex string).
-    :type color: str
     :param size: Size of the icon in pixels.
-    :type size: Optional[int]
+
     :returns: QIcon instance for the material icon.
-    :rtype: QIcon
+
     :raises FileNotFoundError: If the SVG file is not found.
     :raises ValueError: If the SVG cannot be loaded.
     """
@@ -113,7 +119,7 @@ def material_icon(
 
 
 def render_svg_icon(
-    svg_path: Path,
+    svg_path: Union[Path, str],
     *,
     color: Optional[str] = None,
     size: Optional[int] = None,
@@ -122,19 +128,27 @@ def render_svg_icon(
     """Render an SVG file into a QIcon with optional recolor and resize.
 
     :param svg_path: Filesystem path to the SVG file.
-    :type svg_path: Path
     :param color: Color to apply instead of white fill. If None, keep the
         original fills unchanged.
-    :type color: Optional[str]
     :param size: Output icon size in pixels. If None, use SVG default size.
-    :type size: Optional[int]
+
     :returns: Rendered QIcon.
-    :rtype: QIcon
+
     :raises ValueError: If the SVG cannot be loaded.
     """
-    svg_content = svg_path.read_text(encoding="utf-8")
+    if isinstance(svg_path, Path):
+        svg_content = svg_path.read_text(encoding="utf-8")
+    else:
+        file = QFile(svg_path)
+        if not file.open(
+            QIODevice.OpenModeFlag.ReadOnly | QIODevice.OpenModeFlag.Text
+        ):
+            message = f"Failed to open SVG file: {svg_path}"
+            raise ValueError(message)
+        svg_content = file.readAll().data().decode("utf-8")
+        file.close()
 
-    # Replace only pure white fills to preserve multi-colored icons.
+    # Replace only pure white fills to preserve multi-colored icons
     if color:
         modified_svg = svg_content.replace('fill="#ffffff"', f'fill="{color}"')
         modified_svg = modified_svg.replace('fill="#fff"', f'fill="{color}"')

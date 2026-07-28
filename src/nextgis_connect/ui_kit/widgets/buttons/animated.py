@@ -15,6 +15,9 @@ from qgis.PyQt.QtWidgets import QPushButton, QSizePolicy, QWidget
 
 from nextgis_connect.ui_kit.rendering.graphics.decorator import (
     NextgisDecorator,
+    NextgisRadius,
+    NextgisSize,
+    NextgisSpacing,
 )
 
 
@@ -49,7 +52,9 @@ class AnimatedButtonBase(QPushButton):
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self.setAutoDefault(False)
         self.setDefault(False)
-        self.set_button_height(NextgisDecorator.DEFAULT_BUTTON_HEIGHT)
+        self.set_button_height(
+            NextgisDecorator.size(NextgisSize.CONTROL_COMPACT)
+        )
         self.setSizePolicy(
             QSizePolicy.Policy.Minimum,
             QSizePolicy.Policy.Fixed,
@@ -219,10 +224,10 @@ class AnimatedButtonBase(QPushButton):
         raise NotImplementedError
 
     def _horizontal_padding(self) -> int:
-        return self._HORIZONTAL_PADDING
+        return NextgisDecorator.spacing(NextgisSpacing.LG)
 
     def _border_radius(self) -> int:
-        return self._BORDER_RADIUS
+        return NextgisDecorator.radius(NextgisRadius.BUTTON)
 
     def set_button_height(self, height: int) -> None:
         self.setMinimumHeight(height)
@@ -285,7 +290,7 @@ class AnimatedButtonBase(QPushButton):
         self.setMinimumWidth(self._minimum_width())
 
     def _icon_text_spacing(self) -> int:
-        return 6
+        return NextgisDecorator.spacing(NextgisSpacing.SM)
 
     def _paint_content(self, painter: QPainter, rect: QRect) -> None:
         icon = self.icon()

@@ -24,19 +24,23 @@ from qgis.PyQt.QtCore import (
     Qt,
     pyqtSignal,
 )
-from qgis.PyQt.QtGui import QEnterEvent, QIcon, QMouseEvent, QMovie
+from qgis.PyQt.QtGui import QEnterEvent, QIcon, QMouseEvent
 from qgis.PyQt.QtWidgets import QPushButton, QToolButton, QWidget
+
+from nextgis_connect.ui_kit.widgets.loading_indicator import (
+    LoadingIndicatorIconAnimator,
+)
 
 
 class LoadingButtonMixin:
-    DEFAULT_ANIMATION_PATH = ":images/themes/default/mIconLoading.gif"
-
     def _initialize_loading_button(
         self,
         icon: Optional[QIcon] = None,
         cancel_icon: Optional[QIcon] = None,
         animation_path: Optional[str] = None,
     ) -> None:
+        del animation_path
+
         self._default_icon = QIcon() if icon is None else QIcon(icon)
         self._set_icon(self._default_icon)
         self._cancel_icon = (
@@ -46,8 +50,11 @@ class LoadingButtonMixin:
         self._enabled_before_loading = self._is_enabled()
         self._is_hovered = False
         self._is_loading = False
-        self._movie = QMovie(animation_path or self.DEFAULT_ANIMATION_PATH)
-        self._movie.frameChanged.connect(self._update_loading_icon)
+        self._loading_icon = LoadingIndicatorIconAnimator(
+            self._icon_size(),
+            parent=self,
+        )
+        self._loading_icon.frame_changed.connect(self._update_loading_icon)
 
     def is_loading(self) -> bool:
         return self._is_loading
@@ -74,26 +81,17 @@ class LoadingButtonMixin:
                 QCoreApplication.translate("LoadingButton", "Cancel")
             )
 
-        if self._movie.fileName() == "":
-            return
-
-        if not self._movie.isValid():
-            return
-
-        if self._movie.state() == QMovie.MovieState.Running:
-            return
-
         icon_size = self._icon_size()
         if not icon_size.isValid():
             icon_size = QSize(16, 16)
 
-        self._movie.setScaledSize(icon_size)
-        self._movie.start()
+        self._loading_icon.set_size(icon_size)
+        self._loading_icon.start()
         self._update_loading_icon()
 
     def _stop_loading(self) -> None:
-        if self._movie.state() != QMovie.MovieState.NotRunning:
-            self._movie.stop()
+        if self._loading_icon.is_running():
+            self._loading_icon.stop()
 
         self._is_loading = False
         self._set_icon(self._default_icon)
@@ -137,18 +135,19 @@ class LoadingButtonMixin:
 
     def _handle_icon_size_change(self, size: QSize) -> None:
         if size.isValid():
-            self._movie.setScaledSize(size)
+            self._loading_icon.set_size(size)
 
     def _update_loading_icon(self) -> None:
         if self._is_hovered and not self._cancel_icon.isNull():
             self._set_icon(self._cancel_icon)
             return
 
-        current_pixmap = self._movie.currentPixmap()
-        if current_pixmap.isNull():
-            return
-
-        self._set_icon(QIcon(current_pixmap))
+        self._set_icon(
+            self._loading_icon.current_icon(
+                palette=self.palette(),
+                device_pixel_ratio=self.devicePixelRatioF(),
+            )
+        )
 
     def _set_icon(self, icon: QIcon) -> None:
         self.setIcon(icon)

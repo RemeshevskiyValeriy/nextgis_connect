@@ -1,14 +1,136 @@
+import json
+from dataclasses import dataclass
 from enum import Enum
-from typing import Iterable, Mapping, Optional, Tuple, Union
+from pathlib import Path
+from typing import Any, Dict, Iterable, Mapping, Optional, Tuple, Union
 
 from qgis.core import QgsApplication
 from qgis.PyQt.QtGui import QColor, QPalette
 from qgis.PyQt.QtWidgets import QWidget
 
 
-class NextgisColor(Enum):
-    MAIN = "#0c65af"
-    PRESSED = "#0952a3"
+@dataclass(frozen=True)
+class NextgisToken:
+    path: str
+    fallback: Any
+
+
+TokenSource = Union[NextgisToken, str]
+
+
+class NextgisBrandColor(Enum):
+    DEFAULT = NextgisToken("color.shared.brand", "#0c65af")
+    HOVER = NextgisToken("color.shared.brandHover", "#0952a5")
+    ACTIVE = NextgisToken("color.shared.brandActive", "#063f80")
+    ACCENT = NextgisToken("color.shared.brandAccent", "#0070c5")
+    ON_BRAND = NextgisToken("color.shared.onBrand", "#ffffff")
+
+
+class NextgisRadius(Enum):
+    FIELD = NextgisToken("radiusPx.field", 8)
+    BUTTON = NextgisToken("radiusPx.button", 4)
+    CARD = NextgisToken("radiusPx.card", 6)
+    PANEL = NextgisToken("radiusPx.panel", 18)
+    PILL = NextgisToken("radiusPx.pill", 999)
+
+
+class NextgisSpacing(Enum):
+    XS = NextgisToken("spacingPx.1", 4)
+    SM = NextgisToken("spacingPx.2", 8)
+    MD = NextgisToken("spacingPx.3", 12)
+    LG = NextgisToken("spacingPx.4", 16)
+    XL = NextgisToken("spacingPx.6", 24)
+
+
+class NextgisSize(Enum):
+    ICON_SMALL = NextgisToken("sizePx.iconSmall", 16)
+    ICON = NextgisToken("sizePx.icon", 20)
+    ICON_LARGE = NextgisToken("sizePx.iconLarge", 24)
+    CONTROL_COMPACT = NextgisToken("sizePx.controlCompact", 32)
+    CONTROL = NextgisToken("sizePx.control", 40)
+    CONTROL_LARGE = NextgisToken("sizePx.controlLarge", 48)
+    CONTAINER_MAX = NextgisToken("sizePx.containerMax", 1200)
+
+
+class NextgisTheme:
+    def __init__(self, path: Path) -> None:
+        self._path = path
+        self._data_cache: Optional[Dict[str, Any]] = None
+
+    @property
+    def data(self) -> Mapping[str, Any]:
+        if self._data_cache is None:
+            self._data_cache = self._load()
+
+        return self._data_cache
+
+    def value(self, token: TokenSource, fallback: Any = None) -> Any:
+        key_path, fallback_value = self._normalize_token(token, fallback)
+        value: Any = self.data
+
+        for key in key_path.split("."):
+            if not isinstance(value, dict) or key not in value:
+                return fallback_value
+            value = value[key]
+
+        return value
+
+    def color(
+        self, token: TokenSource, fallback: Optional[str] = None
+    ) -> QColor:
+        _, fallback_value = self._normalize_token(token, fallback)
+        value = self.value(token, fallback)
+        if not isinstance(value, str):
+            value = "" if value is None else str(value)
+
+        color = QColor(value)
+        if color.isValid():
+            return color
+
+        fallback_text = "" if fallback_value is None else str(fallback_value)
+        fallback_color = QColor(fallback_text)
+        return fallback_color if fallback_color.isValid() else QColor()
+
+    def integer(
+        self, token: TokenSource, fallback: Optional[int] = None
+    ) -> int:
+        _, fallback_value = self._normalize_token(token, fallback)
+        value = self.value(token, fallback)
+        if isinstance(value, bool):
+            return self._fallback_integer(fallback_value)
+
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return self._fallback_integer(fallback_value)
+
+    def _normalize_token(
+        self,
+        token: TokenSource,
+        fallback: Any,
+    ) -> Tuple[str, Any]:
+        if isinstance(token, NextgisToken):
+            return token.path, token.fallback if fallback is None else fallback
+
+        return token, fallback
+
+    def _load(self) -> Dict[str, Any]:
+        try:
+            with self._path.open(encoding="utf-8") as theme_file:
+                theme_data = json.load(theme_file)
+        except (OSError, ValueError, TypeError):
+            return {}
+
+        if not isinstance(theme_data, dict):
+            return {}
+
+        return theme_data
+
+    def _fallback_integer(self, fallback: Any) -> int:
+        try:
+            return int(fallback)
+        except (TypeError, ValueError):
+            return 0
 
 
 PaletteKey = Union[
@@ -61,77 +183,142 @@ class NextgisDecorator:
         QPalette.ColorGroup.Inactive,
         QPalette.ColorGroup.Disabled,
     )
+    _THEME_PATH = (
+        Path(__file__).resolve().parents[3]
+        / "assets"
+        / "themes"
+        / "nextgis.json"
+    )
+    _theme = NextgisTheme(_THEME_PATH)
 
     @classmethod
-    def application_palette(cls) -> QPalette:
+    def theme(cls) -> NextgisTheme:
+        return cls._theme
+
+    @classmethod
+    def system_palette(cls, palette: Optional[QPalette] = None) -> QPalette:
+        if palette is not None:
+            return QPalette(palette)
+
         return QPalette(QgsApplication.palette())
 
     @classmethod
-    def corporate_color(cls, color: NextgisColor) -> QColor:
-        return QColor(color.value)
+    def system_color(
+        cls,
+        role: QPalette.ColorRole,
+        palette: Optional[QPalette] = None,
+        *,
+        group: Optional[QPalette.ColorGroup] = None,
+    ) -> QColor:
+        active_palette = cls.system_palette(palette)
+        if group is None:
+            return active_palette.color(role)
+
+        return active_palette.color(group, role)
+
+    @classmethod
+    def system_window_color(
+        cls,
+        palette: Optional[QPalette] = None,
+    ) -> QColor:
+        return cls.system_color(QPalette.ColorRole.Window, palette)
+
+    @classmethod
+    def system_base_color(
+        cls,
+        palette: Optional[QPalette] = None,
+    ) -> QColor:
+        return cls.system_color(QPalette.ColorRole.Base, palette)
+
+    @classmethod
+    def system_title_color(
+        cls,
+        palette: Optional[QPalette] = None,
+    ) -> QColor:
+        return cls.system_color(QPalette.ColorRole.WindowText, palette)
+
+    @classmethod
+    def system_text_color(
+        cls,
+        palette: Optional[QPalette] = None,
+    ) -> QColor:
+        return cls.system_color(QPalette.ColorRole.Text, palette)
+
+    @classmethod
+    def system_button_color(
+        cls,
+        palette: Optional[QPalette] = None,
+    ) -> QColor:
+        return cls.system_color(QPalette.ColorRole.Button, palette)
+
+    @classmethod
+    def system_border_color(
+        cls,
+        palette: Optional[QPalette] = None,
+    ) -> QColor:
+        return cls.system_color(QPalette.ColorRole.Mid, palette)
+
+    @classmethod
+    def system_muted_text_color(
+        cls,
+        palette: Optional[QPalette] = None,
+    ) -> QColor:
+        active_palette = cls.system_palette(palette)
+
+        return mix_colors(
+            cls.system_text_color(active_palette),
+            cls.system_window_color(active_palette),
+            0.45 if cls.is_dark_theme(active_palette) else 0.60,
+        )
 
     @classmethod
     def is_dark_theme(cls, palette: Optional[QPalette] = None) -> bool:
-        active_palette = QPalette(palette or cls.application_palette())
-        window_color = active_palette.color(QPalette.ColorRole.Window)
-        text_color = active_palette.color(QPalette.ColorRole.WindowText)
+        active_palette = cls.system_palette(palette)
+        window_color = cls.system_window_color(active_palette)
+        text_color = cls.system_title_color(active_palette)
 
         return window_color.lightnessF() < text_color.lightnessF()
 
     @classmethod
-    def title_color(cls, palette: Optional[QPalette] = None) -> QColor:
-        active_palette = QPalette(palette or cls.application_palette())
-
-        return active_palette.color(QPalette.ColorRole.WindowText)
-
-    @classmethod
-    def text_color(cls, palette: Optional[QPalette] = None) -> QColor:
-        active_palette = QPalette(palette or cls.application_palette())
-
-        return active_palette.color(QPalette.ColorRole.Text)
+    def brand_color(
+        cls,
+        color: NextgisBrandColor = NextgisBrandColor.DEFAULT,
+    ) -> QColor:
+        return cls.theme().color(color.value)
 
     @classmethod
-    def helper_text_color(cls, palette: Optional[QPalette] = None) -> QColor:
-        active_palette = QPalette(palette or cls.application_palette())
-        text_color = active_palette.color(QPalette.ColorRole.Text)
-        window_color = active_palette.color(QPalette.ColorRole.Window)
-        factor = 0.45 if cls.is_dark_theme(active_palette) else 0.60
-
-        return mix_colors(text_color, window_color, factor)
+    def brand_hover_color(cls) -> QColor:
+        return cls.brand_color(NextgisBrandColor.HOVER)
 
     @classmethod
-    def accent_overlay_color(
+    def brand_active_color(cls) -> QColor:
+        return cls.brand_color(NextgisBrandColor.ACTIVE)
+
+    @classmethod
+    def brand_overlay_color(
         cls,
         alpha_factor: float = 0.05,
     ) -> QColor:
-        color = cls.corporate_color(NextgisColor.MAIN)
+        color = cls.brand_color()
         color.setAlpha(round(255 * max(0.0, min(1.0, alpha_factor))))
 
         return color
 
     @classmethod
-    def accent_hover_color(cls, palette: Optional[QPalette] = None) -> QColor:
-        active_palette = QPalette(palette or cls.application_palette())
-
-        return mix_colors(
-            cls.corporate_color(NextgisColor.MAIN),
-            active_palette.color(QPalette.ColorRole.Base),
-            0.16,
-        )
+    def brand_on_color(cls) -> QColor:
+        return cls.brand_color(NextgisBrandColor.ON_BRAND)
 
     @classmethod
-    def accent_pressed_color(cls) -> QColor:
-        return cls.corporate_color(NextgisColor.PRESSED)
+    def spacing(cls, spacing: NextgisSpacing) -> int:
+        return cls.theme().integer(spacing.value)
 
     @classmethod
-    def accent_text_color(cls) -> QColor:
-        return QColor("#ffffff")
+    def radius(cls, radius: NextgisRadius) -> int:
+        return cls.theme().integer(radius.value)
 
     @classmethod
-    def border_color(cls, palette: Optional[QPalette] = None) -> QColor:
-        active_palette = QPalette(palette or cls.application_palette())
-
-        return active_palette.color(QPalette.ColorRole.Mid)
+    def size(cls, size: NextgisSize) -> int:
+        return cls.theme().integer(size.value)
 
     @classmethod
     def create_palette(
@@ -140,7 +327,7 @@ class NextgisDecorator:
         *,
         base_palette: Optional[QPalette] = None,
     ) -> QPalette:
-        palette = QPalette(base_palette or cls.application_palette())
+        palette = cls.system_palette(base_palette)
 
         for key, color in overrides.items():
             normalized_color = QColor(color)
@@ -159,11 +346,11 @@ class NextgisDecorator:
         cls,
         palette: Optional[QPalette] = None,
     ) -> QPalette:
-        active_palette = QPalette(palette or cls.application_palette())
-        base_color = active_palette.color(QPalette.ColorRole.Base)
-        window_color = active_palette.color(QPalette.ColorRole.Window)
-        title_color = cls.title_color(active_palette)
-        helper_color = cls.helper_text_color(active_palette)
+        active_palette = cls.system_palette(palette)
+        base_color = cls.system_base_color(active_palette)
+        window_color = cls.system_window_color(active_palette)
+        title_color = cls.system_title_color(active_palette)
+        helper_color = cls.system_muted_text_color(active_palette)
         card_color = mix_colors(window_color, base_color, 0.82)
         disabled_text = mix_colors(title_color, card_color, 0.60)
 
@@ -173,7 +360,9 @@ class NextgisDecorator:
                 QPalette.ColorRole.Base: card_color,
                 QPalette.ColorRole.WindowText: title_color,
                 QPalette.ColorRole.Text: title_color,
-                QPalette.ColorRole.Mid: cls.border_color(active_palette),
+                QPalette.ColorRole.Mid: cls.system_border_color(
+                    active_palette
+                ),
                 (
                     QPalette.ColorGroup.Disabled,
                     QPalette.ColorRole.WindowText,
@@ -191,14 +380,12 @@ class NextgisDecorator:
         cls,
         palette: Optional[QPalette] = None,
     ) -> QPalette:
-        active_palette = QPalette(palette or cls.application_palette())
+        active_palette = cls.system_palette(palette)
 
         return cls.create_palette(
             {
-                QPalette.ColorRole.Highlight: cls.corporate_color(
-                    NextgisColor.MAIN
-                ),
-                QPalette.ColorRole.HighlightedText: cls.accent_text_color(),
+                QPalette.ColorRole.Highlight: cls.brand_color(),
+                QPalette.ColorRole.HighlightedText: cls.brand_on_color(),
             },
             base_palette=active_palette,
         )
@@ -249,7 +436,3 @@ class NextgisDecorator:
             f"rgba({color.red()}, {color.green()}, {color.blue()}, "
             f"{color.alphaF():.3f})"
         )
-
-
-NEXTGIS_MAIN_COLOR = NextgisDecorator.corporate_color(NextgisColor.MAIN)
-NEXTGIS_PRESSED_COLOR = NextgisDecorator.corporate_color(NextgisColor.PRESSED)

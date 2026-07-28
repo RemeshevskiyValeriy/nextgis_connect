@@ -252,7 +252,7 @@ class CustomSvgRenderer(QObject):
         style_pattern = re.compile(
             rf"(?P<prefix>(?<![-\w]){property_name}"
             r"(?![-\w])\s*:\s*)"
-            r"(?P<value>[^;\"']+)",
+            r"(?P<value>[^;\"'}]+)",
             flags=re.IGNORECASE,
         )
 

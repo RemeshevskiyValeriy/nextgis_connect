@@ -4,7 +4,7 @@ from qgis.PyQt.QtGui import QPalette
 from qgis.PyQt.QtWidgets import QWidget
 
 from nextgis_connect.ui_kit.rendering.graphics.decorator import (
-    NextgisColor,
+    NextgisBrandColor,
     NextgisDecorator,
     mix_colors,
 )
@@ -23,47 +23,42 @@ class PrimaryButton(AnimatedButtonBase):
         super().__init__(text, parent)
 
     def _normal_state(self) -> ButtonVisualState:
-        color = NextgisDecorator.corporate_color(NextgisColor.MAIN)
+        color = NextgisDecorator.brand_color()
 
         return ButtonVisualState(
             background=color,
             border=color,
-            text=NextgisDecorator.accent_text_color(),
+            text=NextgisDecorator.brand_on_color(),
         )
 
     def _hover_state(self) -> ButtonVisualState:
-        palette = QPalette(self.palette())
-        hover_color = mix_colors(
-            NextgisDecorator.corporate_color(NextgisColor.MAIN),
-            palette.color(QPalette.ColorRole.Base),
-            0.14,
-        )
+        hover_color = NextgisDecorator.brand_hover_color()
 
         return ButtonVisualState(
             background=hover_color,
             border=hover_color,
-            text=NextgisDecorator.accent_text_color(),
+            text=NextgisDecorator.brand_on_color(),
         )
 
     def _pressed_state(self) -> ButtonVisualState:
-        color = NextgisDecorator.corporate_color(NextgisColor.PRESSED)
+        color = NextgisDecorator.brand_active_color()
 
         return ButtonVisualState(
             background=color,
             border=color,
-            text=NextgisDecorator.accent_text_color(),
+            text=NextgisDecorator.brand_on_color(),
         )
 
     def _disabled_state(self) -> ButtonVisualState:
         palette = QPalette(self.palette())
-        base_color = palette.color(QPalette.ColorRole.Button)
+        base_color = NextgisDecorator.system_button_color(palette)
         disabled_color = mix_colors(
-            NextgisDecorator.corporate_color(NextgisColor.MAIN),
+            NextgisDecorator.brand_color(NextgisBrandColor.DEFAULT),
             base_color,
             0.50,
         )
         text_color = mix_colors(
-            NextgisDecorator.accent_text_color(),
+            NextgisDecorator.brand_on_color(),
             disabled_color,
             0.40,
         )

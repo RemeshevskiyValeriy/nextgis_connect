@@ -5,7 +5,6 @@ from qgis.PyQt.QtCore import QObject, QRect, QRectF
 from qgis.PyQt.QtGui import QColor, QLinearGradient, QPainter, QPalette, QPen
 
 from nextgis_connect.ui_kit.rendering.graphics.decorator import (
-    NextgisColor,
     NextgisDecorator,
     mix_colors,
 )
@@ -34,9 +33,7 @@ class NextgisBackgroundPainter(QObject):
         *,
         palette: Optional[QPalette] = None,
     ) -> None:
-        active_palette = QPalette(
-            palette or NextgisDecorator.application_palette()
-        )
+        active_palette = NextgisDecorator.system_palette(palette)
 
         self._draw_grid(painter, rect, active_palette)
         self._draw_isolines(painter, rect, opacity=0.50)
@@ -49,9 +46,7 @@ class NextgisBackgroundPainter(QObject):
         *,
         palette: Optional[QPalette] = None,
     ) -> None:
-        active_palette = QPalette(
-            palette or NextgisDecorator.application_palette()
-        )
+        active_palette = NextgisDecorator.system_palette(palette)
 
         painter.save()
         painter.setClipRect(rect)
@@ -66,7 +61,7 @@ class NextgisBackgroundPainter(QObject):
         rect: QRect,
         palette: QPalette,
     ) -> None:
-        color = palette.color(QPalette.ColorRole.Text)
+        color = NextgisDecorator.system_muted_text_color(palette)
         color.setAlpha(50)
 
         pen = QPen(color)
@@ -116,8 +111,8 @@ class NextgisBackgroundPainter(QObject):
         rect: QRect,
         palette: QPalette,
     ) -> None:
-        background_color = palette.color(QPalette.ColorRole.Window)
-        surface_color = palette.color(QPalette.ColorRole.Base)
+        background_color = NextgisDecorator.system_window_color(palette)
+        surface_color = NextgisDecorator.system_base_color(palette)
         top_color = mix_colors(background_color, surface_color, 0.75)
 
         transparent_color = QColor(top_color)
@@ -137,11 +132,11 @@ class NextgisBackgroundPainter(QObject):
         rect: QRect,
         palette: QPalette,
     ) -> None:
-        base_color = palette.color(QPalette.ColorRole.Base)
-        window_color = palette.color(QPalette.ColorRole.Window)
+        base_color = NextgisDecorator.system_base_color(palette)
+        window_color = NextgisDecorator.system_window_color(palette)
         accent_color = mix_colors(
             base_color,
-            NextgisDecorator.corporate_color(NextgisColor.MAIN),
+            NextgisDecorator.brand_color(),
             0.16,
         )
         bottom_color = mix_colors(window_color, base_color, 0.90)

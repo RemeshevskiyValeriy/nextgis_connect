@@ -5,7 +5,7 @@ from qgis.PyQt.QtGui import QColor, QLinearGradient, QPainter
 from qgis.PyQt.QtWidgets import QWidget
 
 from nextgis_connect.ui_kit.rendering.graphics.decorator import (
-    NextgisColor,
+    NextgisBrandColor,
     NextgisDecorator,
 )
 from nextgis_connect.ui_kit.widgets.buttons.animated import ButtonVisualState
@@ -13,8 +13,6 @@ from nextgis_connect.ui_kit.widgets.buttons.primary import PrimaryButton
 
 
 class ShiningButton(PrimaryButton):
-    _GRADIENT_END = QColor("#1E88E5")
-
     def __init__(
         self,
         text: str = "",
@@ -71,8 +69,8 @@ class ShiningButton(PrimaryButton):
         if not self.isEnabled() or self._is_pressed:
             return super()._background_css(state)
 
-        start_color = NextgisDecorator.corporate_color(NextgisColor.MAIN)
-        end_color = QColor(self._GRADIENT_END)
+        start_color = NextgisDecorator.brand_color()
+        end_color = NextgisDecorator.brand_color(NextgisBrandColor.ACCENT)
 
         return (
             "qlineargradient(x1:0, y1:1, x2:1, y2:0, "

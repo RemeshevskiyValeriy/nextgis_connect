@@ -1,0 +1,184 @@
+{
+  "meta": {
+    "name": "NextGIS corporate design",
+    "fontFilesIncluded": false
+  },
+  "color": {
+    "shared": {
+      "brand": "#0C65AF",
+      "brandHover": "#0952A5",
+      "brandActive": "#063F80",
+      "brandAccent": "#0070C5",
+      "onBrand": "#FFFFFF"
+    },
+    "light": {
+      "background": "#FFFFFF",
+      "pageSoft": "#F4F7FA",
+      "surface": "#FFFFFF",
+      "surfaceMuted": "#F2F4F5",
+      "surfaceBrand": "#F2F8FC",
+      "border": "#D7DEE5",
+      "borderStrong": "#B8C4CF",
+      "text": "#1D1D1B",
+      "textSecondary": "#374151",
+      "textMuted": "#6C7280",
+      "brandSoft": "#DCECF7",
+      "focus": "#0070C5",
+      "link": "#0070C5",
+      "success": "#137A50",
+      "successSoft": "#E1F3EA",
+      "warning": "#8A5A00",
+      "warningSoft": "#FFF2D6",
+      "danger": "#B8324A",
+      "dangerSoft": "#FBE6EA"
+    },
+    "dark": {
+      "background": "#0B1118",
+      "pageSoft": "#0F1822",
+      "surface": "#121D27",
+      "surfaceMuted": "#172431",
+      "surfaceBrand": "#10273B",
+      "surfaceElevated": "#1A2B3A",
+      "border": "#2A3A49",
+      "borderStrong": "#3D5265",
+      "text": "#F2F6F9",
+      "textSecondary": "#C7D2DB",
+      "textMuted": "#95A6B4",
+      "brandSoft": "#173A56",
+      "focus": "#69B8ED",
+      "link": "#69B8ED",
+      "success": "#54D497",
+      "successSoft": "#143426",
+      "warning": "#F2C66D",
+      "warningSoft": "#3B2C13",
+      "danger": "#F08A9B",
+      "dangerSoft": "#3D1D25",
+      "brandHover": "#1478C9",
+      "brandActive": "#0952A5"
+    }
+  },
+  "typography": {
+    "displayFamily": [
+      "Inter Display",
+      "Inter",
+      "Segoe UI",
+      "Roboto",
+      "sans-serif"
+    ],
+    "headingFamily": [
+      "Inter",
+      "Segoe UI",
+      "Roboto",
+      "sans-serif"
+    ],
+    "bodyFamily": [
+      "Inter",
+      "Roboto",
+      "Segoe UI",
+      "Arial",
+      "sans-serif"
+    ],
+    "legacyFamily": [
+      "Ubuntu",
+      "Roboto",
+      "sans-serif"
+    ],
+    "weight": {
+      "regular": 400,
+      "medium": 500,
+      "semibold": 600,
+      "bold": 700
+    },
+    "desktop": {
+      "display": {
+        "sizePx": 48,
+        "lineHeight": 1.12,
+        "weight": 700
+      },
+      "h1": {
+        "sizePx": 34,
+        "lineHeight": 1.18,
+        "weight": 700
+      },
+      "h2": {
+        "sizePx": 24,
+        "lineHeight": 1.25,
+        "weight": 700
+      },
+      "h3": {
+        "sizePx": 18,
+        "lineHeight": 1.35,
+        "weight": 600
+      },
+      "bodyLarge": {
+        "sizePx": 18,
+        "lineHeight": 1.55,
+        "weight": 400
+      },
+      "body": {
+        "sizePx": 16,
+        "lineHeight": 1.5,
+        "weight": 400
+      },
+      "control": {
+        "sizePx": 14,
+        "lineHeight": 1.4,
+        "weight": 500
+      },
+      "caption": {
+        "sizePx": 12,
+        "lineHeight": 1.4,
+        "weight": 400
+      }
+    }
+  },
+  "spacingPx": {
+    "0": 0,
+    "1": 4,
+    "2": 8,
+    "3": 12,
+    "4": 16,
+    "5": 20,
+    "6": 24,
+    "8": 32,
+    "10": 40,
+    "12": 48,
+    "16": 64
+  },
+  "radiusPx": {
+    "field": 8,
+    "button": 6,
+    "card": 8,
+    "panel": 18,
+    "pill": 999
+  },
+  "sizePx": {
+    "iconSmall": 16,
+    "icon": 20,
+    "iconLarge": 24,
+    "controlCompact": 32,
+    "control": 40,
+    "controlLarge": 48,
+    "containerMax": 1200
+  },
+  "motion": {
+    "fastMs": 120,
+    "standardMs": 180,
+    "slowMs": 240,
+    "easing": "cubic-bezier(0.2, 0, 0, 1)",
+    "allowed": [
+      "color",
+      "background-color",
+      "border-color",
+      "opacity",
+      "focus-ring",
+      "chevron-rotation",
+      "dropdown-fade"
+    ],
+    "disallowed": [
+      "button-translate",
+      "card-lift",
+      "hover-scale"
+    ]
+  }
+}
