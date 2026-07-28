@@ -7,6 +7,17 @@ from urllib.parse import quote_plus
 
 @dataclass(frozen=True)
 class SearchTag:
+    """Store a searchable NGW query tag definition.
+
+    Describe how user-facing search tags map to NGW API query fields
+    and which value forms are accepted by the parser.
+
+    :ivar name: User-facing tag name without the leading ``@``.
+    :ivar query_name: NGW API query field name.
+    :ivar in_supported: Whether multiple values can use ``__in``.
+    :ivar unquoted_value_pattern: Regular expression for unquoted values.
+    """
+
     name: str
     query_name: str
     in_supported: bool = True
@@ -15,6 +26,16 @@ class SearchTag:
 
 @dataclass(frozen=True)
 class SearchPredicate:
+    """Store a parsed structured search predicate.
+
+    Bind a known search tag to a query operator and one or more
+    parsed values ready for NGW query generation.
+
+    :ivar tag: Parsed search tag metadata.
+    :ivar operator: Internal NGW query operator suffix.
+    :ivar values: Parsed predicate values.
+    """
+
     tag: SearchTag
     operator: str
     values: Tuple[object, ...]
@@ -22,6 +43,15 @@ class SearchPredicate:
 
 @dataclass(frozen=True)
 class MetadataPredicate:
+    """Store a parsed metadata equality predicate.
+
+    Keep the metadata key and textual value extracted from
+    ``@metadata["key"] = value`` search expressions.
+
+    :ivar key: Metadata key selected by the expression.
+    :ivar value: Metadata value selected by the expression.
+    """
+
     key: str
     value: str
 
@@ -31,27 +61,74 @@ SearchExpression = Union[SearchPredicate, MetadataPredicate]
 
 @dataclass(frozen=True)
 class DefaultSearch:
+    """Store fallback text search data.
+
+    Represent the plain-text search branch used when the input cannot
+    be parsed as a structured tag expression.
+
+    :ivar value: User-provided display name fragment.
+    :ivar exact: Whether the fallback search must match exactly.
+    """
+
     value: str
     exact: bool
 
 
 @dataclass(frozen=True)
 class ParsedSearch:
+    """Store a parsed search expression.
+
+    Hold either structured predicate groups or a fallback display-name
+    search when parsing cannot produce structured predicates.
+
+    :ivar groups: OR groups containing AND predicate expressions.
+    :ivar fallback: Fallback display-name search data, if applicable.
+    """
+
     groups: Tuple[Tuple[SearchExpression, ...], ...]
     fallback: Optional[DefaultSearch] = None
 
     @property
     def is_fallback(self) -> bool:
+        """Return whether parsing fell back to display-name search.
+
+        :return: ``True`` when fallback search data is present.
+        """
         return self.fallback is not None
 
 
 class OwnerResolver(Protocol):
-    def resolve_equal(self, values: List[str]) -> List[int]: ...
+    """Resolve owner names used by search predicates.
 
-    def resolve_like(self, operator: str, value: str) -> List[int]: ...
+    Implement this protocol to translate owner text entered by the
+    caller into numeric owner identifiers accepted by NGW queries.
+    """
+
+    def resolve_equal(self, values: List[str]) -> List[int]:
+        """Resolve exact owner names.
+
+        :param values: Owner names from equality or ``IN`` predicates.
+        :return: Matching owner identifiers.
+        """
+        ...
+
+    def resolve_like(self, operator: str, value: str) -> List[int]:
+        """Resolve owner names matched by a text operator.
+
+        :param operator: Parsed text search operator.
+        :param value: Owner name fragment from the predicate.
+        :return: Matching owner identifiers.
+        """
+        ...
 
 
 class SearchSyntax:
+    """Expose supported search tags.
+
+    Provide lookup helpers for integer and string search tags used by
+    the parser and suggestion builder.
+    """
+
     INT_TAGS: Tuple[SearchTag, ...] = (
         SearchTag("id", "id"),
         SearchTag("parent", "parent"),
@@ -67,12 +144,26 @@ class SearchSyntax:
     TAGS: Tuple[SearchTag, ...] = (*INT_TAGS, *STR_TAGS)
 
     def known_tag_names(self) -> List[str]:
+        """Return supported user-facing search tag names.
+
+        :return: Tag names accepted in structured search input.
+        """
         return [tag.name for tag in self.TAGS] + ["metadata"]
 
     def int_tag(self, tag_name: str) -> Optional[SearchTag]:
+        """Return an integer-valued tag by name.
+
+        :param tag_name: User-facing tag name without the leading ``@``.
+        :return: Matching tag definition or ``None``.
+        """
         return self._tag_by_name(tag_name, self.INT_TAGS)
 
     def str_tag(self, tag_name: str) -> Optional[SearchTag]:
+        """Return a string-valued tag by name.
+
+        :param tag_name: User-facing tag name without the leading ``@``.
+        :return: Matching tag definition or ``None``.
+        """
         return self._tag_by_name(tag_name, self.STR_TAGS)
 
     def _tag_by_name(
@@ -88,10 +179,25 @@ class SearchSyntax:
 
 
 class SearchQueryParser:
+    """Parse user search text.
+
+    Convert structured ``@tag`` expressions into predicate groups and
+    preserve plain text as a fallback display-name search.
+    """
+
     def __init__(self, syntax: Optional[SearchSyntax] = None) -> None:
+        """Initialize the parser.
+
+        :param syntax: Search syntax definition to use.
+        """
         self._syntax = syntax or SearchSyntax()
 
     def parse(self, search_string: str) -> ParsedSearch:
+        """Parse search text.
+
+        :param search_string: Raw search text entered by the caller.
+        :return: Structured predicates or fallback search data.
+        """
         stripped_search_string = search_string.strip()
         if not stripped_search_string.startswith("@"):
             return self._default_search(stripped_search_string)
@@ -300,10 +406,25 @@ class SearchQueryParser:
 
 
 class NgwSearchQueryBuilder:
+    """Build NGW query strings from parsed search data.
+
+    Convert parsed predicates into one or more query strings suitable
+    for NGW resource search requests.
+    """
+
     def __init__(self, owner_resolver: OwnerResolver) -> None:
+        """Initialize the query builder.
+
+        :param owner_resolver: Resolver for owner-name predicates.
+        """
         self._owner_resolver = owner_resolver
 
     def build(self, parsed_search: ParsedSearch) -> List[str]:
+        """Build NGW query strings.
+
+        :param parsed_search: Parsed search expression to convert.
+        :return: Query strings accepted by NGW resource search.
+        """
         if parsed_search.fallback is not None:
             return [self._default_query(parsed_search.fallback)]
 

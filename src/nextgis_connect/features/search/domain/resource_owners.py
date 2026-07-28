@@ -2,7 +2,18 @@ from typing import Any, Dict, List, Set
 
 
 class ResourceOwnerSuggestionParser:
+    """Extract owner names from NGW user payloads.
+
+    Convert user records into unique owner names suitable for search
+    suggestions while skipping system users.
+    """
+
     def parse(self, users: Any) -> List[str]:
+        """Parse owner names from user records.
+
+        :param users: NGW user records payload.
+        :return: Sorted owner names.
+        """
         if not isinstance(users, list):
             return []
 

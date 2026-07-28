@@ -7,6 +7,16 @@ from nextgis_connect.features.search.domain.query import SearchQueryParser
 
 @dataclass(frozen=True)
 class ResourceTypeSuggestionContext:
+    """Store resource-type completion context.
+
+    Capture the already typed text and the currently open quote state
+    for resource type suggestions.
+
+    :ivar base_text: Text before the suggested resource type.
+    :ivar closing_quote: Quote that must be appended to the suggestion.
+    :ivar value_prefix: Lowercase resource type prefix to match.
+    """
+
     base_text: str
     closing_quote: str
     value_prefix: str
@@ -14,6 +24,16 @@ class ResourceTypeSuggestionContext:
 
 @dataclass(frozen=True)
 class OwnerSuggestionContext:
+    """Store owner-name completion context.
+
+    Capture the already typed text and the currently open quote state
+    for owner suggestions.
+
+    :ivar base_text: Text before the suggested owner name.
+    :ivar closing_quote: Quote that must be appended to the suggestion.
+    :ivar value_prefix: Lowercase owner prefix to match.
+    """
+
     base_text: str
     closing_quote: str
     value_prefix: str
@@ -21,17 +41,41 @@ class OwnerSuggestionContext:
 
 @dataclass(frozen=True)
 class SearchOperation:
+    """Store an operation completion option.
+
+    Represent a visible operation name and the text inserted when that
+    operation is selected.
+
+    :ivar name: Operation name used for prefix matching.
+    :ivar completion_text: Text appended to the current tag expression.
+    """
+
     name: str
     completion_text: str
 
 
 @dataclass(frozen=True)
 class TagOperationSyntax:
+    """Store completion operations for one search tag.
+
+    Map a user-facing search tag to the operations that can be
+    suggested after that tag.
+
+    :ivar tag_name: User-facing tag name without the leading ``@``.
+    :ivar operations: Operations available for the tag.
+    """
+
     tag_name: str
     operations: Tuple[SearchOperation, ...]
 
 
 class TextSearchSuggestionBuilder:
+    """Build suggestions for structured search text.
+
+    Provide completions for tag names, tag operations, logical
+    operations, resource types, and owners.
+    """
+
     LOGICAL_OPERATIONS: Tuple[str, ...] = ("AND", "OR")
 
     KEYWORDS: Tuple[str, ...] = (
@@ -127,9 +171,18 @@ class TextSearchSuggestionBuilder:
         self,
         query_parser: Optional[SearchQueryParser] = None,
     ) -> None:
+        """Initialize the suggestion builder.
+
+        :param query_parser: Parser used to validate partial expressions.
+        """
         self._query_parser = query_parser or SearchQueryParser()
 
     def keyword_suggestions(self, search_string: str) -> Optional[List[str]]:
+        """Return tag-name suggestions.
+
+        :param search_string: Current search text.
+        :return: Suggested search strings or ``None`` when unavailable.
+        """
         fragment = self._last_tag_fragment(search_string)
         if fragment is None:
             return None
@@ -148,6 +201,11 @@ class TextSearchSuggestionBuilder:
         return suggestions
 
     def operation_suggestions(self, search_string: str) -> Optional[List[str]]:
+        """Return operation suggestions for the current tag.
+
+        :param search_string: Current search text.
+        :return: Suggested search strings or ``None`` when unavailable.
+        """
         fragment = self._last_tag_fragment(search_string)
         if fragment is None:
             return None
@@ -211,6 +269,11 @@ class TextSearchSuggestionBuilder:
         self,
         search_string: str,
     ) -> Optional[List[str]]:
+        """Return logical operation suggestions.
+
+        :param search_string: Current search text.
+        :return: Suggested search strings or ``None`` when unavailable.
+        """
         match = self._LOGICAL_OPERATION_PATTERN.match(search_string)
         if match is None:
             return None
@@ -246,6 +309,11 @@ class TextSearchSuggestionBuilder:
         self,
         search_string: str,
     ) -> Optional[ResourceTypeSuggestionContext]:
+        """Return resource-type completion context.
+
+        :param search_string: Current search text.
+        :return: Completion context or ``None`` when unavailable.
+        """
         fragment = self._last_tag_fragment(search_string)
         if fragment is None:
             return None
@@ -273,6 +341,12 @@ class TextSearchSuggestionBuilder:
         search_string: str,
         resource_types: Iterable[str],
     ) -> Optional[List[str]]:
+        """Return resource-type suggestions.
+
+        :param search_string: Current search text.
+        :param resource_types: Available resource type names.
+        :return: Suggested search strings or ``None`` when unavailable.
+        """
         context = self.resource_type_context(search_string)
         if context is None:
             return None
@@ -292,6 +366,11 @@ class TextSearchSuggestionBuilder:
         self,
         search_string: str,
     ) -> Optional[OwnerSuggestionContext]:
+        """Return owner-name completion context.
+
+        :param search_string: Current search text.
+        :return: Completion context or ``None`` when unavailable.
+        """
         fragment = self._last_tag_fragment(search_string)
         if fragment is None:
             return None
@@ -314,6 +393,12 @@ class TextSearchSuggestionBuilder:
         search_string: str,
         owners: Iterable[str],
     ) -> Optional[List[str]]:
+        """Return owner-name suggestions.
+
+        :param search_string: Current search text.
+        :param owners: Available owner display names.
+        :return: Suggested search strings or ``None`` when unavailable.
+        """
         context = self.owner_context(search_string)
         if context is None:
             return None

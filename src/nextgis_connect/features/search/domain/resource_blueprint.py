@@ -3,6 +3,12 @@ from typing import Any, ClassVar, Dict, List, Optional, Set
 
 
 class ResourceBlueprintTypeParser:
+    """Extract resource type names from NGW blueprints.
+
+    Traverse loosely structured blueprint payloads and collect values
+    that look like NGW resource type identifiers.
+    """
+
     _VALUE_KEYS = (
         "cls",
         "identity",
@@ -42,6 +48,11 @@ class ResourceBlueprintTypeParser:
     _TYPE_PATTERN = re.compile(r"^[a-z][a-z0-9_]*$")
 
     def parse(self, blueprint: Any) -> List[str]:
+        """Parse resource type names from a blueprint payload.
+
+        :param blueprint: Blueprint payload returned by NGW.
+        :return: Sorted resource type names.
+        """
         resource_types: Set[str] = set()
         self._collect(blueprint, resource_types)
         return sorted(resource_types)
@@ -124,6 +135,12 @@ class ResourceBlueprintTypeParser:
 
 
 class ResourceBlueprintLabelParser(ResourceBlueprintTypeParser):
+    """Extract resource type labels from NGW blueprints.
+
+    Traverse blueprint payloads and collect display labels associated
+    with resource type identifiers.
+    """
+
     _LABEL_KEYS = (
         "label",
         "display_name",
@@ -131,6 +148,11 @@ class ResourceBlueprintLabelParser(ResourceBlueprintTypeParser):
     )
 
     def parse(self, blueprint: Any) -> Dict[str, str]:
+        """Parse resource type labels from a blueprint payload.
+
+        :param blueprint: Blueprint payload returned by NGW.
+        :return: Mapping from resource type name to display label.
+        """
         resource_labels: Dict[str, str] = {}
         self._collect_labels(blueprint, resource_labels)
         return dict(sorted(resource_labels.items()))
