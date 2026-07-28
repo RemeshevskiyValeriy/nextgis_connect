@@ -13,11 +13,22 @@ from nextgis_connect.ui_kit.graphics.decorator import (
 
 
 class SecondaryButton(AnimatedButtonBase):
+    """Show the secondary NextGIS action button.
+
+    Use transparent and muted visual states while preserving the shared
+    animated button behavior.
+    """
+
     def __init__(
         self,
         text: str = "",
         parent: Optional[QWidget] = None,
     ) -> None:
+        """Initialize the secondary button.
+
+        :param text: Initial button text.
+        :param parent: Parent widget.
+        """
         super().__init__(text, parent)
         self.setFlat(True)
 

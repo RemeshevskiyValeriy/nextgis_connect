@@ -10,15 +10,13 @@ from nextgis_connect.ui_kit.icons.icon import plugin_icon
 
 @dataclass
 class _CursorMetadata:
-    """
-    Represents information about a cursor.
+    """Store cursor icon metadata.
+
+    Keep the icon path and active point used to build a themed Qt cursor.
 
     :param icon: Path to the cursor icon.
-    :type icon: str
     :param active_x: X-coordinate of the cursor's active point.
-    :type active_x: int
     :param active_y: Y-coordinate of the cursor's active point.
-    :type active_y: int
     """
 
     icon: str
@@ -27,8 +25,7 @@ class _CursorMetadata:
 
 
 class NgConnectCursor(Enum):
-    """
-    Enum representing available cursors for the NextGIS Connect plugin.
+    """Define available cursors for the NextGIS Connect plugin.
 
     :cvar IDENTIFY: Cursor for the "Identify" tool.
     """
@@ -37,12 +34,11 @@ class NgConnectCursor(Enum):
 
 
 def create_cursor(cursor_metadata: NgConnectCursor) -> QCursor:
-    """
-    Generate a QCursor object based on the provided NgConnectCursor.
+    """Create a QCursor from cursor metadata.
 
-    This function creates a cursor using the icon and active point
-    specified in the `_CursorMetadata` of the given `NgConnectCursor`.
-    Based on QgsApplication::getThemeCursor.
+    Create a scaled cursor using the icon and active point specified by
+    the cursor metadata. The scaling logic follows QgsApplication theme
+    cursor behavior.
 
     :param cursor_metadata: The cursor type to generate.
     :return: A QCursor object for the specified cursor type.

@@ -26,7 +26,11 @@ from nextgis_connect.ui_kit.graphics.decorator import (
 
 
 class LoadingIndicatorRenderer:
-    """Paints the NextGIS loading indicator as a circle and rotating arc."""
+    """Paint the NextGIS loading indicator.
+
+    Render a circular track and rotating arc as an icon, pixmap, or
+    directly into an existing painter.
+    """
 
     DEFAULT_SIZE = QSize(16, 16)
     PEN_WIDTH = 2.0
@@ -41,6 +45,11 @@ class LoadingIndicatorRenderer:
         track_color: Optional[QColor] = None,
         arc_color: Optional[QColor] = None,
     ) -> None:
+        """Initialize the loading indicator renderer.
+
+        :param track_color: Optional track color override.
+        :param arc_color: Optional arc color override.
+        """
         self._track_color = (
             None if track_color is None else QColor(track_color)
         )
@@ -54,6 +63,14 @@ class LoadingIndicatorRenderer:
         palette: Optional[QPalette] = None,
         device_pixel_ratio: float = 1.0,
     ) -> QIcon:
+        """Return a loading indicator icon.
+
+        :param size: Logical icon size.
+        :param angle: Arc rotation angle in degrees.
+        :param palette: Palette used for default colors.
+        :param device_pixel_ratio: Device pixel ratio for generated pixmaps.
+        :return: Loading indicator icon.
+        """
         icon = QIcon(
             self.pixmap(
                 size,
@@ -84,6 +101,15 @@ class LoadingIndicatorRenderer:
         device_pixel_ratio: float = 1.0,
         selected: bool = False,
     ) -> QPixmap:
+        """Return a loading indicator pixmap.
+
+        :param size: Logical pixmap size.
+        :param angle: Arc rotation angle in degrees.
+        :param palette: Palette used for default colors.
+        :param device_pixel_ratio: Device pixel ratio for the pixmap.
+        :param selected: Whether to use selected-state colors.
+        :return: Loading indicator pixmap.
+        """
         logical_size = self._normalize_size(size)
         scale = max(1.0, device_pixel_ratio)
         physical_size = QSize(
@@ -116,6 +142,14 @@ class LoadingIndicatorRenderer:
         palette: Optional[QPalette] = None,
         selected: bool = False,
     ) -> None:
+        """Paint the loading indicator.
+
+        :param painter: Painter used for rendering.
+        :param rect: Rectangle to paint into.
+        :param angle: Arc rotation angle in degrees.
+        :param palette: Palette used for default colors.
+        :param selected: Whether to use selected-state colors.
+        """
         if rect.width() <= 0 or rect.height() <= 0:
             return
 

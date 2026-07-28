@@ -15,11 +15,22 @@ from nextgis_connect.ui_kit.graphics.decorator import (
 
 
 class PrimaryButton(AnimatedButtonBase):
+    """Show the primary NextGIS action button.
+
+    Use brand colors for the default, hover, pressed, and disabled
+    visual states.
+    """
+
     def __init__(
         self,
         text: str = "",
         parent: Optional[QWidget] = None,
     ) -> None:
+        """Initialize the primary button.
+
+        :param text: Initial button text.
+        :param parent: Parent widget.
+        """
         super().__init__(text, parent)
 
     def _normal_state(self) -> ButtonVisualState:

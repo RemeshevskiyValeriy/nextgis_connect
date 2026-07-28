@@ -11,6 +11,12 @@ from nextgis_connect.ui_kit.graphics import CustomSvgRenderer
 
 
 class CancelButton(SecondaryButton):
+    """Show a compact cancel button.
+
+    Render a square secondary button that switches from a cancel icon
+    to a waiting indicator icon when cancellation is already requested.
+    """
+
     _MATERIAL_ICONS_DIR = (
         Path(__file__).resolve().parents[3] / "assets" / "icons" / "material"
     )
@@ -19,6 +25,10 @@ class CancelButton(SecondaryButton):
         self,
         parent: Optional[QWidget] = None,
     ) -> None:
+        """Initialize the cancel button.
+
+        :param parent: Parent widget.
+        """
         self._is_waiting = False
         self._icon_name = ""
         self._icon_renderer: Optional[CustomSvgRenderer] = None
@@ -28,6 +38,10 @@ class CancelButton(SecondaryButton):
         self.set_button_height(self.minimumHeight())
 
     def set_waiting(self, is_waiting: bool) -> None:
+        """Set whether the button is waiting.
+
+        :param is_waiting: Whether cancellation is waiting for completion.
+        """
         if self._is_waiting == is_waiting:
             return
 
@@ -36,9 +50,17 @@ class CancelButton(SecondaryButton):
         self._refresh_visual_state(animated=False)
 
     def is_waiting(self) -> bool:
+        """Return whether the button is waiting.
+
+        :return: ``True`` when the button is waiting.
+        """
         return self._is_waiting
 
     def set_button_height(self, height: int) -> None:
+        """Set the square button size.
+
+        :param height: Button height and width in pixels.
+        """
         super().set_button_height(height)
         self.setFixedWidth(height)
         self.setIconSize(QSize(max(16, height - 12), max(16, height - 12)))

@@ -33,6 +33,12 @@ from nextgis_connect.ui_kit.widgets.loading_indicator import (
 
 
 class LoadingButtonMixin:
+    """Provide loading-state behavior for button widgets.
+
+    Manage animated loading icons, optional cancel icons, and cancel
+    request signaling for concrete Qt button classes.
+    """
+
     def _initialize_loading_button(
         self,
         icon: Optional[QIcon] = None,
@@ -57,12 +63,24 @@ class LoadingButtonMixin:
         self._loading_icon.frame_changed.connect(self._update_loading_icon)
 
     def is_loading(self) -> bool:
+        """Return whether loading is active.
+
+        :return: ``True`` when the button is in loading state.
+        """
         return self._is_loading
 
     def cancel_icon(self) -> QIcon:
+        """Return the cancel icon.
+
+        :return: Copy of the cancel icon.
+        """
         return QIcon(self._cancel_icon)
 
     def set_cancel_icon(self, icon: QIcon) -> None:
+        """Set the cancel icon.
+
+        :param icon: Cancel icon to show on hover during loading.
+        """
         self._cancel_icon = QIcon(icon)
 
     def _start_loading(self) -> None:
@@ -178,6 +196,12 @@ class LoadingButtonMixin:
 
 
 class LoadingPushButton(LoadingButtonMixin, QPushButton):
+    """Show a push button with loading feedback.
+
+    Switch the button icon to an animated loading indicator and emit a
+    cancel signal when a cancel icon is available and clicked.
+    """
+
     cancel_requested = pyqtSignal()
 
     def __init__(
@@ -187,6 +211,13 @@ class LoadingPushButton(LoadingButtonMixin, QPushButton):
         animation_path: Optional[str] = None,
         parent: Optional[QWidget] = None,
     ) -> None:
+        """Initialize the loading push button.
+
+        :param icon: Default button icon.
+        :param cancel_icon: Icon used for cancel requests.
+        :param animation_path: Loading animation asset path.
+        :param parent: Parent widget.
+        """
         super().__init__(parent)
         self._initialize_loading_button(
             icon=icon,
@@ -195,31 +226,55 @@ class LoadingPushButton(LoadingButtonMixin, QPushButton):
         )
 
     def start(self) -> None:
+        """Start loading feedback."""
         self._start_loading()
 
     def stop(self) -> None:
+        """Stop loading feedback."""
         self._stop_loading()
 
     def enterEvent(self, event: Optional[QEnterEvent]) -> None:
+        """Handle pointer enter events.
+
+        :param event: Qt enter event.
+        """
         self._handle_enter_event()
         super().enterEvent(event)
 
     def leaveEvent(self, a0: Optional[QEvent]) -> None:
+        """Handle pointer leave events.
+
+        :param a0: Qt leave event.
+        """
         self._handle_leave_event()
         super().leaveEvent(a0)
 
     def mouseReleaseEvent(self, e: Optional[QMouseEvent]) -> None:
+        """Handle mouse release events.
+
+        :param e: Qt mouse event.
+        """
         if self._handle_mouse_release_event(e):
             return
 
         super().mouseReleaseEvent(e)
 
     def setIconSize(self, size: QSize) -> None:
+        """Set the icon size.
+
+        :param size: New icon size.
+        """
         super().setIconSize(size)
         self._handle_icon_size_change(size)
 
 
 class LoadingToolButton(LoadingButtonMixin, QToolButton):
+    """Show a tool button with loading feedback.
+
+    Switch the button icon to an animated loading indicator and emit a
+    cancel signal when a cancel icon is available and clicked.
+    """
+
     cancel_requested = pyqtSignal()
 
     def __init__(
@@ -229,6 +284,13 @@ class LoadingToolButton(LoadingButtonMixin, QToolButton):
         animation_path: Optional[str] = None,
         parent: Optional[QWidget] = None,
     ) -> None:
+        """Initialize the loading tool button.
+
+        :param icon: Default button icon.
+        :param cancel_icon: Icon used for cancel requests.
+        :param animation_path: Loading animation asset path.
+        :param parent: Parent widget.
+        """
         super().__init__(parent)
         self._initialize_loading_button(
             icon=icon,
@@ -237,25 +299,43 @@ class LoadingToolButton(LoadingButtonMixin, QToolButton):
         )
 
     def start(self) -> None:
+        """Start loading feedback."""
         self._start_loading()
 
     def stop(self) -> None:
+        """Stop loading feedback."""
         self._stop_loading()
 
     def enterEvent(self, a0: Optional[QEnterEvent]) -> None:
+        """Handle pointer enter events.
+
+        :param a0: Qt enter event.
+        """
         self._handle_enter_event()
         super().enterEvent(a0)
 
     def leaveEvent(self, a0: Optional[QEvent]) -> None:
+        """Handle pointer leave events.
+
+        :param a0: Qt leave event.
+        """
         self._handle_leave_event()
         super().leaveEvent(a0)
 
     def mouseReleaseEvent(self, a0: Optional[QMouseEvent]) -> None:
+        """Handle mouse release events.
+
+        :param a0: Qt mouse event.
+        """
         if self._handle_mouse_release_event(a0):
             return
 
         super().mouseReleaseEvent(a0)
 
     def setIconSize(self, size: QSize) -> None:
+        """Set the icon size.
+
+        :param size: New icon size.
+        """
         super().setIconSize(size)
         self._handle_icon_size_change(size)

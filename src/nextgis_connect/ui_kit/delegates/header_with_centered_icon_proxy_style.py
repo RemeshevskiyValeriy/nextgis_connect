@@ -12,6 +12,12 @@ from qgis.PyQt.QtWidgets import (
 
 
 class HeaderWithCenteredIconProxyStyle(QProxyStyle):
+    """Draw header icons centered in their section.
+
+    Override header label drawing only when the header item contains an
+    icon; all other controls are delegated to the base style.
+    """
+
     def drawControl(
         self,
         element: QStyle.ControlElement,
@@ -19,8 +25,12 @@ class HeaderWithCenteredIconProxyStyle(QProxyStyle):
         painter: QPainter,
         widget: Optional[QWidget] = None,
     ) -> None:
-        """
-        Custom header drawing with centered icon
+        """Draw a style control.
+
+        :param element: Control element to draw.
+        :param option: Style option for the control.
+        :param painter: Painter used for rendering.
+        :param widget: Optional widget being painted.
         """
 
         if element != QStyle.ControlElement.CE_HeaderLabel or not isinstance(

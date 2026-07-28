@@ -20,7 +20,11 @@ ReplacementValue = Union[str, QColor, Any]
 
 
 class CustomSvgRenderer(QObject):
-    """Render SVG content with theme-aware text replacements."""
+    """Render SVG content with text replacements.
+
+    Load SVG data from files or bytes, apply color and custom text
+    replacements, and render through an internal ``QSvgRenderer``.
+    """
 
     _NON_REPLACEABLE_COLORS: ClassVar[Set[str]] = {
         "",
@@ -38,7 +42,12 @@ class CustomSvgRenderer(QObject):
         parent: Optional[QObject] = None,
         themed: bool = False,
     ) -> None:
-        """Initialize the renderer and optionally load SVG content."""
+        """Initialize the SVG renderer.
+
+        :param source: SVG source to load.
+        :param parent: Parent object.
+        :param themed: Whether to resolve colors from the active theme.
+        """
         super().__init__(parent)
 
         self._renderer = QSvgRenderer(self)
@@ -55,35 +64,59 @@ class CustomSvgRenderer(QObject):
             self.load(source)
 
     def load(self, source: SvgSource) -> bool:
-        """Load SVG content and preserve the original data."""
+        """Load SVG content.
+
+        :param source: SVG source to load.
+        :return: ``True`` when the renderer accepts the SVG data.
+        """
         self._original_data = self._read_source(source)
         self._is_dirty = True
 
         return self._reload_renderer()
 
     def render(self, painter: QPainter, *args: Any) -> None:
-        """Render SVG content using the wrapped QSvgRenderer."""
+        """Render SVG content.
+
+        :param painter: Painter used for rendering.
+        :param args: Arguments passed to ``QSvgRenderer.render``.
+        """
         self._ensure_renderer_updated()
         self._renderer.render(painter, *args)
 
     def default_size(self) -> QSize:
-        """Return the default SVG document size."""
+        """Return the default SVG document size.
+
+        :return: Default SVG size.
+        """
         self._ensure_renderer_updated()
 
         return self._renderer.defaultSize()
 
     @property
     def themed(self) -> bool:
+        """Return whether themed replacements are enabled.
+
+        :return: ``True`` when themed replacements are enabled.
+        """
         return self._themed
 
     @themed.setter
     def themed(self, value: bool) -> None:
+        """Set whether themed replacements are enabled.
+
+        :param value: Whether themed replacements are enabled.
+        """
         self.set_themed(value)
 
     def size_for(
         self, *, height: Optional[int] = None, width: Optional[int] = None
     ) -> QSize:
-        """Return the SVG document size scaled to the specified height or width."""
+        """Return the SVG size scaled to a target dimension.
+
+        :param height: Target height in pixels.
+        :param width: Target width in pixels.
+        :return: Scaled SVG size.
+        """
         default_size = self.default_size()
 
         if height is not None and width is not None:
@@ -106,23 +139,36 @@ class CustomSvgRenderer(QObject):
         return default_size
 
     def view_box(self) -> QRectF:
-        """Return the SVG view box rectangle."""
+        """Return the SVG view box rectangle.
+
+        :return: SVG view box.
+        """
         self._ensure_renderer_updated()
 
         return self._renderer.viewBoxF()
 
     def is_valid(self) -> bool:
-        """Return whether the current themed SVG data is valid."""
+        """Return whether the current SVG data is valid.
+
+        :return: ``True`` when the current SVG data is valid.
+        """
         self._ensure_renderer_updated()
 
         return self._renderer.isValid()
 
     def set_fill_color(self, color: Optional[ColorSource]) -> None:
-        """Set replacement color for SVG fill declarations."""
+        """Set the replacement color for SVG fill declarations.
+
+        :param color: Fill color to apply.
+        """
         self._fill_color = self._normalize_color(color)
         self._is_dirty = True
 
     def set_themed(self, themed: bool) -> None:
+        """Set whether themed replacements are enabled.
+
+        :param themed: Whether themed replacements are enabled.
+        """
         if self._themed == themed:
             return
 
@@ -130,7 +176,10 @@ class CustomSvgRenderer(QObject):
         self._is_dirty = True
 
     def set_stroke_color(self, color: Optional[ColorSource]) -> None:
-        """Set replacement color for SVG stroke declarations."""
+        """Set the replacement color for SVG stroke declarations.
+
+        :param color: Stroke color to apply.
+        """
         self._stroke_color = self._normalize_color(color)
         self._is_dirty = True
 
@@ -139,7 +188,12 @@ class CustomSvgRenderer(QObject):
         search_text: str,
         replacement: ReplacementValue,
     ) -> None:
-        """Set a custom text replacement for SVG content."""
+        """Set a custom text replacement.
+
+        :param search_text: Text to replace in SVG content.
+        :param replacement: Replacement value.
+        :raises ValueError: If search text is empty.
+        """
         if not search_text:
             raise ValueError("Replacement search text must not be empty.")
 
@@ -152,12 +206,18 @@ class CustomSvgRenderer(QObject):
         self,
         replacements: Mapping[str, ReplacementValue],
     ) -> None:
-        """Set multiple custom text replacements for SVG content."""
+        """Set multiple custom text replacements.
+
+        :param replacements: Replacement mapping.
+        """
         for search_text, replacement in replacements.items():
             self.set_replacement(search_text, replacement)
 
     def remove_replacement(self, search_text: str) -> None:
-        """Remove a custom text replacement."""
+        """Remove a custom text replacement.
+
+        :param search_text: Text replacement key to remove.
+        """
         if search_text not in self._replacements:
             return
 
@@ -173,14 +233,20 @@ class CustomSvgRenderer(QObject):
         self._is_dirty = True
 
     def original_data(self) -> Optional[QByteArray]:
-        """Return the original SVG data before replacements."""
+        """Return the original SVG data before replacements.
+
+        :return: Original SVG data or ``None``.
+        """
         if self._original_data is None:
             return None
 
         return QByteArray(self._original_data)
 
     def themed_data(self) -> Optional[QByteArray]:
-        """Return SVG data after applying current replacements."""
+        """Return SVG data after applying current replacements.
+
+        :return: Replaced SVG data or ``None``.
+        """
         if self._original_data is None:
             return None
 

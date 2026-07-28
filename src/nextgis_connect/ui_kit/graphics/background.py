@@ -14,11 +14,22 @@ from nextgis_connect.ui_kit.graphics.svg_renderer import (
 
 
 class NextgisBackgroundPainter(QObject):
+    """Paint NextGIS themed backgrounds.
+
+    Draw grid, isoline SVG, and gradient layers for widgets and header
+    areas using the active palette.
+    """
+
     def __init__(
         self,
         isolines_path: Path,
         parent: Optional[QObject] = None,
     ) -> None:
+        """Initialize the background painter.
+
+        :param isolines_path: SVG path used for isoline decoration.
+        :param parent: Parent object.
+        """
         super().__init__(parent)
         self._isolines_renderer = CustomSvgRenderer(
             isolines_path,
@@ -33,6 +44,12 @@ class NextgisBackgroundPainter(QObject):
         *,
         palette: Optional[QPalette] = None,
     ) -> None:
+        """Paint a full widget background.
+
+        :param painter: Painter used for rendering.
+        :param rect: Rectangle to paint.
+        :param palette: Palette used for colors.
+        """
         active_palette = NextgisDecorator.system_palette(palette)
 
         self._draw_grid(painter, rect, active_palette)
@@ -46,6 +63,12 @@ class NextgisBackgroundPainter(QObject):
         *,
         palette: Optional[QPalette] = None,
     ) -> None:
+        """Paint a header background.
+
+        :param painter: Painter used for rendering.
+        :param rect: Rectangle to paint.
+        :param palette: Palette used for colors.
+        """
         active_palette = NextgisDecorator.system_palette(palette)
 
         painter.save()

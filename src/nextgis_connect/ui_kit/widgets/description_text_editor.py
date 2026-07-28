@@ -28,7 +28,7 @@ if QT_VERSION_MAJOR == 6:
 
 
 class DescriptionTextEditor(QgsRichTextEditor):
-    """A text editor for editing NextGIS Web descriptions.
+    """Provide a text editor for NextGIS Web descriptions.
 
     QgsRichTextEditor has some features that are not supported by NextGIS Web,
     such as support for tables, font sizes, and text colors. This class patches
@@ -37,6 +37,10 @@ class DescriptionTextEditor(QgsRichTextEditor):
     """
 
     def __init__(self, parent: Optional[QWidget] = None) -> None:
+        """Initialize the editor.
+
+        :param parent: Optional parent widget.
+        """
         super().__init__(parent)
         self._collect_widgets()
         self.set_read_only(True)
@@ -62,6 +66,10 @@ class DescriptionTextEditor(QgsRichTextEditor):
         self._tool_bar.setDisabled(read_only)
 
     def set_content(self, content: str) -> None:
+        """Set the editor content.
+
+        :param content: HTML content to display in the editor.
+        """
         if Qgis.versionInt() < QGIS_3_42:
             # Old QgsRichTextEditor had issues with leading whitespace, so we
             # need to strip it.

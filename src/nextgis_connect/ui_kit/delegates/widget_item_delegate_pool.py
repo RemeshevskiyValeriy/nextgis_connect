@@ -1,10 +1,3 @@
-"""Widget pool and event forwarding for widget-based item delegates.
-
-Manages widget instances per model index, wires event forwarding from
-embedded widgets back to the view's viewport, and handles lifecycle
-operations such as clearing and validation.
-"""
-
 from enum import IntEnum
 from typing import TYPE_CHECKING, Dict, List, Optional, cast
 
@@ -42,7 +35,6 @@ class WidgetItemDelegateEventListener(QObject):
     Python port of KWidgetItemDelegateEventListener (KItemViews)
 
     :ivar _pool: Pool managing widgets and related state.
-    :vartype _pool: WidgetItemDelegatePool
     """
 
     def __init__(
@@ -51,9 +43,7 @@ class WidgetItemDelegateEventListener(QObject):
         """Initialize event listener.
 
         :param pool: Owning widget pool instance.
-        :type pool: WidgetItemDelegatePool
         :param parent: Optional QObject parent.
-        :type parent: Optional[QObject]
         """
         super().__init__(parent)
         self._pool = pool
@@ -62,11 +52,8 @@ class WidgetItemDelegateEventListener(QObject):
         """Filter widget events and forward to the view's viewport.
 
         :param watched: Observed object (expected to be a QWidget).
-        :type watched: QObject
         :param event: Event to filter and possibly forward.
-        :type event: QEvent
         :return: ``True`` if handled; otherwise calls base implementation.
-        :rtype: bool
         """
         widget = watched
 
@@ -202,15 +189,10 @@ class WidgetItemDelegatePool:
     Python port of KWidgetItemDelegatePool (KItemViews)
 
     :ivar _delegate: Owning delegate instance.
-    :vartype _delegate: WidgetItemDelegate
     :ivar _event_listener: Event listener instance for forwarding.
-    :vartype _event_listener: WidgetItemDelegateEventListener
     :ivar _used_widgets: Mapping from persistent index to widgets list.
-    :vartype _used_widgets: Dict[QPersistentModelIndex, List[QWidget]]
     :ivar _widget_in_index: Reverse mapping from widget to index.
-    :vartype _widget_in_index: Dict[QWidget, QPersistentModelIndex]
     :ivar _is_clearing: Internal flag to suppress warnings during clear.
-    :vartype _is_clearing: bool
     """
 
     class UpdateWidgetsEnum(IntEnum):
@@ -223,7 +205,6 @@ class WidgetItemDelegatePool:
         """Initialize widget pool for the provided delegate.
 
         :param delegate: Delegate owning this pool.
-        :type delegate: WidgetItemDelegate
         """
         self._delegate = delegate
         self._event_listener = WidgetItemDelegateEventListener(self)
@@ -236,7 +217,6 @@ class WidgetItemDelegatePool:
         """Return whether the pool is currently clearing widgets.
 
         :return: ``True`` if in clearing phase, otherwise ``False``.
-        :rtype: bool
         """
         return self._is_clearing
 
@@ -245,7 +225,6 @@ class WidgetItemDelegatePool:
         """Return the owning delegate.
 
         :return: Delegate associated with this pool.
-        :rtype: WidgetItemDelegate
         """
         return self._delegate
 
@@ -261,13 +240,9 @@ class WidgetItemDelegatePool:
         requested updates their visible state and geometry.
 
         :param index: Persistent index for which to obtain widgets.
-        :type index: QPersistentModelIndex
         :param option: Style option describing item rectangle/state.
-        :type option: QStyleOptionViewItem
         :param updateWidgets: Whether to update widget state/geometry.
-        :type updateWidgets: WidgetItemDelegatePool.UpdateWidgetsEnum
         :return: List of widgets associated with the index.
-        :rtype: List[QWidget]
         """
         result: List[QWidget] = []
 
@@ -319,7 +294,6 @@ class WidgetItemDelegatePool:
         """Return widgets whose associated indexes are invalid.
 
         :return: Widgets bound to invalid or stale indexes.
-        :rtype: List[QWidget]
         """
         result: List[QWidget] = []
 

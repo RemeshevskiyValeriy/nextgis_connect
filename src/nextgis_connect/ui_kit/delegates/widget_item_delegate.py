@@ -1,9 +1,3 @@
-"""Widget-based item delegate for Qt item views.
-
-Provides a Python port of KWidgetItemDelegate to embed interactive
-widgets into Qt item views and synchronize them with the model state.
-"""
-
 from typing import Dict, List, Optional
 
 from qgis.PyQt.QtCore import (
@@ -43,17 +37,11 @@ class WidgetItemDelegate(QAbstractItemDelegate):
     Python port of KWidgetItemDelegate (KItemViews)
 
     :ivar _item_view: Item view monitored by this delegate.
-    :vartype _item_view: QAbstractItemView
     :ivar _blocked_events: Mapping of widget ids to blocked event types.
-    :vartype _blocked_events: Dict[int, List[QEvent.Type]]
     :ivar _pool: Internal widget pool and event wiring helper.
-    :vartype _pool: WidgetItemDelegatePool
     :ivar _model: Currently attached model or ``None``.
-    :vartype _model: Optional[QObject]
     :ivar _selection_model: Current selection model or ``None``.
-    :vartype _selection_model: Optional[QObject]
     :ivar _is_view_destroyed: Whether the view is being destroyed.
-    :vartype _is_view_destroyed: bool
     """
 
     def __init__(
@@ -62,9 +50,7 @@ class WidgetItemDelegate(QAbstractItemDelegate):
         """Initialize delegate for a given item view.
 
         :param item_view: Item view to monitor and decorate with widgets.
-        :type item_view: QAbstractItemView
         :param parent: Optional QObject parent.
-        :type parent: Optional[QObject]
         """
 
         super().__init__(parent)
@@ -106,7 +92,6 @@ class WidgetItemDelegate(QAbstractItemDelegate):
         """Return the monitored item view.
 
         :return: The item view associated with this delegate.
-        :rtype: QAbstractItemView
         """
         return self._item_view
 
@@ -117,7 +102,6 @@ class WidgetItemDelegate(QAbstractItemDelegate):
         returned. The returned index may be invalid.
 
         :return: Focused persistent model index or invalid index.
-        :rtype: QPersistentModelIndex
         """
         focused_widget = QApplication.focusWidget()
         if focused_widget is not None:
@@ -141,9 +125,7 @@ class WidgetItemDelegate(QAbstractItemDelegate):
         may be established at creation time.
 
         :param index: Model index to create widgets for.
-        :type index: QModelIndex
         :return: Newly created widgets for the item.
-        :rtype: List[QWidget]
         :raises NotImplementedError: If not implemented in subclass.
         """
         del index
@@ -161,11 +143,8 @@ class WidgetItemDelegate(QAbstractItemDelegate):
         or connecting signals here as this method is called frequently.
 
         :param widgets: Widgets previously created for the item.
-        :type widgets: List[QWidget]
         :param option: Style options for the current item view state.
-        :type option: QStyleOptionViewItem
         :param index: Persistent index of the item being updated.
-        :type index: QPersistentModelIndex
         :raises NotImplementedError: If not implemented in subclass.
         """
         del widgets, option, index
@@ -179,9 +158,7 @@ class WidgetItemDelegate(QAbstractItemDelegate):
         Blocked events are not forwarded to the view.
 
         :param widget: Target widget; ignored if ``None``.
-        :type widget: QWidget
         :param types: Event types to block for the widget.
-        :type types: List[QEvent.Type]
         """
 
         if widget is None:
@@ -194,9 +171,7 @@ class WidgetItemDelegate(QAbstractItemDelegate):
         """Return blocked event types for a widget.
 
         :param widget: Widget to query.
-        :type widget: QWidget
         :return: List of blocked event types (empty if none or widget is ``None``).
-        :rtype: List[QEvent.Type]
         """
         if widget is None:
             return []
@@ -210,9 +185,7 @@ class WidgetItemDelegate(QAbstractItemDelegate):
         """Build style option for a given index.
 
         :param index: Model index to describe.
-        :type index: QModelIndex
         :return: Style option describing the item view state.
-        :rtype: QStyleOptionViewItem
         """
         option = QStyleOptionViewItem()
         option.initFrom(self._item_view.viewport())
@@ -224,7 +197,6 @@ class WidgetItemDelegate(QAbstractItemDelegate):
         """Initialize widgets for all visible indexes recursively.
 
         :param parent: Parent index to start traversal or ``None``.
-        :type parent: Optional[QModelIndex]
         """
         if parent is None:
             parent = QModelIndex()
@@ -268,13 +240,9 @@ class WidgetItemDelegate(QAbstractItemDelegate):
         """Update widgets for a row range and handle removals.
 
         :param parent: Parent index of the rows.
-        :type parent: QModelIndex
         :param start: Start row (inclusive).
-        :type start: int
         :param end: End row (inclusive).
-        :type end: int
         :param is_removing: Whether rows are being removed.
-        :type is_removing: bool
         """
         model = self._item_view.model()
         if model is None:
@@ -319,11 +287,8 @@ class WidgetItemDelegate(QAbstractItemDelegate):
         """Update widgets after row insertion.
 
         :param parent: Parent index of the inserted rows.
-        :type parent: QModelIndex
         :param start: First inserted row.
-        :type start: int
         :param end: Last inserted row (unused for update extent).
-        :type end: int
         """
         del end
         model = self._item_view.model()
@@ -344,11 +309,8 @@ class WidgetItemDelegate(QAbstractItemDelegate):
         """Prepare widgets before row removal.
 
         :param parent: Parent index of the rows to remove.
-        :type parent: QModelIndex
         :param start: First row to remove.
-        :type start: int
         :param end: Last row to remove.
-        :type end: int
         """
         self._update_row_range(parent, start, end, True)
 
@@ -359,11 +321,8 @@ class WidgetItemDelegate(QAbstractItemDelegate):
         """Update widgets after rows have been removed.
 
         :param parent: Parent index of the removed rows.
-        :type parent: QModelIndex
         :param start: First removed row.
-        :type start: int
         :param end: Last removed row (unused for update extent).
-        :type end: int
         """
         del end
         model = self._item_view.model()
@@ -384,9 +343,7 @@ class WidgetItemDelegate(QAbstractItemDelegate):
         """Update widgets in the changed data range.
 
         :param top_left: Top-left index of the changed region.
-        :type top_left: QModelIndex
         :param bottom_right: Bottom-right index of the changed region.
-        :type bottom_right: QModelIndex
         """
         model = self._item_view.model()
         if model is None:
@@ -423,9 +380,7 @@ class WidgetItemDelegate(QAbstractItemDelegate):
         """Update widgets for selection changes.
 
         :param selected: Newly selected indexes.
-        :type selected: QItemSelection
         :param deselected: Newly deselected indexes.
-        :type deselected: QItemSelection
         """
         for index in selected.indexes():
             self._pool.find_and_update_widgets(
@@ -444,11 +399,8 @@ class WidgetItemDelegate(QAbstractItemDelegate):
         and triggers widget updates in response to relevant view events.
 
         :param watched: Object being watched.
-        :type watched: QObject
         :param event: Event being filtered.
-        :type event: QEvent
         :return: ``True`` if handled; otherwise delegates to base.
-        :rtype: bool
         """
         # Manages dynamic connections and responds to view events.
         DestroyType = QEvent.Type(16)  # QEvent.Type.Destroy constant

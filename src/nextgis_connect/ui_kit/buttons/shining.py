@@ -13,11 +13,22 @@ from nextgis_connect.ui_kit.graphics.decorator import (
 
 
 class ShiningButton(PrimaryButton):
+    """Show a primary button with hover shimmer feedback.
+
+    Extend the primary button with a subtle animated highlight for
+    prominent calls to action.
+    """
+
     def __init__(
         self,
         text: str = "",
         parent: Optional[QWidget] = None,
     ) -> None:
+        """Initialize the shining button.
+
+        :param text: Initial button text.
+        :param parent: Parent widget.
+        """
         self._shimmer_progress = 0.0
         super().__init__(text, parent)
 
@@ -29,14 +40,26 @@ class ShiningButton(PrimaryButton):
         )
 
     def enterEvent(self, event) -> None:
+        """Handle pointer enter events.
+
+        :param event: Qt enter event.
+        """
         self._animate_shimmer(1.0)
         super().enterEvent(event)
 
     def leaveEvent(self, event) -> None:
+        """Handle pointer leave events.
+
+        :param event: Qt leave event.
+        """
         self._animate_shimmer(0.0)
         super().leaveEvent(event)
 
     def paintEvent(self, event) -> None:
+        """Paint the button and shimmer overlay.
+
+        :param event: Qt paint event.
+        """
         super().paintEvent(event)
 
         if not self.isEnabled() or self._shimmer_progress <= 0.0:

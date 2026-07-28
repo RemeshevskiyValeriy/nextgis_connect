@@ -35,13 +35,17 @@ from nextgis_connect.ui_kit.graphics.loading_indicator import (
 
 
 class LoadingIndicatorAnimation(QObject):
-    """Animates an angle property from 0 to 360 degrees indefinitely."""
+    """Animate an angle property from 0 to 360 degrees indefinitely."""
 
     ANIMATION_DURATION_MS = 850
 
     angle_changed = pyqtSignal(float)
 
     def __init__(self, parent: Optional[QObject] = None) -> None:
+        """Initialize the animation object.
+
+        :param parent: Optional QObject parent.
+        """
         super().__init__(parent)
 
         self._angle = 0.0
@@ -54,10 +58,18 @@ class LoadingIndicatorAnimation(QObject):
 
     @pyqtProperty(float)
     def angle(self) -> float:
+        """Return the current animation angle.
+
+        :return: Current angle in degrees.
+        """
         return self._angle
 
     @angle.setter
     def angle(self, value: float) -> None:
+        """Set the current animation angle.
+
+        :param value: Angle in degrees.
+        """
         next_angle = value % 360.0
         if self._angle == next_angle:
             return
@@ -66,23 +78,29 @@ class LoadingIndicatorAnimation(QObject):
         self.angle_changed.emit(self._angle)
 
     def start(self) -> None:
+        """Start the animation."""
         if self.is_running():
             return
 
         self._animation.start()
 
     def stop(self) -> None:
+        """Stop the animation and reset its angle."""
         if self.is_running():
             self._animation.stop()
 
         self.angle = 0.0
 
     def is_running(self) -> bool:
+        """Return whether the animation is running.
+
+        :return: ``True`` when the animation is active.
+        """
         return self._animation.state() == QAbstractAnimation.State.Running
 
 
 class LoadingIndicatorIconAnimator(QObject):
-    """Creates animated loading icons using LoadingIndicatorRenderer."""
+    """Create animated loading icons with a loading indicator renderer."""
 
     frame_changed = pyqtSignal()
 
@@ -93,6 +111,12 @@ class LoadingIndicatorIconAnimator(QObject):
         renderer: Optional[LoadingIndicatorRenderer] = None,
         parent: Optional[QObject] = None,
     ) -> None:
+        """Initialize the icon animator.
+
+        :param size: Optional icon size.
+        :param renderer: Optional renderer used to draw frames.
+        :param parent: Optional QObject parent.
+        """
         super().__init__(parent)
 
         self._size = QSize(size or LoadingIndicatorRenderer.DEFAULT_SIZE)
@@ -104,24 +128,42 @@ class LoadingIndicatorIconAnimator(QObject):
 
     @property
     def angle(self) -> float:
+        """Return the current animation angle.
+
+        :return: Current angle in degrees.
+        """
         return self._animation.angle
 
     @angle.setter
     def angle(self, value: float) -> None:
+        """Set the current animation angle.
+
+        :param value: Angle in degrees.
+        """
         self._animation.angle = value
 
     def start(self) -> None:
+        """Start the icon animation."""
         self._animation.start()
         self.frame_changed.emit()
 
     def stop(self) -> None:
+        """Stop the icon animation."""
         self._animation.stop()
         self.frame_changed.emit()
 
     def is_running(self) -> bool:
+        """Return whether the icon animation is running.
+
+        :return: ``True`` when the animation is active.
+        """
         return self._animation.is_running()
 
     def set_size(self, size: QSize) -> None:
+        """Set the rendered icon size.
+
+        :param size: New icon size.
+        """
         if not size.isValid() or size.isEmpty():
             return
 
@@ -137,6 +179,12 @@ class LoadingIndicatorIconAnimator(QObject):
         palette: Optional[QPalette] = None,
         device_pixel_ratio: float = 1.0,
     ) -> QIcon:
+        """Return the current animated icon frame.
+
+        :param palette: Optional palette used for rendering.
+        :param device_pixel_ratio: Device pixel ratio for the rendered icon.
+        :return: Icon for the current animation frame.
+        """
         return self._renderer.icon(
             self._size,
             angle=self.angle,
@@ -146,7 +194,7 @@ class LoadingIndicatorIconAnimator(QObject):
 
 
 class LoadingIndicatorWidget(QWidget):
-    """Reusable spinner widget for long-running operations."""
+    """Provide a reusable spinner widget for long-running operations."""
 
     DEFAULT_SIZE = QSize(20, 20)
 
@@ -157,6 +205,12 @@ class LoadingIndicatorWidget(QWidget):
         size: Optional[QSize] = None,
         renderer: Optional[LoadingIndicatorRenderer] = None,
     ) -> None:
+        """Initialize the loading indicator widget.
+
+        :param parent: Optional parent widget.
+        :param size: Optional widget size.
+        :param renderer: Optional renderer used to draw the indicator.
+        """
         super().__init__(parent)
 
         self._size = QSize(size or self.DEFAULT_SIZE)
@@ -171,38 +225,72 @@ class LoadingIndicatorWidget(QWidget):
 
     @property
     def angle(self) -> float:
+        """Return the current animation angle.
+
+        :return: Current angle in degrees.
+        """
         return self._animation.angle
 
     @angle.setter
     def angle(self, value: float) -> None:
+        """Set the current animation angle.
+
+        :param value: Angle in degrees.
+        """
         self._animation.angle = value
 
     def start(self) -> None:
+        """Start the widget animation."""
         self._animation.start()
         self.update()
 
     def stop(self) -> None:
+        """Stop the widget animation."""
         self._animation.stop()
         self.update()
 
     def is_running(self) -> bool:
+        """Return whether the widget animation is running.
+
+        :return: ``True`` when the animation is active.
+        """
         return self._animation.is_running()
 
     def sizeHint(self) -> QSize:
+        """Return the preferred widget size.
+
+        :return: Preferred size.
+        """
         return QSize(self._size)
 
     def minimumSizeHint(self) -> QSize:
+        """Return the minimum preferred widget size.
+
+        :return: Minimum preferred size.
+        """
         return QSize(self._size)
 
     def showEvent(self, event) -> None:
+        """Handle widget show events.
+
+        :param event: Show event.
+        """
         self.start()
         super().showEvent(event)
 
     def hideEvent(self, event) -> None:
+        """Handle widget hide events.
+
+        :param event: Hide event.
+        """
         self.stop()
         super().hideEvent(event)
 
     def paintEvent(self, event) -> None:
+        """Paint the current indicator frame.
+
+        :param event: Paint event.
+        """
         del event
 
         painter = QPainter(self)

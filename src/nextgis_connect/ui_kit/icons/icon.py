@@ -25,7 +25,7 @@ def qgis_icon(icon_name: str) -> QIcon:
 
     :param icon_name: Name of the icon.
 
-    :returns: QIcon instance for the QGIS theme icon.
+    :return: QIcon instance for the QGIS theme icon.
     """
     icon = QgsApplication.getThemeIcon(icon_name)
     if icon.isNull():
@@ -48,8 +48,9 @@ def plugin_icon(
     :param icon_path: Path or name of the icon file.
     :param color: Color to apply instead of white fill for SVG icons.
         If None, keep the original fills unchanged.
-
-    :returns: QIcon instance for the plugin icon.
+    :param size: Optional size for rendered SVG icons.
+    :param replacements: Optional literal SVG text replacements.
+    :return: QIcon instance for the plugin icon.
     """
     plugin = NgConnectInterface.instance()
     icons_path = plugin.path / "assets" / "icons"
@@ -89,7 +90,7 @@ def material_icon(
     :param color: Color to apply to the icon (hex string).
     :param size: Size of the icon in pixels.
 
-    :returns: QIcon instance for the material icon.
+    :return: QIcon instance for the material icon.
 
     :raises FileNotFoundError: If the SVG file is not found.
     :raises ValueError: If the SVG cannot be loaded.
@@ -131,9 +132,8 @@ def render_svg_icon(
     :param color: Color to apply instead of white fill. If None, keep the
         original fills unchanged.
     :param size: Output icon size in pixels. If None, use SVG default size.
-
-    :returns: Rendered QIcon.
-
+    :param replacements: Optional literal SVG text replacements.
+    :return: Rendered QIcon.
     :raises ValueError: If the SVG cannot be loaded.
     """
     if isinstance(svg_path, Path):
@@ -185,11 +185,8 @@ def draw_icon(label: QLabel, icon: QIcon, *, size: int = 24) -> None:
     """Draw an icon on a QLabel with specified size.
 
     :param label: QLabel to draw the icon on.
-    :type label: QLabel
     :param icon: QIcon to be drawn.
-    :type icon: QIcon
     :param size: Size of the icon in pixels.
-    :type size: int
     """
     pixmap = icon.pixmap(icon.actualSize(QSize(size, size)))
     label.setPixmap(pixmap)
@@ -200,11 +197,8 @@ def icon_to_base64(icon: QIcon, size: Optional[int] = None) -> str:
     """Convert a QIcon to a base64-encoded PNG string.
 
     :param icon: QIcon to convert.
-    :type icon: QIcon
     :param size: Size of the icon in pixels. If None, use 32x32.
-    :type size: Optional[int]
     :return: Base64-encoded PNG string of the icon.
-    :rtype: str
     """
     icon_size = QSize(32, 32) if size is None else QSize(size, size)
     pixmap = icon.pixmap(icon_size)

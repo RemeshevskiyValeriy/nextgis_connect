@@ -11,6 +11,15 @@ from qgis.PyQt.QtWidgets import QWidget
 
 @dataclass(frozen=True)
 class NextgisToken:
+    """Store a theme token path and fallback value.
+
+    Describe a value inside the NextGIS theme JSON and the fallback to
+    use when the token cannot be resolved.
+
+    :ivar path: Dot-separated theme path.
+    :ivar fallback: Value used when the token is missing.
+    """
+
     path: str
     fallback: Any
 
@@ -19,6 +28,12 @@ TokenSource = Union[NextgisToken, str]
 
 
 class NextgisBrandColor(Enum):
+    """Represent brand color theme tokens.
+
+    Provide token references for default, interactive, accent, and
+    foreground brand colors.
+    """
+
     DEFAULT = NextgisToken("color.shared.brand", "#0c65af")
     HOVER = NextgisToken("color.shared.brandHover", "#0952a5")
     ACTIVE = NextgisToken("color.shared.brandActive", "#063f80")
@@ -27,6 +42,12 @@ class NextgisBrandColor(Enum):
 
 
 class NextgisRadius(Enum):
+    """Represent radius theme tokens.
+
+    Provide token references for field, button, card, panel, and pill
+    corner radii.
+    """
+
     FIELD = NextgisToken("radiusPx.field", 8)
     BUTTON = NextgisToken("radiusPx.button", 4)
     CARD = NextgisToken("radiusPx.card", 6)
@@ -35,6 +56,11 @@ class NextgisRadius(Enum):
 
 
 class NextgisSpacing(Enum):
+    """Represent spacing theme tokens.
+
+    Provide token references for reusable pixel spacing values.
+    """
+
     XS = NextgisToken("spacingPx.1", 4)
     SM = NextgisToken("spacingPx.2", 8)
     MD = NextgisToken("spacingPx.3", 12)
@@ -43,6 +69,11 @@ class NextgisSpacing(Enum):
 
 
 class NextgisSize(Enum):
+    """Represent size theme tokens.
+
+    Provide token references for icons, controls, and layout bounds.
+    """
+
     ICON_SMALL = NextgisToken("sizePx.iconSmall", 16)
     ICON = NextgisToken("sizePx.icon", 20)
     ICON_LARGE = NextgisToken("sizePx.iconLarge", 24)
@@ -53,18 +84,38 @@ class NextgisSize(Enum):
 
 
 class NextgisTheme:
+    """Read values from a NextGIS theme file.
+
+    Load theme JSON lazily and resolve typed values through token paths
+    with caller-provided fallbacks.
+    """
+
     def __init__(self, path: Path) -> None:
+        """Initialize the theme reader.
+
+        :param path: Theme JSON path.
+        """
         self._path = path
         self._data_cache: Optional[Dict[str, Any]] = None
 
     @property
     def data(self) -> Mapping[str, Any]:
+        """Return parsed theme data.
+
+        :return: Parsed theme mapping.
+        """
         if self._data_cache is None:
             self._data_cache = self._load()
 
         return self._data_cache
 
     def value(self, token: TokenSource, fallback: Any = None) -> Any:
+        """Return a raw theme value.
+
+        :param token: Theme token or dot-separated token path.
+        :param fallback: Fallback value for missing tokens.
+        :return: Resolved theme value or fallback.
+        """
         key_path, fallback_value = self._normalize_token(token, fallback)
         value: Any = self.data
 
@@ -78,6 +129,12 @@ class NextgisTheme:
     def color(
         self, token: TokenSource, fallback: Optional[str] = None
     ) -> QColor:
+        """Return a theme color.
+
+        :param token: Theme token or dot-separated token path.
+        :param fallback: Fallback color text.
+        :return: Resolved color.
+        """
         _, fallback_value = self._normalize_token(token, fallback)
         value = self.value(token, fallback)
         if not isinstance(value, str):
@@ -94,6 +151,12 @@ class NextgisTheme:
     def integer(
         self, token: TokenSource, fallback: Optional[int] = None
     ) -> int:
+        """Return a theme integer.
+
+        :param token: Theme token or dot-separated token path.
+        :param fallback: Fallback integer value.
+        :return: Resolved integer.
+        """
         _, fallback_value = self._normalize_token(token, fallback)
         value = self.value(token, fallback)
         if isinstance(value, bool):
@@ -144,6 +207,13 @@ def mix_colors(
     second_color: QColor,
     factor: float,
 ) -> QColor:
+    """Mix two colors.
+
+    :param first_color: Color used at factor ``0``.
+    :param second_color: Color used at factor ``1``.
+    :param factor: Blend factor clamped to the ``0`` to ``1`` range.
+    :return: Mixed color.
+    """
     clamped_factor = max(0.0, min(1.0, factor))
     inverse_factor = 1.0 - clamped_factor
 
@@ -168,6 +238,12 @@ def mix_colors(
 
 
 class NextgisDecorator:
+    """Provide shared NextGIS UI styling helpers.
+
+    Resolve theme tokens, palette colors, brand colors, and stylesheet
+    snippets used by reusable Qt components.
+    """
+
     DEFAULT_BUTTON_HEIGHT = 32
     CARD_MARGIN = 28
     CARD_PADDING_HORIZONTAL = 28
@@ -193,10 +269,19 @@ class NextgisDecorator:
 
     @classmethod
     def theme(cls) -> NextgisTheme:
+        """Return the shared NextGIS theme.
+
+        :return: Theme reader instance.
+        """
         return cls._theme
 
     @classmethod
     def system_palette(cls, palette: Optional[QPalette] = None) -> QPalette:
+        """Return a QGIS system palette copy.
+
+        :param palette: Palette to copy instead of the application palette.
+        :return: Palette copy.
+        """
         if palette is not None:
             return QPalette(palette)
 
@@ -210,6 +295,13 @@ class NextgisDecorator:
         *,
         group: Optional[QPalette.ColorGroup] = None,
     ) -> QColor:
+        """Return a color from a system palette.
+
+        :param role: Palette color role.
+        :param palette: Palette to read from.
+        :param group: Optional palette color group.
+        :return: Palette color.
+        """
         active_palette = cls.system_palette(palette)
         if group is None:
             return active_palette.color(role)
@@ -221,6 +313,11 @@ class NextgisDecorator:
         cls,
         palette: Optional[QPalette] = None,
     ) -> QColor:
+        """Return the system window color.
+
+        :param palette: Palette to read from.
+        :return: Window color.
+        """
         return cls.system_color(QPalette.ColorRole.Window, palette)
 
     @classmethod
@@ -228,6 +325,11 @@ class NextgisDecorator:
         cls,
         palette: Optional[QPalette] = None,
     ) -> QColor:
+        """Return the system base color.
+
+        :param palette: Palette to read from.
+        :return: Base color.
+        """
         return cls.system_color(QPalette.ColorRole.Base, palette)
 
     @classmethod
@@ -235,6 +337,11 @@ class NextgisDecorator:
         cls,
         palette: Optional[QPalette] = None,
     ) -> QColor:
+        """Return the system title text color.
+
+        :param palette: Palette to read from.
+        :return: Title text color.
+        """
         return cls.system_color(QPalette.ColorRole.WindowText, palette)
 
     @classmethod
@@ -242,6 +349,11 @@ class NextgisDecorator:
         cls,
         palette: Optional[QPalette] = None,
     ) -> QColor:
+        """Return the system text color.
+
+        :param palette: Palette to read from.
+        :return: Text color.
+        """
         return cls.system_color(QPalette.ColorRole.Text, palette)
 
     @classmethod
@@ -249,6 +361,11 @@ class NextgisDecorator:
         cls,
         palette: Optional[QPalette] = None,
     ) -> QColor:
+        """Return the system button color.
+
+        :param palette: Palette to read from.
+        :return: Button color.
+        """
         return cls.system_color(QPalette.ColorRole.Button, palette)
 
     @classmethod
@@ -256,6 +373,11 @@ class NextgisDecorator:
         cls,
         palette: Optional[QPalette] = None,
     ) -> QColor:
+        """Return the system border color.
+
+        :param palette: Palette to read from.
+        :return: Border color.
+        """
         return cls.system_color(QPalette.ColorRole.Mid, palette)
 
     @classmethod
@@ -263,6 +385,11 @@ class NextgisDecorator:
         cls,
         palette: Optional[QPalette] = None,
     ) -> QColor:
+        """Return a muted text color.
+
+        :param palette: Palette to read from.
+        :return: Muted text color.
+        """
         active_palette = cls.system_palette(palette)
 
         return mix_colors(
@@ -273,6 +400,11 @@ class NextgisDecorator:
 
     @classmethod
     def is_dark_theme(cls, palette: Optional[QPalette] = None) -> bool:
+        """Return whether a palette appears dark.
+
+        :param palette: Palette to inspect.
+        :return: ``True`` when the palette appears dark.
+        """
         active_palette = cls.system_palette(palette)
         window_color = cls.system_window_color(active_palette)
         text_color = cls.system_title_color(active_palette)
@@ -284,14 +416,27 @@ class NextgisDecorator:
         cls,
         color: NextgisBrandColor = NextgisBrandColor.DEFAULT,
     ) -> QColor:
+        """Return a brand color.
+
+        :param color: Brand color token to resolve.
+        :return: Brand color.
+        """
         return cls.theme().color(color.value)
 
     @classmethod
     def brand_hover_color(cls) -> QColor:
+        """Return the brand hover color.
+
+        :return: Brand hover color.
+        """
         return cls.brand_color(NextgisBrandColor.HOVER)
 
     @classmethod
     def brand_active_color(cls) -> QColor:
+        """Return the brand active color.
+
+        :return: Brand active color.
+        """
         return cls.brand_color(NextgisBrandColor.ACTIVE)
 
     @classmethod
@@ -299,6 +444,11 @@ class NextgisDecorator:
         cls,
         alpha_factor: float = 0.05,
     ) -> QColor:
+        """Return the brand color with adjusted alpha.
+
+        :param alpha_factor: Alpha factor clamped to the ``0`` to ``1`` range.
+        :return: Brand overlay color.
+        """
         color = cls.brand_color()
         color.setAlpha(round(255 * max(0.0, min(1.0, alpha_factor))))
 
@@ -306,18 +456,37 @@ class NextgisDecorator:
 
     @classmethod
     def brand_on_color(cls) -> QColor:
+        """Return the foreground color for brand backgrounds.
+
+        :return: Brand foreground color.
+        """
         return cls.brand_color(NextgisBrandColor.ON_BRAND)
 
     @classmethod
     def spacing(cls, spacing: NextgisSpacing) -> int:
+        """Return a spacing token value.
+
+        :param spacing: Spacing token to resolve.
+        :return: Spacing in pixels.
+        """
         return cls.theme().integer(spacing.value)
 
     @classmethod
     def radius(cls, radius: NextgisRadius) -> int:
+        """Return a radius token value.
+
+        :param radius: Radius token to resolve.
+        :return: Radius in pixels.
+        """
         return cls.theme().integer(radius.value)
 
     @classmethod
     def size(cls, size: NextgisSize) -> int:
+        """Return a size token value.
+
+        :param size: Size token to resolve.
+        :return: Size in pixels.
+        """
         return cls.theme().integer(size.value)
 
     @classmethod
@@ -327,6 +496,12 @@ class NextgisDecorator:
         *,
         base_palette: Optional[QPalette] = None,
     ) -> QPalette:
+        """Create a palette with color overrides.
+
+        :param overrides: Palette role overrides.
+        :param base_palette: Base palette to copy.
+        :return: Palette with applied overrides.
+        """
         palette = cls.system_palette(base_palette)
 
         for key, color in overrides.items():
@@ -346,6 +521,11 @@ class NextgisDecorator:
         cls,
         palette: Optional[QPalette] = None,
     ) -> QPalette:
+        """Create a palette for overlay cards.
+
+        :param palette: Base palette to copy.
+        :return: Overlay card palette.
+        """
         active_palette = cls.system_palette(palette)
         base_color = cls.system_base_color(active_palette)
         window_color = cls.system_window_color(active_palette)
@@ -380,6 +560,11 @@ class NextgisDecorator:
         cls,
         palette: Optional[QPalette] = None,
     ) -> QPalette:
+        """Create a palette for progress controls.
+
+        :param palette: Base palette to copy.
+        :return: Progress palette.
+        """
         active_palette = cls.system_palette(palette)
 
         return cls.create_palette(
@@ -396,6 +581,12 @@ class NextgisDecorator:
         selector: str,
         declarations: Mapping[str, str],
     ) -> str:
+        """Build a CSS stylesheet rule.
+
+        :param selector: CSS selector.
+        :param declarations: CSS declarations.
+        :return: Stylesheet rule.
+        """
         rules = [
             f"{property_name}: {value};"
             for property_name, value in declarations.items()
@@ -405,6 +596,11 @@ class NextgisDecorator:
 
     @classmethod
     def merge_stylesheets(cls, *stylesheets: str) -> str:
+        """Merge stylesheet snippets.
+
+        :param stylesheets: Stylesheet snippets to merge.
+        :return: Combined stylesheet text.
+        """
         return "\n".join(
             stylesheet
             for stylesheet in stylesheets
@@ -420,6 +616,13 @@ class NextgisDecorator:
         stylesheets: Iterable[str] = (),
         auto_fill_background: Optional[bool] = None,
     ) -> None:
+        """Apply shared palette and stylesheet settings to a widget.
+
+        :param widget: Widget to patch.
+        :param palette: Palette to apply.
+        :param stylesheets: Stylesheet snippets to merge and apply.
+        :param auto_fill_background: Optional auto-fill-background value.
+        """
         if palette is not None:
             widget.setPalette(QPalette(palette))
 
@@ -432,6 +635,11 @@ class NextgisDecorator:
 
     @classmethod
     def as_rgba(cls, color: QColor) -> str:
+        """Return a CSS rgba color string.
+
+        :param color: Color to convert.
+        :return: CSS rgba string.
+        """
         return (
             f"rgba({color.red()}, {color.green()}, {color.blue()}, "
             f"{color.alphaF():.3f})"

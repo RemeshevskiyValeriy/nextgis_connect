@@ -1,5 +1,3 @@
-"""Reusable widgets."""
-
 from .loading_indicator import (
     LoadingIndicatorIconAnimator,
     LoadingIndicatorWidget,

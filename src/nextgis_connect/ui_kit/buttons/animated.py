@@ -23,12 +23,28 @@ from nextgis_connect.ui_kit.graphics.decorator import (
 
 @dataclass
 class ButtonVisualState:
+    """Store button colors for one visual state.
+
+    Carry background, border, and text colors used while painting an
+    animated button state.
+
+    :ivar background: Button background color.
+    :ivar border: Button border color.
+    :ivar text: Button text and icon color.
+    """
+
     background: QColor
     border: QColor
     text: QColor
 
 
 class AnimatedButtonBase(QPushButton):
+    """Render a button with animated visual states.
+
+    Provide hover, press, disabled, and normal state transitions for
+    custom-painted NextGIS buttons.
+    """
+
     _TRANSITION_DURATION_MS = 300
     _BORDER_RADIUS = 4
     _HORIZONTAL_PADDING = 14
@@ -38,6 +54,11 @@ class AnimatedButtonBase(QPushButton):
         text: str = "",
         parent: Optional[QWidget] = None,
     ) -> None:
+        """Initialize the animated button.
+
+        :param text: Initial button text.
+        :param parent: Parent widget.
+        """
         super().__init__(text, parent)
         self._initial_palette = QPalette(self.palette())
 
@@ -73,27 +94,51 @@ class AnimatedButtonBase(QPushButton):
         self._apply_visual_state(self._current_state)
 
     def setText(self, text: str) -> None:
+        """Set button text and update the minimum width.
+
+        :param text: New button text.
+        """
         super().setText(text)
         self._sync_minimum_width()
 
     def sizeHint(self) -> QSize:
+        """Return the preferred button size.
+
+        :return: Preferred button size.
+        """
         return QSize(self.minimumWidth(), self.minimumHeight())
 
     def minimumSizeHint(self) -> QSize:
+        """Return the minimum button size.
+
+        :return: Minimum button size.
+        """
         return QSize(self.minimumWidth(), self.minimumHeight())
 
     def enterEvent(self, event) -> None:
+        """Handle pointer enter events.
+
+        :param event: Qt enter event.
+        """
         self._is_hovered = True
         self._refresh_visual_state()
         super().enterEvent(event)
 
     def leaveEvent(self, event) -> None:
+        """Handle pointer leave events.
+
+        :param event: Qt leave event.
+        """
         self._is_hovered = False
         self._is_pressed = False
         self._refresh_visual_state()
         super().leaveEvent(event)
 
     def mousePressEvent(self, event) -> None:
+        """Handle mouse press events.
+
+        :param event: Qt mouse event.
+        """
         if event.button() == Qt.MouseButton.LeftButton:
             self._is_pressed = True
             self._refresh_visual_state()
@@ -101,12 +146,20 @@ class AnimatedButtonBase(QPushButton):
         super().mousePressEvent(event)
 
     def mouseReleaseEvent(self, event) -> None:
+        """Handle mouse release events.
+
+        :param event: Qt mouse event.
+        """
         self._is_pressed = False
         self._is_hovered = self.rect().contains(event.pos())
         self._refresh_visual_state()
         super().mouseReleaseEvent(event)
 
     def changeEvent(self, event) -> None:
+        """Handle widget state changes.
+
+        :param event: Qt change event.
+        """
         if self._is_applying_visual_state:
             super().changeEvent(event)
             return
@@ -169,6 +222,10 @@ class AnimatedButtonBase(QPushButton):
             self._is_applying_visual_state = False
 
     def paintEvent(self, event) -> None:
+        """Paint the button.
+
+        :param event: Qt paint event.
+        """
         del event
 
         painter = QPainter(self)
@@ -230,6 +287,10 @@ class AnimatedButtonBase(QPushButton):
         return NextgisDecorator.radius(NextgisRadius.BUTTON)
 
     def set_button_height(self, height: int) -> None:
+        """Set a fixed button height.
+
+        :param height: Button height in pixels.
+        """
         self.setMinimumHeight(height)
         self.setMaximumHeight(height)
         self._sync_minimum_width()
