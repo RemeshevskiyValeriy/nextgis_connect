@@ -16,8 +16,8 @@ from qgis.core import (
 )
 
 from nextgis_connect.bootstrap.plugin_interface import NgConnectInterface
-from nextgis_connect.ngw.resources.ngw_field import NgwField
-from nextgis_connect.ngw.resources.ngw_fields import NgwFields
+from nextgis_connect.legacy.ngw.resources.ngw_field import NgwField
+from nextgis_connect.legacy.ngw.resources.ngw_fields import NgwFields
 from nextgis_connect.platform.logging import logger
 from nextgis_connect.platform.qgis.compat import QgsFeatureId
 from nextgis_connect.platform.qgis.errors import (

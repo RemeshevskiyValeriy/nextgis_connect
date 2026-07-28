@@ -16,15 +16,17 @@ from nextgis_connect.legacy.detached_editing.utils import (
     detached_layer_uri,
     is_ngw_container,
 )
+from nextgis_connect.legacy.ngw.core.ngw_resource_factory import (
+    NGWResourceFactory,
+)
+from nextgis_connect.legacy.ngw.core.ngw_vector_layer import NGWVectorLayer
+from nextgis_connect.legacy.ngw.qgis.qgis_ngw_connection import (
+    QgsNgwConnection,
+)
 from nextgis_connect.legacy.ngw_connection import NgwConnectionsManager
 from nextgis_connect.legacy.settings.ng_connect_cache_manager import (
     NgConnectCacheManager,
 )
-from nextgis_connect.ngw.core.ngw_resource_factory import (
-    NGWResourceFactory,
-)
-from nextgis_connect.ngw.core.ngw_vector_layer import NGWVectorLayer
-from nextgis_connect.ngw.qgis.qgis_ngw_connection import QgsNgwConnection
 from nextgis_connect.platform.logging import logger
 
 

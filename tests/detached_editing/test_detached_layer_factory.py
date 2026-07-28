@@ -23,10 +23,10 @@ from nextgis_connect.legacy.detached_editing.utils import (
     detached_layer_uri,
     make_connection,
 )
+from nextgis_connect.legacy.ngw.core import NGWVectorLayer
+from nextgis_connect.legacy.ngw.resources.ngw_fields import NgwFields
 from nextgis_connect.legacy.ngw_connection import NgwConnection
 from nextgis_connect.legacy.settings import NgConnectSettings
-from nextgis_connect.ngw.core import NGWVectorLayer
-from nextgis_connect.ngw.resources.ngw_fields import NgwFields
 from nextgis_connect.platform.qgis.compat import FieldType
 from tests.ng_connect_testcase import (
     NgConnectTestCase,
@@ -202,17 +202,17 @@ class TestDetachedContainerFactory(NgConnectTestCase):
         self.assertNotIn("old_connection_ids", metadata_columns)
 
     @mock.patch(
-        "nextgis_connect.ngw.core.NGWVectorLayer.is_versioning_enabled",
+        "nextgis_connect.legacy.ngw.core.NGWVectorLayer.is_versioning_enabled",
         new_callable=mock.PropertyMock,
         return_value=True,
     )
     @mock.patch(
-        "nextgis_connect.ngw.core.NGWVectorLayer.epoch",
+        "nextgis_connect.legacy.ngw.core.NGWVectorLayer.epoch",
         new_callable=mock.PropertyMock,
         return_value=42,
     )
     @mock.patch(
-        "nextgis_connect.ngw.core.NGWVectorLayer.version",
+        "nextgis_connect.legacy.ngw.core.NGWVectorLayer.version",
         new_callable=mock.PropertyMock,
         return_value=24,
     )

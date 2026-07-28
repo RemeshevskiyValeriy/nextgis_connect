@@ -25,27 +25,31 @@ from typing import Any, Dict, List, Optional, Union, cast
 from qgis.core import QgsFeedback, QgsMapLayer
 from qgis.PyQt.QtCore import QObject, pyqtSignal
 
-from nextgis_connect.legacy.settings import NgConnectSettings
-from nextgis_connect.ngw.core.ngw_error import NGWError
-from nextgis_connect.ngw.core.ngw_group_resource import NGWGroupResource
-from nextgis_connect.ngw.core.ngw_qgis_style import NGWQGISStyle
-from nextgis_connect.ngw.core.ngw_raster_layer import NGWRasterLayer
-from nextgis_connect.ngw.core.ngw_resource import (
+from nextgis_connect.legacy.ngw.core.ngw_error import NGWError
+from nextgis_connect.legacy.ngw.core.ngw_group_resource import NGWGroupResource
+from nextgis_connect.legacy.ngw.core.ngw_qgis_style import NGWQGISStyle
+from nextgis_connect.legacy.ngw.core.ngw_raster_layer import NGWRasterLayer
+from nextgis_connect.legacy.ngw.core.ngw_resource import (
     NGWResource,
     NGWResourceDeletePreview,
 )
-from nextgis_connect.ngw.core.ngw_resource_creator import ResourceCreator
-from nextgis_connect.ngw.core.ngw_resource_factory import (
+from nextgis_connect.legacy.ngw.core.ngw_resource_creator import (
+    ResourceCreator,
+)
+from nextgis_connect.legacy.ngw.core.ngw_resource_factory import (
     NGWResourceFactory,
 )
-from nextgis_connect.ngw.core.ngw_vector_layer import NGWVectorLayer
-from nextgis_connect.ngw.core.ngw_webmap import (
+from nextgis_connect.legacy.ngw.core.ngw_vector_layer import NGWVectorLayer
+from nextgis_connect.legacy.ngw.core.ngw_webmap import (
     NGWWebMap,
     NGWWebMapLayer,
     NGWWebMapRoot,
 )
-from nextgis_connect.ngw.qgis.qgis_ngw_connection import QgsNgwConnection
-from nextgis_connect.ngw.resources.utils import generate_unique_name
+from nextgis_connect.legacy.ngw.qgis.qgis_ngw_connection import (
+    QgsNgwConnection,
+)
+from nextgis_connect.legacy.ngw.resources.utils import generate_unique_name
+from nextgis_connect.legacy.settings import NgConnectSettings
 from nextgis_connect.platform.logging import logger
 from nextgis_connect.platform.qgis.errors import NgConnectError
 

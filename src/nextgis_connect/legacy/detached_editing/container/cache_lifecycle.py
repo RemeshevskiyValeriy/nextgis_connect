@@ -11,11 +11,11 @@ from nextgis_connect.legacy.detached_editing.utils import (
     container_metadata,
     make_connection,
 )
+from nextgis_connect.legacy.ngw.core.ngw_vector_layer import NGWVectorLayer
 from nextgis_connect.legacy.ngw_connection.domain.connection import (
     NgwConnection,
 )
 from nextgis_connect.legacy.settings import NgConnectSettings
-from nextgis_connect.ngw.core.ngw_vector_layer import NGWVectorLayer
 from nextgis_connect.platform.logging import logger
 from nextgis_connect.platform.qgis.compat import parse_version
 

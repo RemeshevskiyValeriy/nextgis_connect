@@ -17,15 +17,15 @@ from qgis.PyQt.QtWidgets import (
     QWidget,
 )
 
-from nextgis_connect.legacy.tree_widget import QNGWResourceItem
-from nextgis_connect.ngw.core.ngw_abstract_vector_resource import (
+from nextgis_connect.legacy.ngw.core.ngw_abstract_vector_resource import (
     NGWAbstractVectorResource,
 )
-from nextgis_connect.ngw.core.ngw_qgis_style import (
+from nextgis_connect.legacy.ngw.core.ngw_qgis_style import (
     NGWQGISRasterStyle,
     NGWQGISVectorStyle,
 )
-from nextgis_connect.ngw.core.ngw_raster_layer import NGWRasterLayer
+from nextgis_connect.legacy.ngw.core.ngw_raster_layer import NGWRasterLayer
+from nextgis_connect.legacy.tree_widget import QNGWResourceItem
 
 
 class NGWResourcesTreeView(QTreeView):

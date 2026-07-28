@@ -138,7 +138,7 @@ class TestConnectionDiagnosticsHelpers(unittest.TestCase):
 
     def test_qgs_ngw_connection_accepts_connection_object(self) -> None:
         try:
-            from nextgis_connect.ngw.qgis.qgis_ngw_connection import (
+            from nextgis_connect.legacy.ngw.qgis.qgis_ngw_connection import (
                 QgsNgwConnection,
             )
         except ImportError as error:

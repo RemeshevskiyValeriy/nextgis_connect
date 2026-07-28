@@ -57,13 +57,13 @@ from nextgis_connect.legacy.detached_editing.utils import (
     is_feature_new,
     make_connection,
 )
+from nextgis_connect.legacy.ngw.qgis.qgis_ngw_connection import (
+    QgsNgwConnection,
+)
+from nextgis_connect.legacy.ngw.resources.ngw_field import FieldId
 from nextgis_connect.legacy.settings.ng_connect_cache_manager import (
     NgConnectCacheManager,
 )
-from nextgis_connect.ngw.qgis.qgis_ngw_connection import (
-    QgsNgwConnection,
-)
-from nextgis_connect.ngw.resources.ngw_field import FieldId
 from nextgis_connect.platform.logging import logger
 from nextgis_connect.platform.qgis.compat import (
     QgsAttributeList,

@@ -14,7 +14,9 @@ from nextgis_connect.legacy.detached_editing.sync.versioned.actions_serializer i
 from nextgis_connect.legacy.detached_editing.utils import (
     make_connection,
 )
-from nextgis_connect.ngw.qgis.qgis_ngw_connection import QgsNgwConnection
+from nextgis_connect.legacy.ngw.qgis.qgis_ngw_connection import (
+    QgsNgwConnection,
+)
 from nextgis_connect.platform.logging import logger
 from nextgis_connect.platform.qgis.errors import SynchronizationError
 

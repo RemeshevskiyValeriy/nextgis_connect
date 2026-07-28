@@ -3,10 +3,10 @@ from typing import Optional
 from qgis.core import QgsMapLayer, QgsRasterLayer, QgsVectorLayer
 from qgis.PyQt.QtWidgets import QAction
 
-from nextgis_connect.ngw.core.ngw_abstract_vector_resource import (
+from nextgis_connect.legacy.ngw.core.ngw_abstract_vector_resource import (
     NGWAbstractVectorResource,
 )
-from nextgis_connect.ngw.core.ngw_raster_layer import NGWRasterLayer
+from nextgis_connect.legacy.ngw.core.ngw_raster_layer import NGWRasterLayer
 
 
 class ActionStyleImportUpdate(QAction):

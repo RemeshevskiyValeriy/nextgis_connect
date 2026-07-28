@@ -26,8 +26,8 @@ from nextgis_connect.legacy.detached_editing.conflicts.conflict_resolving_item i
 from nextgis_connect.legacy.detached_editing.sync.common.serialization import (
     simplify_value,
 )
-from nextgis_connect.ngw.resources.ngw_data_type import NgwDataType
-from nextgis_connect.ngw.resources.ngw_field import NgwField
+from nextgis_connect.legacy.ngw.resources.ngw_data_type import NgwDataType
+from nextgis_connect.legacy.ngw.resources.ngw_field import NgwField
 from nextgis_connect.shared.types import UnsetType
 from nextgis_connect.ui_kit.icons.icon import draw_icon, material_icon
 

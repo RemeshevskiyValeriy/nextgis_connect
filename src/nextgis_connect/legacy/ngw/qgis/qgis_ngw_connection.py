@@ -26,6 +26,7 @@ from base64 import b64encode
 from http import HTTPStatus
 from typing import TYPE_CHECKING, Any, ClassVar, Dict, Optional, Tuple, Union
 
+from nextgis_connect.legacy.ngw.core.ngw_error import NGWError
 from nextgis_connect.legacy.ngw_connection.application.connections_manager import (
     NgwConnectionsManager,
 )
@@ -33,7 +34,6 @@ from nextgis_connect.legacy.ngw_connection.domain.connection import (
     NgwConnection,
 )
 from nextgis_connect.legacy.settings import NgConnectSettings
-from nextgis_connect.ngw.core.ngw_error import NGWError
 from nextgis_connect.platform.logging import (
     escape_html,
     format_container_data,

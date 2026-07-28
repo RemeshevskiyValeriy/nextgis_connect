@@ -21,7 +21,9 @@
 import re
 from urllib.parse import parse_qs, urlparse
 
-from nextgis_connect.ngw.qgis.qgis_ngw_connection import QgsNgwConnection
+from nextgis_connect.legacy.ngw.qgis.qgis_ngw_connection import (
+    QgsNgwConnection,
+)
 
 from .ngw_error import NGWError
 from .ngw_resource_factory import NGWResourceFactory

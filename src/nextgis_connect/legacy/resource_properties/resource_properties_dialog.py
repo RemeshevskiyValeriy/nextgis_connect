@@ -13,10 +13,10 @@ from qgis.PyQt.QtWidgets import (
     QTabWidget,
 )
 
+from nextgis_connect.legacy.ngw.core.ngw_resource import NGWResource
 from nextgis_connect.legacy.settings.ng_connect_settings import (
     NgConnectSettings,
 )
-from nextgis_connect.ngw.core.ngw_resource import NGWResource
 
 
 class ResourcePropertiesDialog(QDialog):

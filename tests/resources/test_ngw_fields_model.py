@@ -3,14 +3,16 @@ from unittest.mock import patch
 from qgis.PyQt.QtCore import Qt
 from qgis.PyQt.QtGui import QIcon
 
-from nextgis_connect.ngw.resources.ngw_data_type import NgwDataType
-from nextgis_connect.ngw.resources.ngw_fields_model import NgwFieldsModel
+from nextgis_connect.legacy.ngw.resources.ngw_data_type import NgwDataType
+from nextgis_connect.legacy.ngw.resources.ngw_fields_model import (
+    NgwFieldsModel,
+)
 from tests.ng_connect_testcase import NgConnectTestCase
 
 
 class TestNgwFieldsModel(NgConnectTestCase):
     @patch(
-        "nextgis_connect.ngw.resources.ngw_fields_model.material_icon",
+        "nextgis_connect.legacy.ngw.resources.ngw_fields_model.material_icon",
         return_value=QIcon(),
     )
     def test_create_field_stores_required_flag(self, _material_icon) -> None:
@@ -38,7 +40,7 @@ class TestNgwFieldsModel(NgConnectTestCase):
         )
 
     @patch(
-        "nextgis_connect.ngw.resources.ngw_fields_model.material_icon",
+        "nextgis_connect.legacy.ngw.resources.ngw_fields_model.material_icon",
         return_value=QIcon(),
     )
     def test_field_attribute_headers_have_tooltips(
@@ -101,7 +103,7 @@ class TestNgwFieldsModel(NgConnectTestCase):
         )
 
     @patch(
-        "nextgis_connect.ngw.resources.ngw_fields_model.material_icon",
+        "nextgis_connect.legacy.ngw.resources.ngw_fields_model.material_icon",
         return_value=QIcon(),
     )
     def test_set_data_updates_required_flag(self, _material_icon) -> None:

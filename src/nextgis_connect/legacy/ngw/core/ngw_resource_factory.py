@@ -22,13 +22,15 @@ from typing import Dict, Optional, Type
 
 from qgis.core import QgsFeedback
 
-from nextgis_connect.ngw.core.ngw_tms_resources import (
+from nextgis_connect.legacy.ngw.core.ngw_tms_resources import (
     NGWTmsConnection,
     NGWTmsLayer,
 )
-from nextgis_connect.ngw.core.ngw_wfs_connection import NGWWfsConnection
-from nextgis_connect.ngw.core.ngw_wfs_layer import NGWWfsLayer
-from nextgis_connect.ngw.qgis.qgis_ngw_connection import QgsNgwConnection
+from nextgis_connect.legacy.ngw.core.ngw_wfs_connection import NGWWfsConnection
+from nextgis_connect.legacy.ngw.core.ngw_wfs_layer import NGWWfsLayer
+from nextgis_connect.legacy.ngw.qgis.qgis_ngw_connection import (
+    QgsNgwConnection,
+)
 from nextgis_connect.platform.logging import logger
 
 from .ngw_base_map import NGWBaseMap

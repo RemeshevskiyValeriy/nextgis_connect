@@ -29,48 +29,50 @@ from typing import Any, Dict, Iterable, List, Optional, Set, Tuple, cast
 
 from osgeo import ogr
 
-from nextgis_connect.ngw.core.ngw_base_map import (
+from nextgis_connect.legacy.ngw.core.ngw_base_map import (
     NGWBaseMap,
     NGWBaseMapExtSettings,
 )
-from nextgis_connect.ngw.core.ngw_feature import NGWFeature
-from nextgis_connect.ngw.core.ngw_group_resource import NGWGroupResource
-from nextgis_connect.ngw.core.ngw_qgis_style import (
+from nextgis_connect.legacy.ngw.core.ngw_feature import NGWFeature
+from nextgis_connect.legacy.ngw.core.ngw_group_resource import NGWGroupResource
+from nextgis_connect.legacy.ngw.core.ngw_qgis_style import (
     NGWQGISStyle,
     NGWQGISVectorStyle,
 )
-from nextgis_connect.ngw.core.ngw_raster_layer import NGWRasterLayer
-from nextgis_connect.ngw.core.ngw_resource import NGWResource
-from nextgis_connect.ngw.core.ngw_resource_creator import ResourceCreator
-from nextgis_connect.ngw.core.ngw_resource_factory import (
+from nextgis_connect.legacy.ngw.core.ngw_raster_layer import NGWRasterLayer
+from nextgis_connect.legacy.ngw.core.ngw_resource import NGWResource
+from nextgis_connect.legacy.ngw.core.ngw_resource_creator import (
+    ResourceCreator,
+)
+from nextgis_connect.legacy.ngw.core.ngw_resource_factory import (
     NGWResourceFactory,
 )
-from nextgis_connect.ngw.core.ngw_vector_layer import NGWVectorLayer
-from nextgis_connect.ngw.core.ngw_webmap import (
+from nextgis_connect.legacy.ngw.core.ngw_vector_layer import NGWVectorLayer
+from nextgis_connect.legacy.ngw.core.ngw_webmap import (
     NGWWebMap,
     NGWWebMapGroup,
     NGWWebMapLayer,
     NGWWebMapRoot,
 )
-from nextgis_connect.ngw.core.ngw_wms_connection import NGWWmsConnection
-from nextgis_connect.ngw.core.ngw_wms_layer import NGWWmsLayer
-from nextgis_connect.ngw.core.ngw_wms_service import NGWWmsService
-from nextgis_connect.ngw.qgis.qgis_ngw_connection import (
+from nextgis_connect.legacy.ngw.core.ngw_wms_connection import NGWWmsConnection
+from nextgis_connect.legacy.ngw.core.ngw_wms_layer import NGWWmsLayer
+from nextgis_connect.legacy.ngw.core.ngw_wms_service import NGWWmsService
+from nextgis_connect.legacy.ngw.qgis.qgis_ngw_connection import (
     NgwServerFeature,
     QgsNgwConnection,
 )
-from nextgis_connect.ngw.qgis.raster_upload_preparer import (
+from nextgis_connect.legacy.ngw.qgis.raster_upload_preparer import (
     RasterUploadPreparer,
 )
-from nextgis_connect.ngw.qt.qt_ngw_resource_model_job import (
+from nextgis_connect.legacy.ngw.qt.qt_ngw_resource_model_job import (
     NGWResourceModelJob,
 )
-from nextgis_connect.ngw.qt.qt_ngw_resource_model_job_error import (
+from nextgis_connect.legacy.ngw.qt.qt_ngw_resource_model_job_error import (
     JobError,
     JobWarning,
 )
-from nextgis_connect.ngw.resources.ngw_data_type import NgwDataType
-from nextgis_connect.ngw.resources.ngw_field import NgwField
+from nextgis_connect.legacy.ngw.resources.ngw_data_type import NgwDataType
+from nextgis_connect.legacy.ngw.resources.ngw_field import NgwField
 from nextgis_connect.platform.logging import logger
 from nextgis_connect.platform.qgis.compat import (
     QGIS_3_42,

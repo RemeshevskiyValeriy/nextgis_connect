@@ -11,14 +11,16 @@ from nextgis_connect.legacy.detached_editing.utils import (
     container_metadata,
     make_connection,
 )
-from nextgis_connect.legacy.ngw_connection import NgwConnectionsManager
-from nextgis_connect.legacy.settings import NgConnectSettings
-from nextgis_connect.ngw.core.ngw_resource_factory import (
+from nextgis_connect.legacy.ngw.core.ngw_resource_factory import (
     NGWResourceFactory,
 )
-from nextgis_connect.ngw.core.ngw_vector_layer import NGWVectorLayer
-from nextgis_connect.ngw.qgis.qgis_ngw_connection import QgsNgwConnection
-from nextgis_connect.ngw.resources.ngw_fields import NgwFields
+from nextgis_connect.legacy.ngw.core.ngw_vector_layer import NGWVectorLayer
+from nextgis_connect.legacy.ngw.qgis.qgis_ngw_connection import (
+    QgsNgwConnection,
+)
+from nextgis_connect.legacy.ngw.resources.ngw_fields import NgwFields
+from nextgis_connect.legacy.ngw_connection import NgwConnectionsManager
+from nextgis_connect.legacy.settings import NgConnectSettings
 from nextgis_connect.platform.logging import logger
 from nextgis_connect.platform.qgis.compat import parse_version
 from nextgis_connect.platform.qgis.errors import (

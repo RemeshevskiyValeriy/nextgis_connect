@@ -30,8 +30,8 @@ from nextgis_connect.legacy.detached_editing.utils import (
     detached_layer_uri,
     make_connection,
 )
-from nextgis_connect.ngw.core.ngw_vector_layer import NGWVectorLayer
-from nextgis_connect.ngw.resources.ngw_data_type import NgwDataType
+from nextgis_connect.legacy.ngw.core.ngw_vector_layer import NGWVectorLayer
+from nextgis_connect.legacy.ngw.resources.ngw_data_type import NgwDataType
 from nextgis_connect.platform.qgis.compat import QgsFeatureId, WkbType
 from tests.magic_qobject_mock import MagicQObjectMock
 from tests.ng_connect_testcase import (

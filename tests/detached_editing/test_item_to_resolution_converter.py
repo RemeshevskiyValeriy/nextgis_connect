@@ -43,8 +43,8 @@ from nextgis_connect.legacy.detached_editing.utils import (
     DetachedContainerContext,
     DetachedContainerMetaData,
 )
-from nextgis_connect.ngw.resources.ngw_field import NgwField
-from nextgis_connect.ngw.resources.ngw_fields import NgwFields
+from nextgis_connect.legacy.ngw.resources.ngw_field import NgwField
+from nextgis_connect.legacy.ngw.resources.ngw_fields import NgwFields
 from tests.ng_connect_testcase import NgConnectTestCase
 
 

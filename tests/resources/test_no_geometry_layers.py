@@ -13,17 +13,17 @@ from nextgis_connect.legacy.detached_editing.utils import (
     container_metadata,
     detached_layer_uri,
 )
-from nextgis_connect.ngw.core import NGWVectorLayer
-from nextgis_connect.ngw.core.vector_layer_export import (
+from nextgis_connect.legacy.ngw.core import NGWVectorLayer
+from nextgis_connect.legacy.ngw.core.vector_layer_export import (
     VectorLayerExportParams,
 )
-from nextgis_connect.ngw.qgis.ngw_resource_model_4qgis import (
+from nextgis_connect.legacy.ngw.qgis.ngw_resource_model_4qgis import (
     QGISResourceJob,
 )
-from nextgis_connect.ngw.qgis.qgis_ngw_connection import (
+from nextgis_connect.legacy.ngw.qgis.qgis_ngw_connection import (
     NgwServerFeature,
 )
-from nextgis_connect.ngw.qt.qt_ngw_resource_model_job_error import (
+from nextgis_connect.legacy.ngw.qt.qt_ngw_resource_model_job_error import (
     JobError,
 )
 from nextgis_connect.platform.qgis.compat import (

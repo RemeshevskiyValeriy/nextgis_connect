@@ -4,7 +4,7 @@ from qgis.PyQt.QtCore import Qt, QVariant
 from qgis.PyQt.QtGui import QIcon
 from qgis.PyQt.QtWidgets import QTreeWidgetItem
 
-from nextgis_connect.ngw.core import (
+from nextgis_connect.legacy.ngw.core import (
     NGWGroupResource,
     NGWResource,
 )

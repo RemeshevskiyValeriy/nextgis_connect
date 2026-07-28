@@ -30,10 +30,12 @@ from nextgis_connect.legacy.detached_editing.sync.versioned.versioned_changes_ap
 from nextgis_connect.legacy.detached_editing.sync.versioned.versioned_changes_serializer import (
     VersionedChangesSerializer,
 )
+from nextgis_connect.legacy.ngw.qgis.qgis_ngw_connection import (
+    QgsNgwConnection,
+)
 from nextgis_connect.legacy.settings.ng_connect_cache_manager import (
     NgConnectCacheManager,
 )
-from nextgis_connect.ngw.qgis.qgis_ngw_connection import QgsNgwConnection
 from nextgis_connect.platform.logging import logger
 from nextgis_connect.platform.qgis.errors import SynchronizationError
 from nextgis_connect.shared.types import (

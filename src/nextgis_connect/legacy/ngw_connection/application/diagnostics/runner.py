@@ -4,6 +4,9 @@ from qgis.core import QgsApplication, QgsFeedback
 from qgis.PyQt.QtCore import QObject, pyqtSignal
 
 from nextgis_connect.bootstrap.plugin_interface import NgConnectInterface
+from nextgis_connect.legacy.ngw.qgis.qgis_ngw_connection import (
+    QgsNgwConnection,
+)
 from nextgis_connect.legacy.ngw_connection.domain.connection import (
     NgwConnection,
 )
@@ -23,7 +26,6 @@ from nextgis_connect.legacy.ngw_connection.domain.parsers import (
     NgwServerTitleParser,
     suggested_connection_name,
 )
-from nextgis_connect.ngw.qgis.qgis_ngw_connection import QgsNgwConnection
 from nextgis_connect.platform.logging import logger
 from nextgis_connect.platform.tasks.ng_connect_task import NgConnectTask
 

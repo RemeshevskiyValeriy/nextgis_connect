@@ -21,14 +21,16 @@ from nextgis_connect.legacy.detached_editing.utils import (
     container_metadata,
     make_connection,
 )
-from nextgis_connect.ngw.core.ngw_resource_factory import (
+from nextgis_connect.legacy.ngw.core.ngw_resource_factory import (
     NGWResourceFactory,
 )
-from nextgis_connect.ngw.core.ngw_vector_layer import NGWVectorLayer
-from nextgis_connect.ngw.core.vector_layer_export import (
+from nextgis_connect.legacy.ngw.core.ngw_vector_layer import NGWVectorLayer
+from nextgis_connect.legacy.ngw.core.vector_layer_export import (
     VectorLayerExportParams,
 )
-from nextgis_connect.ngw.qgis.qgis_ngw_connection import QgsNgwConnection
+from nextgis_connect.legacy.ngw.qgis.qgis_ngw_connection import (
+    QgsNgwConnection,
+)
 from nextgis_connect.platform.logging import logger
 from nextgis_connect.platform.qgis.errors import (
     SynchronizationError,

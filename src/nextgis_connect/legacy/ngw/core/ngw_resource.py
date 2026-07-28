@@ -28,11 +28,11 @@ from qgis.core import QgsFeedback
 from nextgis_connect.features.search.domain.resource_blueprint import (
     ResourceBlueprintLabelParser,
 )
-from nextgis_connect.ngw.resources.utils import generate_unique_name
+from nextgis_connect.legacy.ngw.resources.utils import generate_unique_name
 from nextgis_connect.platform.logging import logger
 
 if TYPE_CHECKING:
-    from nextgis_connect.ngw.qgis.qgis_ngw_connection import (
+    from nextgis_connect.legacy.ngw.qgis.qgis_ngw_connection import (
         QgsNgwConnection,
     )
 

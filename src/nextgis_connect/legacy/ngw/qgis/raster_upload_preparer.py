@@ -15,6 +15,13 @@ from typing import (
 )
 
 from osgeo import gdal, osr
+
+from nextgis_connect.legacy.ngw.qgis.qgis_ngw_connection import (
+    QgsNgwConnection,
+)
+from nextgis_connect.platform.logging import logger
+from nextgis_connect.platform.qgis.compat import DataType
+from nextgis_connect.platform.qgis.errors import DataPreparationError
 from qgis.core import (
     Qgis,
     QgsCoordinateReferenceSystem,
@@ -25,11 +32,6 @@ from qgis.core import (
     QgsRasterLayer,
     QgsRasterPipe,
 )
-
-from nextgis_connect.ngw.qgis.qgis_ngw_connection import QgsNgwConnection
-from nextgis_connect.platform.logging import logger
-from nextgis_connect.platform.qgis.compat import DataType
-from nextgis_connect.platform.qgis.errors import DataPreparationError
 
 UPLOADABLE_SUFFIXES = frozenset((".tif", ".tiff", ".jpg", ".jpeg", ".png"))
 UPLOADABLE_DRIVER_SUFFIXES = {

@@ -20,7 +20,7 @@ from nextgis_connect.platform.logging import logger
 from nextgis_connect.platform.qgis.errors import ErrorCode, NgConnectException
 
 if TYPE_CHECKING:
-    from nextgis_connect.ngw.qgis.qgis_ngw_connection import (
+    from nextgis_connect.legacy.ngw.qgis.qgis_ngw_connection import (
         QgsNgwConnection,
     )
 

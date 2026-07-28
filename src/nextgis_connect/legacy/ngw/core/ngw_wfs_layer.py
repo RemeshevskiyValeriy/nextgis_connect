@@ -22,10 +22,10 @@ from typing import Tuple
 
 from qgis.core import QgsDataSourceUri
 
-from nextgis_connect.ngw.core.ngw_abstract_vector_resource import (
+from nextgis_connect.legacy.ngw.core.ngw_abstract_vector_resource import (
     NGWAbstractVectorResource,
 )
-from nextgis_connect.ngw.core.ngw_wfs_connection import NGWWfsConnection
+from nextgis_connect.legacy.ngw.core.ngw_wfs_connection import NGWWfsConnection
 
 from .ngw_resource import dict_to_object
 

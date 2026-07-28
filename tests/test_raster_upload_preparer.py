@@ -11,14 +11,18 @@ from qgis.core import (
     QgsRasterLayer,
 )
 
-from nextgis_connect.ngw.core.ngw_raster_layer import NGWRasterLayer
-from nextgis_connect.ngw.core.ngw_resource import NGWResource
-from nextgis_connect.ngw.core.ngw_resource_creator import ResourceCreator
-from nextgis_connect.ngw.core.ngw_resource_factory import (
+from nextgis_connect.legacy.ngw.core.ngw_raster_layer import NGWRasterLayer
+from nextgis_connect.legacy.ngw.core.ngw_resource import NGWResource
+from nextgis_connect.legacy.ngw.core.ngw_resource_creator import (
+    ResourceCreator,
+)
+from nextgis_connect.legacy.ngw.core.ngw_resource_factory import (
     NGWResourceFactory,
 )
-from nextgis_connect.ngw.qgis.qgis_ngw_connection import QgsNgwConnection
-from nextgis_connect.ngw.qgis.raster_upload_preparer import (
+from nextgis_connect.legacy.ngw.qgis.qgis_ngw_connection import (
+    QgsNgwConnection,
+)
+from nextgis_connect.legacy.ngw.qgis.raster_upload_preparer import (
     AUX_XML_SUFFIX,
     GEOTIFF_SUFFIX,
     PreparedRasterFile,

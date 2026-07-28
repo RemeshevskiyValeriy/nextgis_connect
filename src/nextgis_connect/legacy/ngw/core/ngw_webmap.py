@@ -29,7 +29,7 @@ from qgis.core import (
     QgsReferencedRectangle,
 )
 
-from nextgis_connect.ngw.core.ngw_group_resource import NGWGroupResource
+from nextgis_connect.legacy.ngw.core.ngw_group_resource import NGWGroupResource
 
 from .ngw_resource import NGWResource
 

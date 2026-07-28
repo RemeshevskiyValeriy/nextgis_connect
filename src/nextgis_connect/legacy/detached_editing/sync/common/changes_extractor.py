@@ -33,8 +33,8 @@ from nextgis_connect.legacy.detached_editing.utils import (
     FeatureMetadata,
     detached_layer_uri,
 )
-from nextgis_connect.ngw.resources.ngw_data_type import NgwDataType
-from nextgis_connect.ngw.resources.ngw_field import NgwField
+from nextgis_connect.legacy.ngw.resources.ngw_data_type import NgwDataType
+from nextgis_connect.legacy.ngw.resources.ngw_field import NgwField
 from nextgis_connect.platform.qgis.errors import (
     ContainerError,
     ErrorCode,

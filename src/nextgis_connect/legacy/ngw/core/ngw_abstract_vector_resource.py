@@ -8,9 +8,9 @@ from qgis.core import (
     QgsWkbTypes,
 )
 
-from nextgis_connect.ngw.core.ngw_qgis_style import NGWQGISVectorStyle
-from nextgis_connect.ngw.resources.ngw_field import NgwField
-from nextgis_connect.ngw.resources.ngw_fields import NgwFields
+from nextgis_connect.legacy.ngw.core.ngw_qgis_style import NGWQGISVectorStyle
+from nextgis_connect.legacy.ngw.resources.ngw_field import NgwField
+from nextgis_connect.legacy.ngw.resources.ngw_fields import NgwFields
 from nextgis_connect.platform.qgis.compat import GeometryType, WkbType
 
 from .ngw_resource import NGWResource

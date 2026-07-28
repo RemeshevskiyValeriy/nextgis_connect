@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from typing import Any, Optional
 from unittest.mock import MagicMock, call
 
-from nextgis_connect.ngw.core.ngw_resource import (
+from nextgis_connect.legacy.ngw.core.ngw_resource import (
     NGWResource,
     NGWResourceDeleteSummary,
 )

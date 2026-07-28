@@ -40,8 +40,8 @@ from nextgis_connect.legacy.detached_editing.conflicts.conflict_resolving_item i
 from nextgis_connect.legacy.detached_editing.identification.settings import (
     IdentificationSettings,
 )
-from nextgis_connect.ngw.resources.ngw_data_type import NgwDataType
-from nextgis_connect.ngw.resources.ngw_field import NgwField
+from nextgis_connect.legacy.ngw.resources.ngw_data_type import NgwDataType
+from nextgis_connect.legacy.ngw.resources.ngw_field import NgwField
 
 
 TConflictItem = TypeVar("TConflictItem", bound=BaseConflictResolvingItem)

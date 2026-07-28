@@ -117,6 +117,49 @@ from nextgis_connect.legacy.dialog_metadata import MetadataDialog
 from nextgis_connect.legacy.exceptions_list_dialog import (
     ExceptionsListDialog,
 )
+from nextgis_connect.legacy.ngw.core import (
+    NGWBaseMap,
+    NGWError,
+    NGWGroupResource,
+    NGWMapServerStyle,
+    NGWOgcfService,
+    NGWPostgisLayer,
+    NGWQGISRasterStyle,
+    NGWQGISStyle,
+    NGWQGISVectorStyle,
+    NGWRasterLayer,
+    NGWRasterStyle,
+    NGWResource,
+    # NGWTileset,
+    NGWTmsConnection,
+    NGWTmsLayer,
+    NGWVectorLayer,
+    NGWWebMap,
+    NGWWfsLayer,
+    NGWWfsService,
+    NGWWmsConnection,
+    NGWWmsLayer,
+    NGWWmsService,
+)
+from nextgis_connect.legacy.ngw.qgis.ngw_resource_model_4qgis import (
+    QGISResourceJob,
+)
+from nextgis_connect.legacy.ngw.qgis.qgis_ngw_connection import (
+    NgwServerFeature,
+    QgsNgwConnection,
+)
+from nextgis_connect.legacy.ngw.qt.qt_ngw_resource_model_job import (
+    UploadedLayerResource,
+)
+from nextgis_connect.legacy.ngw.qt.qt_ngw_resource_model_job_error import (
+    JobError,
+    JobNGWError,
+    JobServerRequestError,
+    JobWarning,
+)
+from nextgis_connect.legacy.ngw.resources.creation.vector_layer_creation_dialog import (
+    VectorLayerCreationDialog,
+)
 from nextgis_connect.legacy.ngw_connection.application.connections_manager import (
     NgwConnectionsManager,
 )
@@ -163,49 +206,6 @@ from nextgis_connect.legacy.tree_widget.overlay import (
     OverlayButtonState,
 )
 from nextgis_connect.legacy.tree_widget.proxy_model import NgConnectProxyModel
-from nextgis_connect.ngw.core import (
-    NGWBaseMap,
-    NGWError,
-    NGWGroupResource,
-    NGWMapServerStyle,
-    NGWOgcfService,
-    NGWPostgisLayer,
-    NGWQGISRasterStyle,
-    NGWQGISStyle,
-    NGWQGISVectorStyle,
-    NGWRasterLayer,
-    NGWRasterStyle,
-    NGWResource,
-    # NGWTileset,
-    NGWTmsConnection,
-    NGWTmsLayer,
-    NGWVectorLayer,
-    NGWWebMap,
-    NGWWfsLayer,
-    NGWWfsService,
-    NGWWmsConnection,
-    NGWWmsLayer,
-    NGWWmsService,
-)
-from nextgis_connect.ngw.qgis.ngw_resource_model_4qgis import (
-    QGISResourceJob,
-)
-from nextgis_connect.ngw.qgis.qgis_ngw_connection import (
-    NgwServerFeature,
-    QgsNgwConnection,
-)
-from nextgis_connect.ngw.qt.qt_ngw_resource_model_job import (
-    UploadedLayerResource,
-)
-from nextgis_connect.ngw.qt.qt_ngw_resource_model_job_error import (
-    JobError,
-    JobNGWError,
-    JobServerRequestError,
-    JobWarning,
-)
-from nextgis_connect.ngw.resources.creation.vector_layer_creation_dialog import (
-    VectorLayerCreationDialog,
-)
 from nextgis_connect.platform.logging import logger
 from nextgis_connect.platform.qgis import utils
 from nextgis_connect.platform.qgis.compat import QGIS_3_32, parse_version

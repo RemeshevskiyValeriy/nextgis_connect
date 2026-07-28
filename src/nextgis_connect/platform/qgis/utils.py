@@ -3,13 +3,15 @@ from enum import Enum, auto
 from functools import lru_cache
 from itertools import islice
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Optional, Tuple, Union
+from typing import Any, Optional, Tuple, Union
 
+import qgis.utils
 from qgis.core import (
     Qgis,
     QgsApplication,
     QgsSettings,
 )
+from qgis.gui import QgisInterface
 from qgis.PyQt.QtCore import (
     QByteArray,
     QLocale,
@@ -26,7 +28,6 @@ from qgis.PyQt.QtWidgets import (
     QMenu,
     QVBoxLayout,
 )
-from qgis.utils import iface
 
 from nextgis_connect.legacy.settings.ng_connect_settings import (
     NgConnectSettings,
@@ -35,16 +36,17 @@ from nextgis_connect.platform.qgis.compat import QGIS_3_30
 from nextgis_connect.shared.constants import PACKAGE_NAME
 from nextgis_connect.shell.presentation.about.about_dialog import AboutDialog
 
-if TYPE_CHECKING:
-    from qgis.gui import QgisInterface
-
-    assert isinstance(iface, QgisInterface)
-
 
 class SupportStatus(Enum):
     OLD_NGW = auto()
     OLD_CONNECT = auto()
     SUPPORTED = auto()
+
+
+def _iface() -> "QgisInterface":
+    iface = qgis.utils.iface
+    assert isinstance(iface, QgisInterface)
+    return iface
 
 
 class ChooserDialog(QDialog):
@@ -145,6 +147,7 @@ def get_project_import_export_menu() -> Optional[QMenu]:
     """
     Returns the application Project - Import/Export sub menu
     """
+    iface = _iface()
     if Qgis.versionInt() >= QGIS_3_30:
         return iface.projectImportExportMenu()
 
@@ -164,6 +167,7 @@ def add_project_export_action(project_export_action: QAction) -> None:
     """
     Decides how to add action of project export to the Project - Import/Export sub menu
     """
+    iface = _iface()
     if Qgis.versionInt() >= QGIS_3_30:
         iface.addProjectExportAction(project_export_action)
     else:

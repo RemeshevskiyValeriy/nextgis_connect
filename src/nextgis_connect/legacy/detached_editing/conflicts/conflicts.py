@@ -24,7 +24,7 @@ from nextgis_connect.legacy.detached_editing.sync.versioned.actions import (
     FeatureRestoreAction,
     FeatureUpdateAction,
 )
-from nextgis_connect.ngw.resources.ngw_field import FieldId
+from nextgis_connect.legacy.ngw.resources.ngw_field import FieldId
 from nextgis_connect.shared.types import (
     AttachmentId,
     FeatureId,

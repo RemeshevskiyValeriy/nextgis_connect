@@ -16,7 +16,7 @@ from nextgis_connect.legacy.detached_editing.conflicts.conflicts import (
     RemoteFeatureDeletionConflict,
 )
 from nextgis_connect.legacy.detached_editing.utils import AttachmentMetadata
-from nextgis_connect.ngw.resources.ngw_field import FieldId
+from nextgis_connect.legacy.ngw.resources.ngw_field import FieldId
 from nextgis_connect.shared.types import Unset, Unsettable, UnsetType
 
 

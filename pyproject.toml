@@ -20,7 +20,7 @@ compile = false
 [tool.qgspb.translations]
 ts-files = [
     "src/nextgis_connect/i18n/*.ts",
-    "src/nextgis_connect/ngw/qgis/i18n/*.ts",
+    "src/nextgis_connect/legacy/ngw/qgis/i18n/*.ts",
 ]
 
 [tool.pyright]

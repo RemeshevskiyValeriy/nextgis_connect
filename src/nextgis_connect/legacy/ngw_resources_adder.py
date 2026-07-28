@@ -32,13 +32,7 @@ from nextgis_connect.legacy.detached_editing.utils import (
 from nextgis_connect.legacy.dialog_choose_style import (
     NGWLayerStyleChooserDialog,
 )
-from nextgis_connect.legacy.ngw_connection import NgwConnectionsManager
-from nextgis_connect.legacy.settings.ng_connect_cache_manager import (
-    NgConnectCacheManager,
-)
-from nextgis_connect.legacy.tree_widget.item import QNGWResourceItem
-from nextgis_connect.legacy.tree_widget.model import QNGWResourceTreeModel
-from nextgis_connect.ngw.core import (
+from nextgis_connect.legacy.ngw.core import (
     NGWBaseMap,
     NGWGroupResource,
     NGWOgcfService,
@@ -56,18 +50,24 @@ from nextgis_connect.ngw.core import (
     NGWWmsLayer,
     NGWWmsService,
 )
-from nextgis_connect.ngw.core.ngw_abstract_vector_resource import (
+from nextgis_connect.legacy.ngw.core.ngw_abstract_vector_resource import (
     NGWAbstractVectorResource,
 )
-from nextgis_connect.ngw.core.ngw_tms_resources import (
+from nextgis_connect.legacy.ngw.core.ngw_tms_resources import (
     NGWTmsConnection,
     NGWTmsLayer,
 )
-from nextgis_connect.ngw.core.ngw_webmap import (
+from nextgis_connect.legacy.ngw.core.ngw_webmap import (
     NGWWebMapGroup,
     NGWWebMapLayer,
 )
-from nextgis_connect.ngw.resources.ngw_data_type import NgwDataType
+from nextgis_connect.legacy.ngw.resources.ngw_data_type import NgwDataType
+from nextgis_connect.legacy.ngw_connection import NgwConnectionsManager
+from nextgis_connect.legacy.settings.ng_connect_cache_manager import (
+    NgConnectCacheManager,
+)
+from nextgis_connect.legacy.tree_widget.item import QNGWResourceItem
+from nextgis_connect.legacy.tree_widget.model import QNGWResourceTreeModel
 from nextgis_connect.platform.logging import escape_html, logger
 from nextgis_connect.platform.qgis.errors import (
     ErrorCode,
@@ -1172,7 +1172,7 @@ class NgwResourcesAdder(QObject):
                 qgs_vector_layer.setEditorWidgetSetup(field_index, setup)
 
             elif ngw_field.datatype == NgwDataType.JSON:
-                setup = QgsEditorWidgetSetup("JsonEdit", {})
+                setup = QgsEditorWidgetSetup("JsonView", {})
                 field_index = qgs_fields.indexFromName(ngw_field.keyname)
                 qgs_vector_layer.setEditorWidgetSetup(field_index, setup)
 

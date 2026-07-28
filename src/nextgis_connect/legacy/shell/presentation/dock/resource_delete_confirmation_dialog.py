@@ -14,13 +14,13 @@ from qgis.PyQt.QtWidgets import (
     QWidget,
 )
 
+from nextgis_connect.legacy.ngw.core.ngw_resource import (
+    NGWResourceDeletePreview,
+    NGWResourceDeleteSummary,
+)
 from nextgis_connect.legacy.tree_widget.model import (
     NGWResourceModelResponse,
     QNGWResourceTreeModel,
-)
-from nextgis_connect.ngw.core.ngw_resource import (
-    NGWResourceDeletePreview,
-    NGWResourceDeleteSummary,
 )
 from nextgis_connect.ui_kit.icons import material_icon
 from nextgis_connect.ui_kit.rendering.graphics import (

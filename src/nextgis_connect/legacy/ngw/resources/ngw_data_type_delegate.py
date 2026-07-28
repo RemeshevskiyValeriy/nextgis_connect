@@ -8,8 +8,10 @@ from qgis.PyQt.QtWidgets import (
     QWidget,
 )
 
-from nextgis_connect.ngw.resources.ngw_data_type import NgwDataType
-from nextgis_connect.ngw.resources.ngw_fields_model import NgwFieldsModel
+from nextgis_connect.legacy.ngw.resources.ngw_data_type import NgwDataType
+from nextgis_connect.legacy.ngw.resources.ngw_fields_model import (
+    NgwFieldsModel,
+)
 
 
 class NgwDataTypeDelegate(QStyledItemDelegate):

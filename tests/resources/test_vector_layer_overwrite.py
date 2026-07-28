@@ -4,8 +4,8 @@ from unittest import mock
 
 import pytest
 
-from nextgis_connect.ngw.core.ngw_vector_layer import NGWVectorLayer
-from nextgis_connect.ngw.qgis.ngw_resource_model_4qgis import (
+from nextgis_connect.legacy.ngw.core.ngw_vector_layer import NGWVectorLayer
+from nextgis_connect.legacy.ngw.qgis.ngw_resource_model_4qgis import (
     NGWUpdateVectorLayer,
 )
 
@@ -182,7 +182,7 @@ def _prepared_update_job(job: NGWUpdateVectorLayer) -> Iterator[None]:
         )
         stack.enter_context(
             mock.patch(
-                "nextgis_connect.ngw.qgis.ngw_resource_model_4qgis.os.remove"
+                "nextgis_connect.legacy.ngw.qgis.ngw_resource_model_4qgis.os.remove"
             )
         )
         yield

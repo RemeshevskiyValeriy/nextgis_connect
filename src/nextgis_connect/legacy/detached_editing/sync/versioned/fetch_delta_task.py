@@ -16,8 +16,10 @@ from nextgis_connect.legacy.detached_editing.sync.versioned.actions_filter impor
 from nextgis_connect.legacy.detached_editing.sync.versioned.actions_serializer import (
     ActionSerializer,
 )
-from nextgis_connect.ngw.qgis.qgis_ngw_connection import QgsNgwConnection
-from nextgis_connect.ngw.resources.ngw_fields import NgwFields
+from nextgis_connect.legacy.ngw.qgis.qgis_ngw_connection import (
+    QgsNgwConnection,
+)
+from nextgis_connect.legacy.ngw.resources.ngw_fields import NgwFields
 from nextgis_connect.platform.logging import logger
 from nextgis_connect.platform.qgis.errors import (
     ErrorCode,

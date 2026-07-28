@@ -56,12 +56,12 @@ from nextgis_connect.legacy.detached_editing.utils import (
     AttachmentMetadata,
     make_connection,
 )
+from nextgis_connect.legacy.ngw.qgis.qgis_ngw_connection import (
+    QgsNgwConnection,
+)
 from nextgis_connect.legacy.ngw_connection import (
     NgwConnection,
     NgwConnectionsManager,
-)
-from nextgis_connect.ngw.qgis.qgis_ngw_connection import (
-    QgsNgwConnection,
 )
 from nextgis_connect.platform.filesystem import reveal_in_file_manager
 from nextgis_connect.platform.logging import logger

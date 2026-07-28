@@ -2,7 +2,7 @@ from typing import Any, Dict, Tuple
 
 from qgis.core import QgsDataSourceUri
 
-from nextgis_connect.ngw.core.ngw_resource import NGWResource
+from nextgis_connect.legacy.ngw.core.ngw_resource import NGWResource
 from nextgis_connect.platform.qgis.errors import ErrorCode, NgwError
 
 from .ngw_abstract_vector_resource import NGWAbstractVectorResource

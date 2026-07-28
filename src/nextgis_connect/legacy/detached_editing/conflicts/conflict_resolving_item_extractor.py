@@ -49,7 +49,7 @@ from nextgis_connect.legacy.detached_editing.utils import (
     DetachedContainerContext,
     detached_layer_uri,
 )
-from nextgis_connect.ngw.resources.ngw_field import FieldId
+from nextgis_connect.legacy.ngw.resources.ngw_field import FieldId
 from nextgis_connect.platform.qgis.compat import QgsFeatureId
 from nextgis_connect.shared.types import (
     AttachmentId,

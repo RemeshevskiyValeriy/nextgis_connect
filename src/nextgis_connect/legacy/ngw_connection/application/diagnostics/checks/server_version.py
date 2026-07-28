@@ -2,13 +2,13 @@ from typing import TYPE_CHECKING
 
 from qgis.core import QgsFeedback
 
+from nextgis_connect.legacy.ngw.qgis.qgis_ngw_connection import GET_VERSION_URL
 from nextgis_connect.legacy.ngw_connection.domain.diagnostics import (
     ConnectionCheckId,
     ConnectionCheckResult,
     ConnectionDiagnosticContext,
     ServerVersionInfo,
 )
-from nextgis_connect.ngw.qgis.qgis_ngw_connection import GET_VERSION_URL
 from nextgis_connect.platform.qgis.errors import NgConnectError, NgwError
 from nextgis_connect.platform.qgis.utils import (
     SupportStatus,
@@ -18,7 +18,7 @@ from nextgis_connect.platform.qgis.utils import (
 from .base import BaseConnectionCheck, UpdateReporter
 
 if TYPE_CHECKING:
-    from nextgis_connect.ngw.qgis.qgis_ngw_connection import (
+    from nextgis_connect.legacy.ngw.qgis.qgis_ngw_connection import (
         QgsNgwConnection,
     )
 

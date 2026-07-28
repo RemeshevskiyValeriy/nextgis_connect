@@ -3,8 +3,8 @@ from dataclasses import FrozenInstanceError
 
 from qgis.core import QgsField, QgsFieldConstraints
 
-from nextgis_connect.ngw.resources.ngw_field import NgwField
-from nextgis_connect.ngw.resources.ngw_fields import NgwFields
+from nextgis_connect.legacy.ngw.resources.ngw_field import NgwField
+from nextgis_connect.legacy.ngw.resources.ngw_fields import NgwFields
 from nextgis_connect.platform.qgis.compat import FieldType
 from tests.ng_connect_testcase import NgConnectTestCase
 

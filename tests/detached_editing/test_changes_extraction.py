@@ -24,7 +24,7 @@ from nextgis_connect.legacy.detached_editing.utils import (
     AttachmentMetadata,
     DetachedContainerContext,
 )
-from nextgis_connect.ngw.resources.ngw_data_type import NgwDataType
+from nextgis_connect.legacy.ngw.resources.ngw_data_type import NgwDataType
 from nextgis_connect.platform.qgis.errors import (
     ErrorCode,
     SynchronizationError,

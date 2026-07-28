@@ -26,15 +26,17 @@ from qgis.PyQt.QtCore import QSize, Qt
 from qgis.PyQt.QtWidgets import QMainWindow
 from qgis.testing import QgisTestCase
 
+from nextgis_connect.legacy.ngw.core import NGWResource
+from nextgis_connect.legacy.ngw.core.ngw_resource_factory import (
+    NGWResourceFactory,
+)
+from nextgis_connect.legacy.ngw.qgis.qgis_ngw_connection import (
+    QgsNgwConnection,
+)
 from nextgis_connect.legacy.ngw_connection import (
     NgwConnection,
     NgwConnectionsManager,
 )
-from nextgis_connect.ngw.core import NGWResource
-from nextgis_connect.ngw.core.ngw_resource_factory import (
-    NGWResourceFactory,
-)
-from nextgis_connect.ngw.qgis.qgis_ngw_connection import QgsNgwConnection
 from nextgis_connect.platform.filesystem import rm
 
 

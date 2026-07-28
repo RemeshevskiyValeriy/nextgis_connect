@@ -77,15 +77,17 @@ from nextgis_connect.legacy.detached_editing.utils import (
     VersioningSynchronizationState,
     make_connection,
 )
+from nextgis_connect.legacy.ngw.core import NGWVectorLayer
+from nextgis_connect.legacy.ngw.core.ngw_error import NGWError
+from nextgis_connect.legacy.ngw.core.ngw_resource_factory import (
+    NGWResourceFactory,
+)
+from nextgis_connect.legacy.ngw.qgis.qgis_ngw_connection import (
+    QgsNgwConnection,
+)
 from nextgis_connect.legacy.ngw_connection.application.connections_manager import (
     NgwConnectionsManager,
 )
-from nextgis_connect.ngw.core import NGWVectorLayer
-from nextgis_connect.ngw.core.ngw_error import NGWError
-from nextgis_connect.ngw.core.ngw_resource_factory import (
-    NGWResourceFactory,
-)
-from nextgis_connect.ngw.qgis.qgis_ngw_connection import QgsNgwConnection
 from nextgis_connect.platform.logging import logger
 from nextgis_connect.platform.qgis.errors import (
     ContainerError,

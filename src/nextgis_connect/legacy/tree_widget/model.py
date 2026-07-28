@@ -35,21 +35,17 @@ from nextgis_connect.features.search.domain.query import (
 from nextgis_connect.legacy.detached_editing.container.container_factory import (
     DetachedContainerFactory,
 )
-from nextgis_connect.legacy.ngw_connection import NgwConnectionsManager
-from nextgis_connect.legacy.settings.ng_connect_cache_manager import (
-    NgConnectCacheManager,
-)
-from nextgis_connect.ngw.core import (
+from nextgis_connect.legacy.ngw.core import (
     NGWGroupResource,
     NGWResource,
     NGWVectorLayer,
 )
-from nextgis_connect.ngw.core.ngw_qgis_style import NGWQGISVectorStyle
-from nextgis_connect.ngw.core.ngw_resource_factory import (
+from nextgis_connect.legacy.ngw.core.ngw_qgis_style import NGWQGISVectorStyle
+from nextgis_connect.legacy.ngw.core.ngw_resource_factory import (
     NGWResourceFactory,
 )
-from nextgis_connect.ngw.core.ngw_webmap import NGWWebMap
-from nextgis_connect.ngw.qgis.ngw_resource_model_4qgis import (
+from nextgis_connect.legacy.ngw.core.ngw_webmap import NGWWebMap
+from nextgis_connect.legacy.ngw.qgis.ngw_resource_model_4qgis import (
     MapForLayerCreater,
     NGWCreateWMSService,
     NGWUpdateRasterLayer,
@@ -60,8 +56,10 @@ from nextgis_connect.ngw.qgis.ngw_resource_model_4qgis import (
     QGISStyleUpdater,
     ResourcesDownloader,
 )
-from nextgis_connect.ngw.qgis.qgis_ngw_connection import QgsNgwConnection
-from nextgis_connect.ngw.qt.qt_ngw_resource_model_job import (
+from nextgis_connect.legacy.ngw.qgis.qgis_ngw_connection import (
+    QgsNgwConnection,
+)
+from nextgis_connect.legacy.ngw.qt.qt_ngw_resource_model_job import (
     NGWCreateMapForStyle,
     NGWCreateOgcfService,
     NGWCreateVectorLayer,
@@ -79,8 +77,12 @@ from nextgis_connect.ngw.qt.qt_ngw_resource_model_job import (
     NgwStylesDownloader,
     UploadedLayerResource,
 )
-from nextgis_connect.ngw.qt.qt_ngw_resource_model_job_error import (
+from nextgis_connect.legacy.ngw.qt.qt_ngw_resource_model_job_error import (
     NGWResourceModelJobError,
+)
+from nextgis_connect.legacy.ngw_connection import NgwConnectionsManager
+from nextgis_connect.legacy.settings.ng_connect_cache_manager import (
+    NgConnectCacheManager,
 )
 from nextgis_connect.platform.logging import logger
 from nextgis_connect.platform.qgis import utils

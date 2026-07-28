@@ -18,7 +18,7 @@ from nextgis_connect.platform.qgis.errors import (
 from .base import BaseConnectionCheck, UpdateReporter
 
 if TYPE_CHECKING:
-    from nextgis_connect.ngw.qgis.qgis_ngw_connection import (
+    from nextgis_connect.legacy.ngw.qgis.qgis_ngw_connection import (
         QgsNgwConnection,
     )
 

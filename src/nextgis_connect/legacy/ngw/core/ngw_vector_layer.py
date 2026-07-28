@@ -23,11 +23,11 @@ from typing import Any, Dict, List, Optional
 
 from qgis.core import QgsProviderRegistry
 
+from nextgis_connect.legacy.ngw.core.vector_layer_export import (
+    VectorLayerExportParams,
+)
 from nextgis_connect.legacy.ngw_connection.application.connections_manager import (
     NgwConnectionsManager,
-)
-from nextgis_connect.ngw.core.vector_layer_export import (
-    VectorLayerExportParams,
 )
 
 from .ngw_abstract_vector_resource import NGWAbstractVectorResource

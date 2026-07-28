@@ -8,7 +8,7 @@ class TestQgsNgwConnection(NgConnectTestCase):
     def setUp(self) -> None:
         super().setUp()
 
-        from nextgis_connect.ngw.qgis.qgis_ngw_connection import (
+        from nextgis_connect.legacy.ngw.qgis.qgis_ngw_connection import (
             NgwServerFeature,
             QgsNgwConnection,
         )

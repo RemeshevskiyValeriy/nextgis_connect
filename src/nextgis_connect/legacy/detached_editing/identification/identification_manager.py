@@ -1,5 +1,6 @@
 from typing import TYPE_CHECKING, List, Optional
 
+import qgis.utils
 from qgis.core import (
     Qgis,
     QgsExpression,
@@ -30,7 +31,6 @@ from qgis.PyQt.QtCore import (
 )
 from qgis.PyQt.QtGui import QDesktopServices
 from qgis.PyQt.QtWidgets import QAction
-from qgis.utils import iface
 
 from nextgis_connect.bootstrap.plugin_interface import NgConnectInterface
 from nextgis_connect.legacy.detached_editing.identification.identification_tool import (
@@ -58,8 +58,6 @@ from nextgis_connect.ui_kit.icons.icon import plugin_icon, qgis_icon
 if TYPE_CHECKING:
     from qgis.gui import QgisInterface
 
-    assert isinstance(iface, QgisInterface)
-
 
 class IdentificationManager(QObject):
     def __init__(
@@ -71,6 +69,12 @@ class IdentificationManager(QObject):
         self._identify_tool = None
         self._tool_handler = None
         self._results_dialog = None
+
+    @property
+    def _iface(self) -> "QgisInterface":
+        iface = qgis.utils.iface
+        assert isinstance(iface, QgisInterface)
+        return iface
 
     def load(self) -> None:
         """Load identification manager and set the identify tool."""
@@ -126,6 +130,7 @@ class IdentificationManager(QObject):
         self._tool_handler = IdentificationToolHandler(
             self._identify_tool, self._action
         )
+        iface = self._iface
         iface.registerMapToolHandler(self._tool_handler)
         iface.layerTreeView().selectionModel().selectionChanged.connect(
             self._update_action_enabled
@@ -141,6 +146,7 @@ class IdentificationManager(QObject):
             self._results_dialog.deleteLater()
             self._results_dialog = None  # type: ignore
 
+        iface = self._iface
         iface.unregisterMapToolHandler(self._tool_handler)
         try:
             iface.layerTreeView().selectionModel().selectionChanged.disconnect(
@@ -179,6 +185,7 @@ class IdentificationManager(QObject):
         self._results_dialog.open_features_in_attributes_table.connect(
             self.open_features_in_attributes_table
         )
+        iface = self._iface
         if not iface.mainWindow().restoreDockWidget(self._results_dialog):
             iface.addDockWidget(
                 Qt.DockWidgetArea.RightDockWidgetArea, self._results_dialog
@@ -227,6 +234,7 @@ class IdentificationManager(QObject):
     ) -> None:
         """Open features in attributes table."""
         id_list = ",".join(str(f.id()) for f in features)
+        iface = self._iface
         iface.showAttributeTable(layer, f"$id IN ({id_list})")
 
     @pyqtSlot(QgsGeometry, Qt.MouseButton, Qt.KeyboardModifier)
@@ -238,6 +246,7 @@ class IdentificationManager(QObject):
     ) -> None:
         self.results_dialog().clear()
 
+        iface = self._iface
         self._identify_tool.identifyMessage.connect(
             iface.statusBarIface().showMessage
         )
@@ -334,6 +343,7 @@ class IdentificationManager(QObject):
         if self._action is None:
             return
 
+        iface = self._iface
         layer_tree_view = iface.layerTreeView()
         layers = list(layer_tree_view.selectedLayersRecursive())
         current_layer = layer_tree_view.currentLayer()

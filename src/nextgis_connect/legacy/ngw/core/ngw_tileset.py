@@ -2,10 +2,10 @@ from typing import Tuple
 
 from qgis.core import QgsProviderRegistry
 
+from nextgis_connect.legacy.ngw.core.ngw_resource import NGWResource
 from nextgis_connect.legacy.ngw_connection.application.connections_manager import (
     NgwConnectionsManager,
 )
-from nextgis_connect.ngw.core.ngw_resource import NGWResource
 
 from .ngw_resource import dict_to_object
 

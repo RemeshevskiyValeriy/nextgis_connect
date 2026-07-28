@@ -15,15 +15,17 @@ from nextgis_connect.legacy.detached_editing.utils import (
     container_metadata,
     detached_layer_uri,
 )
-from nextgis_connect.ngw.core import NGWVectorLayer
-from nextgis_connect.ngw.core.ngw_resource_creator import ResourceCreator
-from nextgis_connect.ngw.qgis.ngw_resource_model_4qgis import (
+from nextgis_connect.legacy.ngw.core import NGWVectorLayer
+from nextgis_connect.legacy.ngw.core.ngw_resource_creator import (
+    ResourceCreator,
+)
+from nextgis_connect.legacy.ngw.qgis.ngw_resource_model_4qgis import (
     QGISResourceJob,
 )
-from nextgis_connect.ngw.qgis.qgis_ngw_connection import (
+from nextgis_connect.legacy.ngw.qgis.qgis_ngw_connection import (
     NgwServerFeature,
 )
-from nextgis_connect.ngw.resources.ngw_fields import NgwFields
+from nextgis_connect.legacy.ngw.resources.ngw_fields import NgwFields
 from tests.magic_qobject_mock import MagicQObjectMock
 from tests.ng_connect_testcase import NgConnectTestCase, TestData
 
@@ -60,7 +62,7 @@ class TestRequiredFields(NgConnectTestCase):
             "create_vector_layer",
             return_value=ngw_vector_layer,
         ), mock.patch(
-            "nextgis_connect.ngw.qgis.ngw_resource_model_4qgis.os.remove"
+            "nextgis_connect.legacy.ngw.qgis.ngw_resource_model_4qgis.os.remove"
         ):
             job.importQgsVectorLayer(layer, parent_resource)
 

@@ -9,13 +9,15 @@ from qgis.PyQt.QtWidgets import (
     QDialogButtonBox,
 )
 
-from nextgis_connect.legacy.tree_widget.item import QNGWResourceItem
-from nextgis_connect.ngw.core.ngw_resource_creator import ResourceCreator
-from nextgis_connect.ngw.core.ngw_vector_layer import NGWVectorLayer
-from nextgis_connect.ngw.resources.creation.vector_layer_creation_dialog import (
+from nextgis_connect.legacy.ngw.core.ngw_resource_creator import (
+    ResourceCreator,
+)
+from nextgis_connect.legacy.ngw.core.ngw_vector_layer import NGWVectorLayer
+from nextgis_connect.legacy.ngw.resources.creation.vector_layer_creation_dialog import (
     VectorLayerCreationDialog,
     VersioningMode,
 )
+from nextgis_connect.legacy.tree_widget.item import QNGWResourceItem
 from nextgis_connect.platform.qgis.compat import WkbType
 from nextgis_connect.ui_kit.widgets.buttons.loading import LoadingPushButton
 
@@ -158,11 +160,11 @@ def test_upload_vector_layer_does_not_send_versioning_flag() -> None:
     parent_resource.get_api_collection_url.return_value = "/api/resource/"
 
     with mock.patch(
-        "nextgis_connect.ngw.core.ngw_resource_creator.NGWResource"
+        "nextgis_connect.legacy.ngw.core.ngw_resource_creator.NGWResource"
         ".receive_resource_obj",
         return_value=mock.Mock(),
     ), mock.patch(
-        "nextgis_connect.ngw.core.ngw_resource_creator.NGWVectorLayer",
+        "nextgis_connect.legacy.ngw.core.ngw_resource_creator.NGWVectorLayer",
         return_value=mock.Mock(),
     ):
         ResourceCreator.create_vector_layer(

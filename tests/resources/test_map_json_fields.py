@@ -12,12 +12,14 @@ from qgis.core import (
     QgsWkbTypes,
 )
 
-from nextgis_connect.legacy.ngw_resources_adder import NgwResourcesAdder
-from nextgis_connect.ngw.core import NGWVectorLayer
-from nextgis_connect.ngw.qgis.ngw_resource_model_4qgis import (
+from nextgis_connect.legacy.ngw.core import NGWVectorLayer
+from nextgis_connect.legacy.ngw.qgis.ngw_resource_model_4qgis import (
     QGISResourceJob,
 )
-from nextgis_connect.ngw.qgis.qgis_ngw_connection import NgwServerFeature
+from nextgis_connect.legacy.ngw.qgis.qgis_ngw_connection import (
+    NgwServerFeature,
+)
+from nextgis_connect.legacy.ngw_resources_adder import NgwResourcesAdder
 from tests.ng_connect_testcase import NgConnectTestCase, TestData
 
 
@@ -85,10 +87,10 @@ class TestMapJsonFields(NgConnectTestCase):
             "prepareImportVectorFile",
             return_value=("/tmp/fake.gpkg", None, None),
         ), mock.patch(
-            "nextgis_connect.ngw.qgis.ngw_resource_model_4qgis.ResourceCreator.create_vector_layer",
+            "nextgis_connect.legacy.ngw.qgis.ngw_resource_model_4qgis.ResourceCreator.create_vector_layer",
             return_value=ngw_vector_layer,
         ), mock.patch(
-            "nextgis_connect.ngw.qgis.ngw_resource_model_4qgis.os.remove"
+            "nextgis_connect.legacy.ngw.qgis.ngw_resource_model_4qgis.os.remove"
         ):
             job.importQgsVectorLayer(layer, parent_resource)
 
