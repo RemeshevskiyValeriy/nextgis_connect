@@ -105,7 +105,7 @@ class TextSearchSuggestionBuilder:
 
     _KEYWORD_PATTERN = re.compile(r"^@(?P<prefix>[a-z_]*)$", re.IGNORECASE)
     _OPERATION_PATTERN = re.compile(
-        r"^@(?P<tag>[a-z_]+)(?:\s+(?P<operation>[a-z]*))?$",
+        r"^@(?P<tag>[a-z_]+)(?P<separator>\s*)(?P<operation>[a-z]*)$",
         re.IGNORECASE,
     )
     _LOGICAL_OPERATION_PATTERN = re.compile(
@@ -162,13 +162,41 @@ class TextSearchSuggestionBuilder:
         if tag_syntax is None:
             return None
 
+        has_separator = match.group("separator") != ""
         operation_prefix = (match.group("operation") or "").lower()
         return [
-            f"{prefix}@{tag_syntax.tag_name} {operation.completion_text}"
+            (
+                f"{prefix}@{tag_syntax.tag_name}"
+                f"{self._operation_separator(operation, has_separator)}"
+                f"{self._operation_completion_text(operation, has_separator)}"
+            )
             for operation in tag_syntax.operations
             if operation_prefix == ""
             or operation.name.lower().startswith(operation_prefix)
         ]
+
+    def _operation_separator(
+        self,
+        operation: SearchOperation,
+        has_separator: bool,
+    ) -> str:
+        if has_separator:
+            return " "
+
+        if operation.name == "=":
+            return ""
+
+        return " "
+
+    def _operation_completion_text(
+        self,
+        operation: SearchOperation,
+        has_separator: bool,
+    ) -> str:
+        if has_separator or operation.name != "=":
+            return operation.completion_text
+
+        return operation.completion_text.replace("= ", "=", 1)
 
     def _tag_operation_syntax(
         self, tag_name: str

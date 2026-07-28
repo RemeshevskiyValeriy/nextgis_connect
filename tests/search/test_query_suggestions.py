@@ -36,7 +36,7 @@ def test_operation_suggestions_are_available_after_string_tag() -> None:
     suggestions = TextSearchSuggestionBuilder().operation_suggestions("@name")
 
     assert suggestions == [
-        '@name = "',
+        '@name="',
         '@name LIKE "',
         '@name ILIKE "',
         '@name IN ("',
@@ -46,20 +46,32 @@ def test_operation_suggestions_are_available_after_string_tag() -> None:
 def test_operation_suggestions_are_available_after_numeric_tag() -> None:
     suggestions = TextSearchSuggestionBuilder().operation_suggestions("@id")
 
+    assert suggestions == ["@id=", "@id IN ("]
+
+
+def test_operation_suggestions_preserve_space_before_equal() -> None:
+    suggestions = TextSearchSuggestionBuilder().operation_suggestions("@id ")
+
     assert suggestions == ["@id = ", "@id IN ("]
+
+
+def test_operation_suggestions_skip_space_without_equal_separator() -> None:
+    suggestions = TextSearchSuggestionBuilder().operation_suggestions("@name")
+
+    assert suggestions[0] == '@name="'
 
 
 def test_operation_suggestions_skip_unsupported_in_operation() -> None:
     suggestions = TextSearchSuggestionBuilder().operation_suggestions("@root")
 
-    assert suggestions == ["@root = "]
+    assert suggestions == ["@root="]
 
 
 def test_operation_suggestions_for_owner_use_unquoted_values() -> None:
     suggestions = TextSearchSuggestionBuilder().operation_suggestions("@owner")
 
     assert suggestions == [
-        "@owner = ",
+        "@owner=",
         "@owner LIKE ",
         "@owner ILIKE ",
         '@owner IN ("',
