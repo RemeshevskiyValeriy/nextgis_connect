@@ -1,5 +1,4 @@
 import re
-import sqlite3
 from pathlib import Path, PurePath, PurePosixPath, PureWindowsPath
 from typing import List, Optional, Tuple
 
@@ -124,109 +123,41 @@ class DetachedEditingPathPreprocessor(QObject):
         if len(source_path.parts) < 2:
             return None, None
 
-        uuid_candidates = []
-        if len(source_path.parts) >= 4:
-            uuid_candidates.append(source_path.parts[-4])  # New scheme
-        uuid_candidates.append(source_path.parts[-2])  # Old scheme
-
         file_candidate = source_path.parts[-1]
-
         uuid_pattern = re.compile(
             r"^[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$",
             re.IGNORECASE,
         )
         file_pattern = re.compile(r"^\d+\.gpkg$")
 
-        uuid_candidate = None
-        for candidate in uuid_candidates:
-            if uuid_pattern.match(candidate):
-                uuid_candidate = candidate
-                break
-
-        if uuid_candidate is None:
+        if not file_pattern.match(file_candidate):
             return None, None
 
-        if (
-            file_pattern.match(file_candidate)
-            and source_path.parts[-2] == uuid_candidate
-        ):
-            return uuid_candidate, int(source_path.stem)
+        legacy_uuid = source_path.parts[-2]
+        if uuid_pattern.match(legacy_uuid):
+            return legacy_uuid, int(source_path.stem)
 
-        if file_candidate != "layer.gpkg":
+        if len(source_path.parts) < 4:
             return None, None
 
-        resource_id = self._resource_id_from_storage_index(
-            source_path,
-            uuid_candidate,
-        )
-        if resource_id is not None:
-            return uuid_candidate, resource_id
+        indexed_uuid = source_path.parts[-4]
+        if not uuid_pattern.match(indexed_uuid):
+            return None, None
 
-        resource_id = self._resource_id_from_container_metadata(source_path)
-        return uuid_candidate, resource_id
+        if not self._is_indexed_storage_path(source_path):
+            return None, None
 
-    def _resource_id_from_storage_index(
-        self,
-        source_path: PurePath,
-        domain_uuid: str,
-    ) -> Optional[int]:
-        actual_path = self._actual_source_path(source_path)
-        parts = actual_path.parts
-        if len(parts) < 4:
-            return None
+        return indexed_uuid, int(source_path.stem)
 
-        if parts[-4] != domain_uuid:
-            return None
+    def _is_indexed_storage_path(self, source_path: PurePath) -> bool:
+        prefix = source_path.parts[-3]
+        digest = source_path.parts[-2]
+        if len(prefix) != 2 or len(digest) != 64:
+            return False
+        if digest[:2] != prefix:
+            return False
 
-        relative_path = Path(*parts[-3:])
-        index_path = actual_path.parents[2] / "storage.sqlite"
-        if not index_path.exists():
-            return None
-
-        try:
-            with sqlite3.connect(str(index_path)) as connection:
-                cursor = connection.execute(
-                    """
-                    SELECT resource_id
-                    FROM storage_entries
-                    WHERE relative_path = ?
-                    LIMIT 1
-                    """,
-                    (relative_path.as_posix(),),
-                )
-                row = cursor.fetchone()
-        except sqlite3.DatabaseError:
-            logger.exception("Could not read storage index")
-            return None
-
-        if row is None or row[0] is None:
-            return None
-
-        return int(row[0])
-
-    def _resource_id_from_container_metadata(
-        self,
-        source_path: PurePath,
-    ) -> Optional[int]:
-        actual_path = self._actual_source_path(source_path)
-        if not actual_path.exists():
-            return None
-
-        try:
-            return container_metadata(actual_path).resource_id
-        except Exception:
-            logger.exception("Could not read detached container metadata")
-            return None
-
-    def _actual_source_path(self, source_path: PurePath) -> Path:
-        path = Path(str(source_path))
-        if path.is_absolute():
-            return path
-
-        absolute_path = QDir(
-            QgsProject.instance().absolutePath()
-        ).absoluteFilePath(str(source_path))
-        return Path(absolute_path)
+        return all(char in "0123456789abcdefABCDEF" for char in digest)
 
     def _cached_layer_path(self, domain_uuid: str, resource_id: int) -> Path:
         return DetachedStorageServiceFactory.create().container_path(

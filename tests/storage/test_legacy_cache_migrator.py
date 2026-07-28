@@ -54,7 +54,7 @@ def test_migration_moves_service_files(tmp_path: Path) -> None:
         LayerKey(INSTANCE_UUID, 42)
     )
     assert not service_path.exists()
-    assert (target_path.parent / "layer.gpkg-wal").read_text(
+    assert (target_path.parent / f"{target_path.name}-wal").read_text(
         encoding="utf-8"
     ) == "wal"
 

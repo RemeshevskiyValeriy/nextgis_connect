@@ -9,11 +9,11 @@ def test_project_containers_html_uses_labels_only() -> None:
     html = NgwConnectionsWidget._NgwConnectionsWidget__project_containers_html(
         [
             (
-                Path("/tmp/cache/layer.gpkg"),
+                Path("/tmp/cache/42.gpkg"),
                 "Roads <main> (id=42)",
             )
         ]
     )
 
     assert html == "<ul><li>Roads &lt;main&gt; (id=42)</li></ul>"
-    assert "/tmp/cache/layer.gpkg" not in html
+    assert "/tmp/cache/42.gpkg" not in html

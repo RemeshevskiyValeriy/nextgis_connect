@@ -25,19 +25,19 @@ def test_path_resolver_uses_instance_prefix_hash_and_file_name(
     storage_key = StorageKeyFactory.layer_container(layer_key)
     resolver = StoragePathResolver(tmp_path)
 
-    result = resolver.resolve(storage_key, "layer.gpkg")
+    result = resolver.resolve(storage_key, "42.gpkg")
 
     assert result == (
         tmp_path
         / instance_uuid
         / storage_key.digest[:2]
         / storage_key.digest
-        / "layer.gpkg"
+        / "42.gpkg"
     )
     assert resolver.relative_to_instance(result, instance_uuid) == Path(
         storage_key.digest[:2],
         storage_key.digest,
-        "layer.gpkg",
+        "42.gpkg",
     )
 
 

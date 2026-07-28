@@ -646,13 +646,9 @@ class DetachedEditing(QObject):
 
         if container_path is not None:
             candidates = []
-            if (
-                container_path.name == "layer.gpkg"
-                and len(container_path.parts) >= 4
-            ):
+            if self.__looks_like_indexed_container_path(container_path):
                 candidates.append(container_path.parts[-4])
-            else:
-                candidates.append(container_path.parent.name)
+            candidates.append(container_path.parent.name)
             for candidate in candidates:
                 if self.__is_uuid(candidate):
                     return candidate
@@ -775,3 +771,22 @@ class DetachedEditing(QObject):
             return False
 
         return True
+
+    def __looks_like_indexed_container_path(
+        self,
+        container_path: Path,
+    ) -> bool:
+        if len(container_path.parts) < 4:
+            return False
+
+        instance_uuid = container_path.parts[-4]
+        prefix = container_path.parts[-3]
+        digest = container_path.parts[-2]
+        if not self.__is_uuid(instance_uuid):
+            return False
+        if len(prefix) != 2 or len(digest) != 64:
+            return False
+        if digest[:2] != prefix:
+            return False
+
+        return all(char in "0123456789abcdefABCDEF" for char in digest)

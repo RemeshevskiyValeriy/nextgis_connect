@@ -27,7 +27,10 @@ class DetachedLayerStore:
     def container_path(self, layer_key: LayerKey) -> Path:
         """Return the canonical detached container path."""
         storage_key = StorageKeyFactory.layer_container(layer_key)
-        return self._path_resolver.resolve(storage_key, "layer.gpkg")
+        return self._path_resolver.resolve(
+            storage_key,
+            self._container_file_name(layer_key),
+        )
 
     def ensure_container_entry(
         self,
@@ -52,7 +55,7 @@ class DetachedLayerStore:
         if source_path is not None and Path(source_path) != target_path:
             blob_ref = file_store.copy_from(
                 storage_key,
-                "layer.gpkg",
+                self._container_file_name(layer_key),
                 Path(source_path),
                 kind=StorageEntryKind.LAYER_CONTAINER,
                 resource_id=layer_key.resource_id,
@@ -64,7 +67,7 @@ class DetachedLayerStore:
         else:
             entry = file_store.ensure_entry_for_existing_file(
                 storage_key,
-                "layer.gpkg",
+                self._container_file_name(layer_key),
                 kind=StorageEntryKind.LAYER_CONTAINER,
                 resource_id=layer_key.resource_id,
                 state=StorageEntryState.COMMITTED,
@@ -83,6 +86,10 @@ class DetachedLayerStore:
             last_sync_state=None,
         )
         return entry
+
+    def _container_file_name(self, layer_key: LayerKey) -> str:
+        """Return the stable detached container file name."""
+        return f"{layer_key.resource_id}.gpkg"
 
     def ensure_container_placeholder(
         self,
