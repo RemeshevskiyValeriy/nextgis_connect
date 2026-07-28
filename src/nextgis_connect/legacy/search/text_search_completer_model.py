@@ -15,6 +15,12 @@ from qgis.PyQt.QtNetwork import QNetworkReply, QNetworkRequest
 from nextgis_connect.legacy.ngw_connection.application.connections_manager import (
     NgwConnectionsManager,
 )
+from nextgis_connect.legacy.search.query_suggestions import (
+    TextSearchSuggestionBuilder,
+)
+from nextgis_connect.legacy.search.resource_blueprint import (
+    ResourceBlueprintTypeParser,
+)
 from nextgis_connect.legacy.search.search_settings import SearchSettings
 from nextgis_connect.platform.logging import logger
 
@@ -28,10 +34,14 @@ class TextSearchCompleterModel(QStringListModel):
     __bouncing_timer: QTimer
     __network_manager: Optional[QgsNetworkAccessManager]
     __suggestions_network_reply: Optional[QNetworkReply]
+    __resource_types_network_reply: Optional[QNetworkReply]
 
     __prefix: str
     __history_suggestions: List[str]
     __search_suggestions: List[str]
+    __resource_type_suggestions_cache: Optional[List[str]]
+    __suggestion_builder: TextSearchSuggestionBuilder
+    __blueprint_type_parser: ResourceBlueprintTypeParser
 
     def __init__(
         self, connection_id: Optional[str], parent: Optional[QObject] = None
@@ -47,9 +57,13 @@ class TextSearchCompleterModel(QStringListModel):
         # Network manager and reply for handling network requests
         self.__network_manager = None
         self.__suggestions_network_reply = None
+        self.__resource_types_network_reply = None
 
         # Prefix string for the search
         self.__prefix = ""
+        self.__resource_type_suggestions_cache = None
+        self.__suggestion_builder = TextSearchSuggestionBuilder()
+        self.__blueprint_type_parser = ResourceBlueprintTypeParser()
 
         # Fetch history suggestions from settings
         self.__update_history_suggestions()
@@ -61,6 +75,23 @@ class TextSearchCompleterModel(QStringListModel):
         """Set the prefix for search and reset suggestions"""
 
         self.__prefix = prefix
+
+        if self.__update_keyword_suggestions():
+            self.__stop_name_suggestion_fetching()
+            self.__discard_resource_type_fetching()
+            return
+
+        if self.__update_resource_type_suggestions():
+            self.__stop_name_suggestion_fetching()
+            return
+
+        if self.__prefix.strip().startswith("@"):
+            self.__search_suggestions = []
+            self.setStringList([])
+            self.__stop_fetching()
+            return
+
+        self.__discard_resource_type_fetching()
         self.__search_suggestions = []
         self.__combine()
 
@@ -80,6 +111,8 @@ class TextSearchCompleterModel(QStringListModel):
         """Update connection ID and reset suggestions"""
         connection_id = connection_id if connection_id != "" else None
         self.__connection_id = connection_id
+        self.__resource_type_suggestions_cache = None
+        self.__discard_resource_type_fetching()
         self.__search_suggestions = []
         self.__combine()
 
@@ -108,6 +141,45 @@ class TextSearchCompleterModel(QStringListModel):
         ]
         self.setStringList(self.__history_suggestions + found_suggestions)
 
+    def __set_syntax_suggestions(self, suggestions: List[str]) -> None:
+        self.__search_suggestions = suggestions
+        self.setStringList(suggestions)
+
+        if len(suggestions) > 0:
+            self.complete_requested.emit()
+
+    def __update_keyword_suggestions(self) -> bool:
+        suggestions = self.__suggestion_builder.keyword_suggestions(
+            self.__prefix
+        )
+        if suggestions is None:
+            return False
+
+        self.__set_syntax_suggestions(suggestions)
+        return True
+
+    def __update_resource_type_suggestions(self) -> bool:
+        context = self.__suggestion_builder.resource_type_context(
+            self.__prefix
+        )
+        if context is None:
+            return False
+
+        if self.__resource_type_suggestions_cache is not None:
+            suggestions = (
+                self.__suggestion_builder.resource_type_suggestions(
+                    self.__prefix,
+                    self.__resource_type_suggestions_cache,
+                )
+                or []
+            )
+            self.__set_syntax_suggestions(suggestions)
+            return True
+
+        self.__set_syntax_suggestions([])
+        self.__fetch_resource_types()
+        return True
+
     def __discard_previous_fetching(self) -> None:
         """Abort any ongoing network request for suggestions"""
         if self.__suggestions_network_reply is None:
@@ -116,10 +188,21 @@ class TextSearchCompleterModel(QStringListModel):
         self.__suggestions_network_reply.abort()
         logger.debug("Previous suggestions fetching has been cancelled")
 
-    def __stop_fetching(self) -> None:
-        """Stop the bouncing timer and abort previous fetching"""
+    def __discard_resource_type_fetching(self) -> None:
+        if self.__resource_types_network_reply is None:
+            return
+
+        self.__resource_types_network_reply.abort()
+        logger.debug("Resource type suggestions fetching has been cancelled")
+
+    def __stop_name_suggestion_fetching(self) -> None:
         self.__bouncing_timer.stop()
         self.__discard_previous_fetching()
+
+    def __stop_fetching(self) -> None:
+        """Stop the bouncing timer and abort previous fetching"""
+        self.__stop_name_suggestion_fetching()
+        self.__discard_resource_type_fetching()
 
     @pyqtSlot()
     def __fetch_suggestions(self) -> None:
@@ -152,6 +235,33 @@ class TextSearchCompleterModel(QStringListModel):
 
         self.fetching_started.emit()
         logger.debug(f"↓ Fetching suggestions for: {search_string}")
+
+    def __fetch_resource_types(self) -> None:
+        if (
+            self.__connection_id is None
+            or self.__resource_types_network_reply is not None
+        ):
+            return
+
+        connections_manager = NgwConnectionsManager()
+        connection = connections_manager.connection(self.__connection_id)
+        assert connection is not None
+
+        request = QNetworkRequest(
+            QUrl(connection.url + "/api/component/resource/blueprint")
+        )
+        connection.update_network_request(request)
+
+        self.__network_manager = QgsNetworkAccessManager()
+        self.__resource_types_network_reply = self.__network_manager.get(
+            request
+        )
+        self.__resource_types_network_reply.finished.connect(
+            self.__update_resource_types
+        )
+
+        self.fetching_started.emit()
+        logger.debug("↓ Fetching resource type suggestions")
 
     @pyqtSlot()
     def __update_suggestions(self) -> None:
@@ -188,3 +298,35 @@ class TextSearchCompleterModel(QStringListModel):
 
         if len(self.__search_suggestions) > 0:
             self.complete_requested.emit()
+
+    @pyqtSlot()
+    def __update_resource_types(self) -> None:
+        self.fetching_finished.emit()
+
+        if self.__resource_types_network_reply is None:
+            return
+
+        if (
+            self.__resource_types_network_reply.error()  # type: ignore
+            != QNetworkReply.NetworkError.NoError
+        ):
+            self.__resource_types_network_reply.deleteLater()
+            self.__resource_types_network_reply = None
+            return
+
+        try:
+            blueprint = json.loads(
+                self.__resource_types_network_reply.readAll().data().decode()
+            )
+            self.__resource_type_suggestions_cache = (
+                self.__blueprint_type_parser.parse(blueprint)
+            )
+        except Exception:
+            logger.exception("Can't fetch resource type suggestions")
+            self.__resource_type_suggestions_cache = []
+
+        self.__resource_types_network_reply.close()
+        self.__resource_types_network_reply.deleteLater()
+        self.__resource_types_network_reply = None
+
+        self.__update_resource_type_suggestions()
