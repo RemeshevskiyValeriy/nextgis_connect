@@ -26,6 +26,19 @@ def with_name(
     return path.with_name(f"{prefix}{path.stem}{suffix}{extension}")
 
 
+def replace_metadata_version(content: str, version: str) -> str:
+    updated_content, replacements = re.subn(
+        r"(?m)^(version\s*=\s*).*$",
+        rf"\g<1>{version}",
+        content,
+        count=1,
+    )
+    if replacements != 1:
+        raise RuntimeError("Could not find metadata version line")
+
+    return updated_content
+
+
 class QgisPluginBuilder:
     def __init__(self):
         self.current_directory = Path(__file__).parent
@@ -375,11 +388,39 @@ class QgisPluginBuilder:
         metadata = ConfigParser()
         with open(metadata_path, encoding="utf-8") as f:
             metadata.read_file(f)
-        assert metadata.get("general", "version") == project_version
+        metadata_version = metadata.get("general", "version")
+        if metadata_version != project_version:
+            self.__confirm_metadata_version_overwrite(
+                metadata_path,
+                metadata_version,
+                project_version,
+            )
 
         build_path = Path(project_name) / metadata_path.name
 
         return {metadata_path: build_path}
+
+    def __confirm_metadata_version_overwrite(
+        self,
+        metadata_path: Path,
+        metadata_version: str,
+        project_version: str,
+    ) -> None:
+        print(
+            "metadata.txt version differs from pyproject.toml: "
+            f"{metadata_version} != {project_version}"
+        )
+        confirmation = (
+            input(":: Overwrite metadata.txt version? [y/N] ").strip().lower()
+        )
+        if confirmation != "y":
+            raise RuntimeError("metadata.txt version update was cancelled")
+
+        metadata_content = metadata_path.read_text(encoding="utf-8")
+        metadata_path.write_text(
+            replace_metadata_version(metadata_content, project_version),
+            encoding="utf-8",
+        )
 
     def __create_readme_mapping(self) -> Dict[Path, Path]:
         if "readme" not in self.project_settings:

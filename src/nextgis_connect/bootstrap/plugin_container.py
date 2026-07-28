@@ -92,6 +92,16 @@ class PluginContainer:
         self._plugin = plugin
         self.iface = iface
         self.plugin_dir = plugin.path
+        self.__notifier = None
+        self.__task_manager = None
+        self.__detached_editing = None
+        self.__ng_resources_tree_dock = None
+        self.__ng_connect_toolbar = None
+        self.__show_ngw_resources_tree_action = None
+        self.__action_about = None
+        self.__show_help_action = None
+        self.__options_factory = None
+        self.__purge_cache_task = None
 
         logger.debug("<b>✓ Plugin object created</b>")
         logger.debug(f"<b>ⓘ OS:</b> {QSysInfo().prettyProductName()}")
@@ -151,15 +161,22 @@ class PluginContainer:
     def unload(self) -> None:
         logger.debug("<b>Start plugin unloading</b>")
 
-        self.__unload_cache_purging()
-        self.__unload_ng_connect_settings_page()
-        self.__unload_ng_layer_actions()
-        self.__unload_ng_connect_menus()
-        self.__unload_ng_connect_dock()
-        self.__unload_detached_editing()
-        self.__unload_task_manger()
-        self.__unload_notifier()
-        self.__close_notifications()
+        unload_steps = [
+            ("cache purging", self.__unload_cache_purging),
+            ("settings page", self.__unload_ng_connect_settings_page),
+            ("layer actions", self.__unload_ng_layer_actions),
+            ("menus and toolbar", self.__unload_ng_connect_menus),
+            ("dock", self.__unload_ng_connect_dock),
+            ("detached editing", self.__unload_detached_editing),
+            ("task manager", self.__unload_task_manger),
+            ("notifier", self.__unload_notifier),
+            ("notifications", self.__close_notifications),
+        ]
+        for step_name, unload_step in unload_steps:
+            try:
+                unload_step()
+            except Exception:
+                logger.exception(f"Could not unload {step_name}")
 
         logger.debug("<b>End plugin unloading</b>")
 
@@ -225,7 +242,9 @@ class PluginContainer:
         self.__notifier = MessageBarNotifier(self._plugin)
 
     def __unload_notifier(self) -> None:
-        assert self.__notifier is not None
+        if self.__notifier is None:
+            return
+
         self.__notifier.deleteLater()
         self.__notifier = None
 
@@ -245,7 +264,9 @@ class PluginContainer:
         logger.debug("Task manager initialized")
 
     def __unload_task_manger(self) -> None:
-        assert self.__task_manager is not None
+        if self.__task_manager is None:
+            return
+
         self.__task_manager = None
 
         logger.debug("Task manager unloaded")
@@ -259,9 +280,17 @@ class PluginContainer:
         logger.debug("Detached editing initialized")
 
     def __unload_detached_editing(self) -> None:
-        assert self.__detached_editing is not None
-        self.__detached_editing.unload()
-        self.__detached_editing.deleteLater()
+        if self.__detached_editing is None:
+            return
+
+        detached_editing = self.__detached_editing
+        self.__safe_disconnect(
+            self._plugin.connection_updated,
+            detached_editing.on_connection_updated,
+        )
+        detached_editing.unload()
+        detached_editing.deleteLater()
+        self.__flush_deferred_deletes()
         self.__detached_editing = None
 
         logger.debug("Detached editing unloaded")
@@ -278,14 +307,16 @@ class PluginContainer:
             raise NgConnectError(message)
 
     def __unload_ng_connect_dock(self) -> None:
-        self.__ng_resources_tree_dock.setVisible(False)
-        self.iface.removeDockWidget(self.__ng_resources_tree_dock)
-        self.__ng_resources_tree_dock.close()
-        self.__ng_resources_tree_dock.deleteLater()
-        QCoreApplication.sendPostedEvents(
-            self.__ng_resources_tree_dock,
-            QEvent.Type.DeferredDelete,
-        )
+        if self.__ng_resources_tree_dock is None:
+            return
+
+        dock = self.__ng_resources_tree_dock
+        dock.setVisible(False)
+        self.iface.removeDockWidget(dock)
+        dock.close()
+        dock.setParent(None)
+        dock.deleteLater()
+        self.__flush_deferred_deletes()
         self.__ng_resources_tree_dock = None
 
     def __init_ng_connect_menus(self) -> None:
@@ -366,41 +397,53 @@ class PluginContainer:
         plugin_help_menu.addAction(self.__show_help_action)
 
     def __unload_ng_connect_menus(self) -> None:
-        self.iface.removePluginWebMenu(
-            PLUGIN_NAME,
-            self.__show_ngw_resources_tree_action,
-        )
-        self.iface.removePluginWebMenu(
-            PLUGIN_NAME,
-            self.__action_about,
-        )
+        if self.__show_ngw_resources_tree_action is not None:
+            self.iface.removePluginWebMenu(
+                PLUGIN_NAME,
+                self.__show_ngw_resources_tree_action,
+            )
+        if self.__action_about is not None:
+            self.iface.removePluginWebMenu(
+                PLUGIN_NAME,
+                self.__action_about,
+            )
 
-        assert self.__ng_connect_toolbar is not None
-        self.__show_ngw_resources_tree_action.triggered.disconnect(
-            self.__ng_resources_tree_dock.setUserVisible,
-        )
-        self.__ng_resources_tree_dock.visibilityChanged.disconnect(
-            self.__show_ngw_resources_tree_action.setChecked,
-        )
-        self.__ng_connect_toolbar.hide()
-        self.iface.mainWindow().removeToolBar(self.__ng_connect_toolbar)
-        self.__ng_connect_toolbar.deleteLater()
-        QCoreApplication.sendPostedEvents(
-            self.__ng_connect_toolbar,
-            QEvent.Type.DeferredDelete,
-        )
+        if (
+            self.__show_ngw_resources_tree_action is not None
+            and self.__ng_resources_tree_dock is not None
+        ):
+            self.__safe_disconnect(
+                self.__show_ngw_resources_tree_action.triggered,
+                self.__ng_resources_tree_dock.setUserVisible,
+            )
+            self.__safe_disconnect(
+                self.__ng_resources_tree_dock.visibilityChanged,
+                self.__show_ngw_resources_tree_action.setChecked,
+            )
+
+        if self.__ng_connect_toolbar is not None:
+            toolbar = self.__ng_connect_toolbar
+            toolbar.hide()
+            self.iface.mainWindow().removeToolBar(toolbar)
+            toolbar.setParent(None)
+            toolbar.deleteLater()
+            self.__flush_deferred_deletes()
         self.__ng_connect_toolbar = None
 
-        self.__show_ngw_resources_tree_action.deleteLater()
+        if self.__show_ngw_resources_tree_action is not None:
+            self.__show_ngw_resources_tree_action.deleteLater()
         self.__show_ngw_resources_tree_action = None
-        self.__action_about.deleteLater()
+        if self.__action_about is not None:
+            self.__action_about.deleteLater()
         self.__action_about = None
 
-        plugin_help_menu = self.iface.pluginHelpMenu()
-        assert plugin_help_menu is not None
-        plugin_help_menu.removeAction(self.__show_help_action)
-        self.__show_help_action.deleteLater()
+        if self.__show_help_action is not None:
+            plugin_help_menu = self.iface.pluginHelpMenu()
+            assert plugin_help_menu is not None
+            plugin_help_menu.removeAction(self.__show_help_action)
+            self.__show_help_action.deleteLater()
         self.__show_help_action = None
+        self.__flush_deferred_deletes()
 
     def __init_ng_layer_actions(self) -> None:
         # Tools for NGW communicate
@@ -479,5 +522,20 @@ class PluginContainer:
         self.__purge_cache_task = None
 
     def __open_about(self) -> None:
-        dialog = AboutDialog(str(self.plugin_dir.name))
+        dialog = AboutDialog(
+            str(self.plugin_dir.name),
+            components_path=self.plugin_dir / "assets" / "components.json",
+        )
         dialog.exec()
+
+    def __safe_disconnect(self, signal, slot) -> None:
+        try:
+            signal.disconnect(slot)
+        except (RuntimeError, TypeError):
+            pass
+
+    def __flush_deferred_deletes(self) -> None:
+        QCoreApplication.sendPostedEvents(
+            None,
+            QEvent.Type.DeferredDelete,
+        )
