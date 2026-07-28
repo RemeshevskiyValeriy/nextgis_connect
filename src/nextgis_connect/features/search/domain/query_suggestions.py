@@ -30,8 +30,6 @@ class TagOperationSyntax:
 
 
 class TextSearchSuggestionBuilder:
-    OWNER_ALIASES: Tuple[str, ...] = ("me",)
-
     KEYWORDS: Tuple[str, ...] = (
         "id",
         "parent",
@@ -245,7 +243,7 @@ class TextSearchSuggestionBuilder:
 
         suggestions = []
         added_owners = set()
-        for owner in self._owner_suggestion_values(owners):
+        for owner in owners:
             if not owner.lower().startswith(context.value_prefix):
                 continue
 
@@ -262,13 +260,6 @@ class TextSearchSuggestionBuilder:
             added_owners.add(owner_key)
 
         return suggestions
-
-    def _owner_suggestion_values(
-        self,
-        owners: Iterable[str],
-    ) -> Iterable[str]:
-        yield from self.OWNER_ALIASES
-        yield from owners
 
     def _can_use_quoted_value(self, value: str, quote: str) -> bool:
         if quote != "":
