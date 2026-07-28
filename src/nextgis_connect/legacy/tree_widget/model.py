@@ -293,6 +293,7 @@ class NgwSearch(NGWResourceModelJob):
         self.users_keyname = {}
         self.users_username = {}
         self.parents = []
+        self._feedback = QgsFeedback()
 
     def _do(self):
         connections_manager = NgwConnectionsManager()
@@ -302,27 +303,44 @@ class NgwSearch(NGWResourceModelJob):
 
         resources_factory = NGWResourceFactory(ngw_connection)
 
-        for query in self.__queries():
-            logger.debug(f"Search for {query}")
-            search_url = (
-                f"/api/resource/search/?{query}&serialization=resource"
-            )
-            query_result = ngw_connection.get(search_url)
-            self.__process_results(resources_factory, query_result)
-
-        assert self.result.found_resources is not None
-        logger.debug(
-            f"<b>✓ Found</b> {len(self.result.found_resources)} resources: {self.result.found_resources}"
-        )
-
-        if len(self.result.found_resources) == 0:
-            self.result.found_resources.append(-1)
-
         try:
+            for query in self.__queries():
+                self.__raise_if_canceled()
+                logger.debug(f"Search for {query}")
+                search_url = (
+                    f"/api/resource/search/?{query}&serialization=resource"
+                )
+                query_result = ngw_connection.get(
+                    search_url,
+                    feedback=self._feedback,
+                )
+                self.__raise_if_canceled()
+                self.__process_results(resources_factory, query_result)
+
+            assert self.result.found_resources is not None
+            logger.debug(
+                f"<b>✓ Found</b> {len(self.result.found_resources)} resources: {self.result.found_resources}"
+            )
+
+            if len(self.result.found_resources) == 0:
+                self.result.found_resources.append(-1)
+
             self.__fetch_parents(resources_factory)
         except Exception:
+            if self.__is_canceled():
+                self.result.found_resources = []
+
             self.result.added_resources = []
             raise
+
+    def __is_canceled(self) -> bool:
+        return self._feedback is not None and self._feedback.isCanceled()
+
+    def __raise_if_canceled(self) -> None:
+        if not self.__is_canceled():
+            return
+
+        raise NgConnectError("Request was canceled")
 
     def __process_results(
         self, factory: NGWResourceFactory, resources: List[Dict[str, Any]]
@@ -570,6 +588,7 @@ class NgwSearch(NGWResourceModelJob):
         logger.debug("◴ Fetching intermediate resources")
 
         for parent_id in self.parents:
+            self.__raise_if_canceled()
             if parent_id in self.populated_resources:
                 continue
             self.__fetch_children(resources_factory, parent_id)
@@ -599,9 +618,13 @@ class NgwSearch(NGWResourceModelJob):
     def __fetch_children(
         self, resources_factory: NGWResourceFactory, resource_id: int
     ) -> None:
+        self.__raise_if_canceled()
         children_json = NGWResource.receive_resource_children(
-            resources_factory.connection, resource_id
+            resources_factory.connection,
+            resource_id,
+            feedback=self._feedback,
         )
+        self.__raise_if_canceled()
 
         children: List[NGWResource] = []
         for child_json in children_json:

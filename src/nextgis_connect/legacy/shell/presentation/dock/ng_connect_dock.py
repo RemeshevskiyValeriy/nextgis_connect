@@ -589,6 +589,7 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
             "ResourcesDownloader",
             "NgwCreateVectorLayersStubs",
             "NgwStylesDownloader",
+            "NgwSearch",
         }
 
         # proxy model
