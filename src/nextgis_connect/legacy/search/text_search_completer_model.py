@@ -165,12 +165,24 @@ class TextSearchCompleterModel(QStringListModel):
 
     def __combine(self) -> None:
         """Combine current search suggestions with history"""
+        history_suggestions = self.__history_suggestions_for_prefix()
         found_suggestions = [
             suggestion
             for suggestion in self.__search_suggestions
-            if suggestion not in self.__history_suggestions
+            if suggestion not in history_suggestions
         ]
-        self.setStringList(self.__history_suggestions + found_suggestions)
+        self.setStringList(history_suggestions + found_suggestions)
+
+    def __history_suggestions_for_prefix(self) -> List[str]:
+        history_prefix = self.__prefix.strip().lower()
+        if len(history_prefix) == 0:
+            return self.__history_suggestions
+
+        return [
+            suggestion
+            for suggestion in self.__history_suggestions
+            if suggestion.lower().startswith(history_prefix)
+        ]
 
     def __set_syntax_suggestions(self, suggestions: List[str]) -> None:
         self.__search_suggestions = suggestions
