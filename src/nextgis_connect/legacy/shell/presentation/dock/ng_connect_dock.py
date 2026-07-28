@@ -245,7 +245,7 @@ class AddLayersCommand:
     job_uuid: str
     insertion_point: QgsLayerTreeRegistryBridge.InsertionPoint
     ngw_indexes: List[QModelIndex]
-    allow_demo_project_prompt: bool = True
+    allow_demo_project_resolve: bool = True
 
 
 class NgConnectDock(QgsDockWidget, FORM_CLASS):
@@ -2266,7 +2266,7 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
         self.__download_indices(selected_indexes)
 
     def __download_indices(self, indices: List[QModelIndex]) -> None:
-        allow_demo_project_prompt = True
+        allow_demo_project_resolve = True
 
         def save_command(job) -> None:
             insertion_point = self.iface.layerTreeInsertionPoint()
@@ -2275,7 +2275,7 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
                     job.job_uuid,
                     insertion_point,
                     indices,
-                    allow_demo_project_prompt,
+                    allow_demo_project_resolve,
                 )
             )
 
@@ -2302,12 +2302,12 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
             return
 
         resolved = self.__resolve_demo_project_indices(
-            indices, allow_demo_project_prompt
+            indices, allow_demo_project_resolve
         )
         if resolved is None:
             return
 
-        indices, allow_demo_project_prompt = resolved
+        indices, allow_demo_project_resolve = resolved
         adder = NgwResourcesAdder(
             self.resource_model,
             indices,
@@ -2376,28 +2376,20 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
     def __resolve_demo_project_indices(
         self,
         indices: List[QModelIndex],
-        allow_prompt: bool,
+        allow_resolve: bool,
     ) -> Optional[Tuple[List[QModelIndex], bool]]:
-        if not allow_prompt or len(indices) != 1:
-            return indices, allow_prompt
+        if not allow_resolve or len(indices) != 1:
+            return indices, allow_resolve
 
         demo_project_index = indices[0]
         demo_project = demo_project_index.data(
             QNGWResourceItem.NGWResourceRole
         )
         if not self.__is_demo_project(demo_project):
-            return indices, allow_prompt
+            return indices, allow_resolve
 
-        webmap_indices = self.__demo_project_webmap_indices(demo_project_index)
-        if len(webmap_indices) != 1:
-            return indices, allow_prompt
-
-        webmap_index = webmap_indices[0]
-        webmap = webmap_index.data(QNGWResourceItem.NGWResourceRole)
-        assert isinstance(webmap, NGWWebMap)
-
-        add_webmap = self.__ask_demo_project_add_mode(demo_project, webmap)
-        if add_webmap:
+        webmap_index = self.__demo_project_webmap_index(demo_project_index)
+        if webmap_index is not None:
             return [webmap_index], False
 
         return indices, False
@@ -2408,48 +2400,20 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
             and getattr(resource.common, "cls", None) == "demo_project"
         )
 
-    def __demo_project_webmap_indices(
+    def __demo_project_webmap_index(
         self, parent_index: QModelIndex
-    ) -> List[QModelIndex]:
-        webmap_indices = []
-
+    ) -> Optional[QModelIndex]:
         for row in range(self.resource_model.rowCount(parent_index)):
             child_index = self.resource_model.index(row, 0, parent_index)
             child = child_index.data(QNGWResourceItem.NGWResourceRole)
             if isinstance(child, NGWWebMap):
-                webmap_indices.append(child_index)
+                return child_index
             elif isinstance(child, NGWGroupResource):
-                webmap_indices.extend(
-                    self.__demo_project_webmap_indices(child_index)
-                )
+                webmap_index = self.__demo_project_webmap_index(child_index)
+                if webmap_index is not None:
+                    return webmap_index
 
-        return webmap_indices
-
-    def __ask_demo_project_add_mode(
-        self, demo_project: NGWResource, webmap: NGWWebMap
-    ) -> bool:
-        box = QMessageBox(self)
-        box.setIcon(QMessageBox.Icon.Question)
-        box.setWindowTitle(self.tr("Add demo project"))
-        box.setText(
-            self.tr('Demo project "{}" contains one web map.').format(
-                demo_project.display_name
-            )
-        )
-        box.setInformativeText(self.tr("How should it be added to the map?"))
-
-        add_webmap_button = box.addButton(
-            self.tr('Add web map "{}"').format(webmap.display_name),
-            QMessageBox.ButtonRole.AcceptRole,
-        )
-        box.addButton(
-            self.tr("Add as group"),
-            QMessageBox.ButtonRole.RejectRole,
-        )
-        box.setDefaultButton(add_webmap_button)
-        box.exec()
-
-        return box.clickedButton() is add_webmap_button
+        return None
 
     @pyqtSlot()
     def create_group(self) -> None:
@@ -3719,12 +3683,12 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
 
         resolved = self.__resolve_demo_project_indices(
             command.ngw_indexes,
-            command.allow_demo_project_prompt,
+            command.allow_demo_project_resolve,
         )
         if resolved is None:
             return
 
-        command.ngw_indexes, command.allow_demo_project_prompt = resolved
+        command.ngw_indexes, command.allow_demo_project_resolve = resolved
         adder = NgwResourcesAdder(
             self.resource_model, command.ngw_indexes, command.insertion_point
         )
