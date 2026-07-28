@@ -28,6 +28,11 @@ def _retry_on_permission_error(
 
 
 def rm(path: PathLike, *, max_tries: int = DEFAULT_MAX_TRIES) -> None:
+    """Remove a file or directory.
+
+    :param path: File or directory path to remove.
+    :param max_tries: Maximum number of attempts after permission errors.
+    """
     target_path = Path(path)
 
     def action() -> None:
@@ -45,6 +50,12 @@ def mv(
     *,
     max_tries: int = DEFAULT_MAX_TRIES,
 ) -> None:
+    """Move a file or directory.
+
+    :param from_path: Source path to move.
+    :param to_path: Destination path.
+    :param max_tries: Maximum number of attempts after permission errors.
+    """
     _retry_on_permission_error(
         lambda: shutil.move(str(from_path), str(to_path)),
         max_tries=max_tries,
@@ -57,6 +68,12 @@ def cp(
     *,
     max_tries: int = DEFAULT_MAX_TRIES,
 ) -> None:
+    """Copy a file or directory.
+
+    :param from_path: Source path to copy.
+    :param to_path: Destination path.
+    :param max_tries: Maximum number of attempts after permission errors.
+    """
     source_path = Path(from_path)
     target_path = Path(to_path)
 
@@ -74,9 +91,9 @@ def cp(
 
 
 def reveal_in_file_manager(file_path: Path) -> None:
-    """Reveal the given file or directory in the system's file manager.
+    """Reveal a file or directory in the system file manager.
 
-    :param file_path: The path to the file or directory to reveal.
+    :param file_path: File or directory path to reveal.
     """
     path = file_path.resolve()
 

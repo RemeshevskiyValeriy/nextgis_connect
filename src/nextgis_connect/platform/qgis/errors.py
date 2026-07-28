@@ -13,6 +13,12 @@ from nextgis_connect.platform.qgis.utils import locale, nextgis_domain
 
 
 class ErrorCode(IntEnum):
+    """Represent plugin error categories and concrete error codes.
+
+    Group low-level errors into ranges used by logging, user messages,
+    diagnostics, and recovery actions.
+    """
+
     NoError = -1
 
     PluginError = 0
@@ -71,26 +77,50 @@ class ErrorCode(IntEnum):
 
     @property
     def is_plugin_error(self) -> bool:
+        """Return whether the code belongs to plugin lifecycle errors.
+
+        :return: ``True`` for plugin lifecycle errors.
+        """
         return self.PluginError <= self < self.NgStdError
 
     @property
     def is_connection_error(self) -> bool:
+        """Return whether the code belongs to connection errors.
+
+        :return: ``True`` for connection errors.
+        """
         return self.NgwConnectionError <= self < self.ServerError
 
     @property
     def is_server_error(self) -> bool:
+        """Return whether the code belongs to server-side errors.
+
+        :return: ``True`` for server-side errors.
+        """
         return self.ServerError <= self < self.DetachedEditingError
 
     @property
     def is_container_error(self) -> bool:
+        """Return whether the code belongs to detached container errors.
+
+        :return: ``True`` for detached container errors.
+        """
         return self.DetachedEditingError <= self < self.SynchronizationError
 
     @property
     def is_synchronization_error(self) -> bool:
+        """Return whether the code belongs to synchronization errors.
+
+        :return: ``True`` for synchronization errors.
+        """
         return self.SynchronizationError <= self
 
     @property
     def group(self) -> "ErrorCode":
+        """Return the broad error group for this code.
+
+        :return: Group-level error code.
+        """
         if self.is_connection_error:
             return self.NgwConnectionError
 
@@ -107,7 +137,20 @@ class ErrorCode(IntEnum):
 
 
 class NgConnectExceptionInfoMixin:
-    """Mixin providing common fields and logic for NextGIS Connect errors and warnings."""
+    """Provide common exception metadata.
+
+    Store diagnostic identifiers, internal codes, user-facing messages,
+    detail text, retry callbacks, and recovery actions.
+
+    :ivar _error_id: Unique diagnostic identifier.
+    :ivar _code: Internal error code.
+    :ivar _log_message: Message intended for logs.
+    :ivar _user_message: Message intended for users.
+    :ivar _detail: Additional diagnostic detail.
+    :ivar _try_again: Retry callback for the failed operation.
+    :ivar _actions: Named recovery actions.
+    :ivar _need_logs: Whether logs should be shown to the user.
+    """
 
     _error_id: str
     _code: ErrorCode
@@ -128,6 +171,15 @@ class NgConnectExceptionInfoMixin:
         code: ErrorCode = ErrorCode.PluginError,
         try_again: Optional[Callable[[], Any]] = None,
     ) -> None:
+        """Initialize exception metadata.
+
+        :param base_class: Exception base class to initialize.
+        :param log_message: Message intended for logs.
+        :param user_message: Message intended for users.
+        :param detail: Additional diagnostic detail.
+        :param code: Internal error code.
+        :param try_again: Retry callback for the failed operation.
+        """
         self._error_id = str(uuid.uuid4())
         self._code = code
 
@@ -165,113 +217,91 @@ class NgConnectExceptionInfoMixin:
 
     @property
     def error_id(self) -> str:
-        """
-        Get the unique error identifier.
+        """Return the unique error identifier.
 
-        :returns: Unique error ID as a string.
-        :rtype: str
+        :return: Unique error identifier.
         """
         return self._error_id
 
     @property
     def code(self) -> ErrorCode:
-        """
-        Get the error code.
+        """Return the error code.
 
-        :returns: Error code as an instance of ErrorCode.
+        :return: Internal error code.
         """
         return self._code
 
     @property
     def log_message(self) -> str:
-        """
-        Get the log message for debugging.
+        """Return the log message.
 
-        :returns: Log message.
-        :rtype: str
+        :return: Message intended for logs.
         """
         return self._log_message
 
     @property
     def user_message(self) -> str:
-        """
-        Get the message intended for the user.
+        """Return the user-facing message.
 
-        :returns: User message.
-        :rtype: str
+        :return: Message intended for users.
         """
         return self._user_message
 
     @property
     def detail(self) -> Optional[str]:
-        """
-        Get additional details about the error.
+        """Return additional error detail.
 
-        :returns: Error details or None.
-        :rtype: Optional[str]
+        :return: Additional detail or ``None``.
         """
         return self._detail
 
     @property
     def try_again(self) -> Optional[Callable[[], Any]]:
-        """
-        Get the callable to retry the failed operation.
+        """Return the retry callback.
 
-        :returns: Callable or None.
-        :rtype: Optional[Callable[[], Any]]
+        :return: Retry callback or ``None``.
         """
         return self._try_again
 
     @try_again.setter
     def try_again(self, try_again: Optional[Callable[[], Any]]) -> None:
-        """
-        Set the callable to retry the failed operation.
+        """Set the retry callback.
 
-        :param try_again: Callable to retry or None.
-        :type try_again: Optional[Callable[[], Any]]
+        :param try_again: Retry callback or ``None``.
         """
         self._try_again = try_again
 
     @property
     def actions(self) -> List[Tuple[str, Callable[[], Any]]]:
-        """
-        Get the list of available actions for this exception.
+        """Return available recovery actions.
 
-        :returns: List of (action_name, action_callable) tuples.
-        :rtype: List[Tuple[str, Callable[[], Any]]]
+        :return: Recovery actions as name and callback pairs.
         """
         return self._actions
 
     def add_action(self, name: str, callback: Callable[[], Any]) -> None:
-        """
-        Add an action to the exception.
+        """Add a recovery action.
 
-        :param name: Name of the action.
-        :type name: str
-        :param callback: Callable to execute for the action.
-        :type callback: Callable[[], Any]
+        :param name: Action display name.
+        :param callback: Action callback.
         """
         self._actions.append((name, callback))
 
     @property
     def need_logs(self) -> bool:
-        """
-        Indicate whether logs are needed for this exception.
+        """Return whether logs should be shown.
 
-        :returns: True if logs are needed, False otherwise.
-        :rtype: bool
+        :return: ``True`` when logs are useful for this exception.
         """
         return self._need_logs
 
     if sys.version_info < (3, 11):
 
         def add_note(self, note: str) -> None:
-            """
-            Add a note to the exception message (for Python < 3.11).
+            """Add a note to the exception message.
 
-            :param note: Note string to add.
-            :type note: str
-            :raises TypeError: If note is not a string.
+            :param note: Note text to add.
+            :raises TypeError: If the note is not text.
             """
             if not isinstance(note, str):
                 message = "Note must be a string"
@@ -282,6 +312,12 @@ class NgConnectExceptionInfoMixin:
 
 
 class NgConnectException(NgConnectExceptionInfoMixin, Exception):
+    """Represent a base plugin exception.
+
+    Carry common diagnostic metadata while behaving like a standard
+    exception.
+    """
+
     def __init__(
         self,
         log_message: Optional[str] = None,
@@ -291,6 +327,14 @@ class NgConnectException(NgConnectExceptionInfoMixin, Exception):
         code: ErrorCode = ErrorCode.PluginError,
         try_again: Optional[Callable[[], Any]] = None,
     ) -> None:
+        """Initialize the plugin exception.
+
+        :param log_message: Message intended for logs.
+        :param user_message: Message intended for users.
+        :param detail: Additional diagnostic detail.
+        :param code: Internal error code.
+        :param try_again: Retry callback for the failed operation.
+        """
         super().__init__(
             base_class=Exception,
             log_message=log_message,
@@ -302,10 +346,20 @@ class NgConnectException(NgConnectExceptionInfoMixin, Exception):
 
 
 class NgConnectError(NgConnectException):
-    pass
+    """Represent a plugin error.
+
+    Use this as the common base for recoverable and user-visible plugin
+    errors.
+    """
 
 
 class DataPreparationError(NgConnectError):
+    """Represent data preparation failures.
+
+    Use this error for failures that happen while preparing local data
+    for upload or conversion.
+    """
+
     def __init__(
         self,
         log_message: Optional[str] = None,
@@ -315,6 +369,14 @@ class DataPreparationError(NgConnectError):
         code: ErrorCode = ErrorCode.DataPreparationError,
         try_again: Optional[Callable[[], Any]] = None,
     ) -> None:
+        """Initialize the data preparation error.
+
+        :param log_message: Message intended for logs.
+        :param user_message: Message intended for users.
+        :param detail: Additional diagnostic detail.
+        :param code: Internal error code.
+        :param try_again: Retry callback for the failed operation.
+        """
         super().__init__(
             log_message,
             user_message=user_message,
@@ -325,6 +387,12 @@ class DataPreparationError(NgConnectError):
 
 
 class NgConnectWarning(NgConnectExceptionInfoMixin, UserWarning):
+    """Represent a plugin warning.
+
+    Carry common diagnostic metadata while behaving like a standard
+    warning.
+    """
+
     def __init__(
         self,
         log_message: Optional[str] = None,
@@ -334,6 +402,14 @@ class NgConnectWarning(NgConnectExceptionInfoMixin, UserWarning):
         code: ErrorCode = ErrorCode.PluginWarning,
         try_again: Optional[Callable[[], Any]] = None,
     ) -> None:
+        """Initialize the plugin warning.
+
+        :param log_message: Message intended for logs.
+        :param user_message: Message intended for users.
+        :param detail: Additional diagnostic detail.
+        :param code: Internal error code.
+        :param try_again: Retry callback for the failed operation.
+        """
         super().__init__(
             base_class=UserWarning,
             log_message=log_message,
@@ -345,24 +421,35 @@ class NgConnectWarning(NgConnectExceptionInfoMixin, UserWarning):
 
 
 class NgConnectReloadAfterUpdateWarning(NgConnectWarning):
-    """
-    Warning raised when the plugin structure has changed after an update.
+    """Represent a reload-after-update warning.
 
-    This warning indicates that the plugin was successfully updated, but due to changes
-    in its structure, it may fail to load properly until QGIS is restarted.
+    Signal that the plugin was updated and QGIS should be restarted
+    before normal work continues.
     """
 
     def __init__(
         self,
         log_message: Optional[str] = None,
     ) -> None:
-        """Initialize the warning."""
+        """Initialize the reload-after-update warning.
+
+        :param log_message: Message intended for logs.
+        """
         super().__init__(
             log_message=log_message, code=ErrorCode.BigUpdateWarning
         )
 
 
 class NgwError(NgConnectError):
+    """Represent a NextGIS Web communication error.
+
+    Store server-side error details, optional reconnect hints, and the
+    original NGW exception class name when it is available.
+
+    :ivar _try_reconnect: Whether reconnecting can be attempted.
+    :ivar _ngw_exception_class: Original NGW exception class name.
+    """
+
     _try_reconnect: bool
     _ngw_exception_class: Optional[str]
 
@@ -376,6 +463,15 @@ class NgwError(NgConnectError):
         ngw_exception_class: Optional[str] = None,
         code: ErrorCode = ErrorCode.NgwError,
     ) -> None:
+        """Initialize the NGW communication error.
+
+        :param log_message: Message intended for logs.
+        :param user_message: Message intended for users.
+        :param detail: Additional diagnostic detail.
+        :param try_reconnect: Whether reconnecting can be attempted.
+        :param ngw_exception_class: Original NGW exception class name.
+        :param code: Internal error code.
+        """
         super().__init__(
             log_message,
             user_message=user_message,
@@ -391,14 +487,27 @@ class NgwError(NgConnectError):
 
     @property
     def try_reconnect(self) -> bool:
+        """Return whether reconnecting can be attempted.
+
+        :return: ``True`` when reconnecting can be attempted.
+        """
         return self._try_reconnect
 
     @property
     def ngw_exception_class(self) -> Optional[str]:
+        """Return the original NGW exception class name.
+
+        :return: Original NGW exception class name or ``None``.
+        """
         return self._ngw_exception_class
 
     @staticmethod
     def from_json(json: Dict[str, Any]) -> "NgwError":
+        """Create an NGW error from a server error payload.
+
+        :param json: Server error payload.
+        :return: Parsed NGW error.
+        """
         status_code = json["status_code"]
 
         if status_code == HTTPStatus.UNAUTHORIZED:
@@ -447,6 +556,12 @@ class NgwError(NgConnectError):
 
 
 class ResourcePermissionError(NgwError):
+    """Represent missing permissions for a resource.
+
+    Add a resource-opening recovery action when the resource URL is
+    available.
+    """
+
     def __init__(
         self,
         log_message: Optional[str] = None,
@@ -455,6 +570,13 @@ class ResourcePermissionError(NgwError):
         detail: Optional[str] = None,
         resource_url: Optional[str] = None,
     ) -> None:
+        """Initialize the resource permission error.
+
+        :param log_message: Message intended for logs.
+        :param user_message: Message intended for users.
+        :param detail: Additional diagnostic detail.
+        :param resource_url: Resource URL for the recovery action.
+        """
         super().__init__(
             log_message,
             user_message=user_message,
@@ -476,6 +598,12 @@ class ResourcePermissionError(NgwError):
 
 
 class NgwConnectionError(NgConnectError):
+    """Represent a NextGIS Web connection error.
+
+    Use this error for failures that prevent connection verification or
+    communication setup.
+    """
+
     def __init__(
         self,
         log_message: Optional[str] = None,
@@ -484,6 +612,13 @@ class NgwConnectionError(NgConnectError):
         detail: Optional[str] = None,
         code: ErrorCode = ErrorCode.NgwConnectionError,
     ) -> None:
+        """Initialize the connection error.
+
+        :param log_message: Message intended for logs.
+        :param user_message: Message intended for users.
+        :param detail: Additional diagnostic detail.
+        :param code: Internal error code.
+        """
         super().__init__(
             log_message,
             user_message=user_message,
@@ -493,6 +628,12 @@ class NgwConnectionError(NgConnectError):
 
 
 class DetachedEditingError(NgConnectError):
+    """Represent a detached editing error.
+
+    Use this error for failures in detached layer synchronization,
+    local editing state, or related data handling.
+    """
+
     def __init__(
         self,
         log_message: Optional[str] = None,
@@ -501,6 +642,13 @@ class DetachedEditingError(NgConnectError):
         detail: Optional[str] = None,
         code: ErrorCode = ErrorCode.DetachedEditingError,
     ) -> None:
+        """Initialize the detached editing error.
+
+        :param log_message: Message intended for logs.
+        :param user_message: Message intended for users.
+        :param detail: Additional diagnostic detail.
+        :param code: Internal error code.
+        """
         super().__init__(
             log_message,
             user_message=user_message,
@@ -510,6 +658,12 @@ class DetachedEditingError(NgConnectError):
 
 
 class ContainerError(DetachedEditingError):
+    """Represent a detached container error.
+
+    Use this error for local container creation, validation, schema, or
+    lifecycle failures.
+    """
+
     def __init__(
         self,
         log_message: Optional[str] = None,
@@ -518,6 +672,13 @@ class ContainerError(DetachedEditingError):
         detail: Optional[str] = None,
         code: ErrorCode = ErrorCode.ContainerError,
     ) -> None:
+        """Initialize the container error.
+
+        :param log_message: Message intended for logs.
+        :param user_message: Message intended for users.
+        :param detail: Additional diagnostic detail.
+        :param code: Internal error code.
+        """
         super().__init__(
             log_message,
             user_message=user_message,
@@ -527,6 +688,12 @@ class ContainerError(DetachedEditingError):
 
 
 class LayerEditError(DetachedEditingError):
+    """Represent a QGIS layer edit error.
+
+    Convert QGIS edit failures into plugin errors with separated layer
+    and provider diagnostic notes.
+    """
+
     def __init__(
         self,
         log_message: Optional[str] = None,
@@ -535,6 +702,13 @@ class LayerEditError(DetachedEditingError):
         detail: Optional[str] = None,
         code: ErrorCode = ErrorCode.LayerEditError,
     ) -> None:
+        """Initialize the layer edit error.
+
+        :param log_message: Message intended for logs.
+        :param user_message: Message intended for users.
+        :param detail: Additional diagnostic detail.
+        :param code: Internal error code.
+        """
         super().__init__(
             log_message,
             user_message=user_message,
@@ -548,6 +722,12 @@ class LayerEditError(DetachedEditingError):
         *,
         log_message: Optional[str] = None,
     ) -> "LayerEditError":
+        """Create a layer edit error from a QGIS edit error.
+
+        :param error: QGIS edit error to convert.
+        :param log_message: Message intended for logs.
+        :return: Plugin layer edit error.
+        """
         ng_error = LayerEditError(
             log_message="Layer edit error"
             if log_message is None
@@ -591,6 +771,12 @@ class LayerEditError(DetachedEditingError):
 
 
 class SynchronizationError(DetachedEditingError):
+    """Represent a detached layer synchronization error.
+
+    Use this error for failures that prevent local and remote layer
+    state from being synchronized.
+    """
+
     def __init__(
         self,
         log_message: Optional[str] = None,
@@ -599,6 +785,13 @@ class SynchronizationError(DetachedEditingError):
         detail: Optional[str] = None,
         code: ErrorCode = ErrorCode.SynchronizationError,
     ) -> None:
+        """Initialize the synchronization error.
+
+        :param log_message: Message intended for logs.
+        :param user_message: Message intended for users.
+        :param detail: Additional diagnostic detail.
+        :param code: Internal error code.
+        """
         super().__init__(
             log_message,
             user_message=user_message,
@@ -608,6 +801,12 @@ class SynchronizationError(DetachedEditingError):
 
 
 class SerializationError(DetachedEditingError):
+    """Represent a detached editing serialization error.
+
+    Use this error when feature, geometry, attachment, or sync payload
+    serialization fails.
+    """
+
     def __init__(
         self,
         log_message: Optional[str] = None,
@@ -616,6 +815,13 @@ class SerializationError(DetachedEditingError):
         detail: Optional[str] = None,
         code: ErrorCode = ErrorCode.SerializationError,
     ) -> None:
+        """Initialize the serialization error.
+
+        :param log_message: Message intended for logs.
+        :param user_message: Message intended for users.
+        :param detail: Additional diagnostic detail.
+        :param code: Internal error code.
+        """
         super().__init__(
             log_message,
             user_message=user_message,
@@ -670,6 +876,11 @@ def _default_log_message(code: ErrorCode) -> str:
 
 @lru_cache(maxsize=128)
 def default_user_message(code: ErrorCode) -> str:
+    """Return the default user-facing message for an error code.
+
+    :param code: Error code to describe.
+    :return: Localized user-facing message.
+    """
     # fmt: off
     messages = {
         ErrorCode.PluginError: QgsApplication.translate(
@@ -764,6 +975,11 @@ def default_user_message(code: ErrorCode) -> str:
 
 @lru_cache(maxsize=128)
 def default_detail(code: ErrorCode) -> Optional[str]:
+    """Return the default detail text for an error code.
+
+    :param code: Error code to describe.
+    :return: Localized detail text or ``None``.
+    """
     # fmt: off
     layer_reset_detail = QgsApplication.translate(
         "Errors",

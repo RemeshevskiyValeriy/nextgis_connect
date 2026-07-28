@@ -150,6 +150,12 @@ except Exception:
 
 
 class DataType(IntEnum):
+    """Represent QGIS raster data types across supported versions.
+
+    Provide conversion helpers between QGIS data type enum values and
+    GDAL integer data type identifiers.
+    """
+
     UnknownDataType = Qgis.DataType.UnknownDataType
     Byte = Qgis.DataType.Byte
     Int8 = Qgis.DataType.Int8
@@ -169,7 +175,7 @@ class DataType(IntEnum):
     def to_gdal(self) -> int:
         """Return the corresponding GDAL data type.
 
-        Based on QgsGdalUtils::gdalDataTypeFromQgisDataType
+        :return: GDAL data type identifier.
         """
         mapping = {
             DataType.UnknownDataType: int(gdal.GDT_Unknown),
@@ -200,7 +206,8 @@ class DataType(IntEnum):
     def from_gdal(cls, gdal_data_type: int) -> "DataType":
         """Return the corresponding QGIS data type.
 
-        Based on QgsGdalProviderBase::dataTypeFromGdal
+        :param gdal_data_type: GDAL data type identifier.
+        :return: Matching QGIS data type.
         """
         mapping: Dict[int, DataType] = {
             int(gdal.GDT_Unknown): cls.UnknownDataType,

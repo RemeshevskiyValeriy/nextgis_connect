@@ -11,11 +11,21 @@ from nextgis_connect.platform.qgis.errors import (
 
 
 class NgConnectTask(QgsTask):
+    """Run a QGIS task with plugin error capture.
+
+    Store task failures as ``NgConnectError`` instances and prepare
+    worker threads for debugging when developer mode is enabled.
+    """
+
     __error: Optional[NgConnectError]
 
     def __init__(
         self, flags: Union[QgsTask.Flags, QgsTask.Flag, None] = None
     ) -> None:
+        """Initialize the task.
+
+        :param flags: QGIS task flags.
+        """
         if flags is None:
             flags = QgsTask.Flags()
         super().__init__(flags=flags)
@@ -23,6 +33,10 @@ class NgConnectTask(QgsTask):
 
     @property
     def error(self) -> Optional[NgConnectError]:
+        """Return the captured plugin error.
+
+        :return: Captured error or ``None``.
+        """
         return self._error
 
     @property
@@ -38,6 +52,10 @@ class NgConnectTask(QgsTask):
             self.__error.__cause__ = deepcopy(error)
 
     def run(self) -> bool:
+        """Run the task preflight logic.
+
+        :return: ``True`` when the task can continue.
+        """
         if NgConnectSettings().is_developer_mode:
             try:
                 import debugpy  # noqa: T100
@@ -56,4 +74,8 @@ class NgConnectTask(QgsTask):
 
 
 class NgConnectTaskManager(QgsTaskManager):
-    pass
+    """Provide the plugin task manager type.
+
+    Use the QGIS task manager behavior while giving the plugin a stable
+    type for dependency wiring.
+    """

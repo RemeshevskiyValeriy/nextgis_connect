@@ -38,6 +38,12 @@ from nextgis_connect.shell.presentation.about.about_dialog import AboutDialog
 
 
 class SupportStatus(Enum):
+    """Represent NextGIS Web support status.
+
+    Distinguish whether the connected server is older, newer, or within
+    the version range accepted by the current plugin settings.
+    """
+
     OLD_NGW = auto()
     OLD_CONNECT = auto()
     SUPPORTED = auto()
@@ -50,7 +56,20 @@ def _iface() -> "QgisInterface":
 
 
 class ChooserDialog(QDialog):
+    """Show a simple multi-selection dialog.
+
+    Present a list of text options and store the selected values after
+    the dialog is accepted.
+
+    :ivar options: Text options shown to the caller.
+    :ivar seleced_options: Text options selected by the user.
+    """
+
     def __init__(self, options):
+        """Initialize the chooser dialog.
+
+        :param options: Text options to display.
+        """
         super().__init__()
         self.options = options
 
@@ -80,6 +99,7 @@ class ChooserDialog(QDialog):
         self.seleced_options = []
 
     def accept(self):
+        """Accept the dialog and store selected options."""
         self.seleced_options = [
             item.text() for item in self.list.selectedItems()
         ]
@@ -87,6 +107,7 @@ class ChooserDialog(QDialog):
 
 
 def open_plugin_help():
+    """Open the plugin help dialog."""
     components_path = (
         Path(__file__).resolve().parents[2] / "assets" / "components.json"
     )
@@ -97,6 +118,13 @@ def open_plugin_help():
 def set_clipboard_data(
     mime_type: str, data: Union[QByteArray, bytes, bytearray], text: str
 ):
+    """Set binary and text data on the application clipboard.
+
+    :param mime_type: MIME type for the binary clipboard data.
+    :param data: Binary payload to store.
+    :param text: Plain text payload to store.
+    """
+
     def create_mime_data() -> QMimeData:
         mime_data = QMimeData()
         mime_data.setData(mime_type, data)
@@ -113,6 +141,12 @@ def set_clipboard_data(
 
 
 def is_version_supported(current_version_string: str) -> SupportStatus:
+    """Return support status for a NextGIS Web version.
+
+    :param current_version_string: NextGIS Web version string.
+    :return: Version support status.
+    """
+
     def version_to_tuple(version: str) -> Tuple[int, int]:
         minor, major = islice(map(int, version.split(".")), 2)
         return minor, major
@@ -144,8 +178,9 @@ def is_version_supported(current_version_string: str) -> SupportStatus:
 
 
 def get_project_import_export_menu() -> Optional[QMenu]:
-    """
-    Returns the application Project - Import/Export sub menu
+    """Return the application Project Import/Export submenu.
+
+    :return: Import/Export menu or ``None``.
     """
     iface = _iface()
     if Qgis.versionInt() >= QGIS_3_30:
@@ -164,8 +199,9 @@ def get_project_import_export_menu() -> Optional[QMenu]:
 
 
 def add_project_export_action(project_export_action: QAction) -> None:
-    """
-    Decides how to add action of project export to the Project - Import/Export sub menu
+    """Add a project export action to the Project menu.
+
+    :param project_export_action: Action to add to the export menu.
     """
     iface = _iface()
     if Qgis.versionInt() >= QGIS_3_30:
@@ -189,6 +225,10 @@ def add_project_export_action(project_export_action: QAction) -> None:
 
 @lru_cache(maxsize=1)
 def locale() -> str:
+    """Return the active two-letter QGIS locale.
+
+    :return: Lowercase locale code.
+    """
     override_locale = QgsSettings().value(
         "locale/overrideFlag", defaultValue=False, type=bool
     )
@@ -203,11 +243,20 @@ def locale() -> str:
 
 @lru_cache(maxsize=1)
 def is_russian_speaking() -> bool:
+    """Return whether the active locale uses Russian-language services.
+
+    :return: ``True`` for Russian-speaking locales.
+    """
     return locale() in ["be", "kk", "ky", "ru", "uk"]
 
 
 @lru_cache(maxsize=1)
 def nextgis_domain(subdomain: Optional[str] = None) -> str:
+    """Return a localized NextGIS domain URL.
+
+    :param subdomain: Optional subdomain prefix.
+    :return: Localized NextGIS domain URL.
+    """
     speaks_russian = is_russian_speaking()
     if subdomain is None:
         subdomain = ""
@@ -217,6 +266,12 @@ def nextgis_domain(subdomain: Optional[str] = None) -> str:
 
 
 def utm_tags(utm_medium: str, *, utm_campaign: str = "constant") -> str:
+    """Return plugin UTM query parameters.
+
+    :param utm_medium: UTM medium value.
+    :param utm_campaign: UTM campaign value.
+    :return: Encoded UTM query string.
+    """
     utm = (
         f"utm_source=qgis_plugin&utm_medium={utm_medium}"
         f"&utm_campaign={utm_campaign}&utm_term=nextgis_connect"
@@ -226,13 +281,10 @@ def utm_tags(utm_medium: str, *, utm_campaign: str = "constant") -> str:
 
 
 def wrap_sql_value(value: Any) -> str:
-    """
-    Converts a Python value to a SQL-compatible string representation.
+    """Convert a Python value to a SQL literal.
 
-    :param value: The value to be converted.
-    :type value: Any
-    :return: The SQL-compatible string representation of the value.
-    :rtype: str
+    :param value: Value to convert.
+    :return: SQL-compatible string representation.
     """
     if isinstance(value, str):
         value = value.replace("'", r"''")
@@ -245,26 +297,20 @@ def wrap_sql_value(value: Any) -> str:
 
 
 def wrap_sql_table_name(value: Any) -> str:
-    """
-    Wraps a given value in double quotes for use as an SQL table name,
-    escaping any existing double quotes within the value.
+    """Wrap a value as a SQL table name.
 
-    :param value: The value to be wrapped.
-    :type value: Any
-    :return: The value wrapped in double quotes.
-    :rtype: str
+    :param value: Table name to wrap.
+    :return: Double-quoted SQL table name.
     """
     value = value.replace('"', r'""')
     return f'"{value}"'
 
 
 def human_readable_size(size_in_kb: float) -> str:
-    """
-    Converts a file size in kilobytes to a human-readable format.
-    :param size_in_kb: Size in kilobytes.
-    :type size_in_kb: float
-    :returns: Human-readable size string.
-    :rtype: str
+    """Convert a size in KiB to localized human-readable text.
+
+    :param size_in_kb: Size in KiB.
+    :return: Human-readable size string.
     """
     units = [
         QgsApplication.translate("SizeUnits", "KiB"),

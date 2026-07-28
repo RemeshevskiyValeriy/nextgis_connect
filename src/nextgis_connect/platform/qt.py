@@ -10,25 +10,23 @@ from nextgis_connect.platform.qgis.errors import NgConnectExceptionInfoMixin
 
 
 class QObjectMetaClass(ABCMeta, type(QObject)):
-    """Defines a metaclass for QObject-based classes.
+    """Combine abstract base classes with QObject inheritance.
 
-    QObjectMetaClass: A metaclass that combines ABCMeta (for abstract base
-    classes) and the metaclass of QObject, allowing for the creation of
-    abstract Qt objects.
+    Allow abstract Qt objects to inherit from QObject while still using
+    abstract methods and properties.
     """
 
 
 @dataclass
 class QtNetworkErrorInfo:
-    """
-    Stores information about a specific Qt network error.
+    """Store information about a Qt network error.
 
-    :param code: The QNetworkReply.NetworkError code.
-    :type code: QNetworkReply.NetworkError
-    :param constant: The string constant representing the error.
-    :type constant: str
-    :param description: Human-readable description of the error.
-    :type description: str
+    Keep the Qt error code, its enum constant name, and a readable
+    description used for exception notes.
+
+    :ivar code: Qt network error code.
+    :ivar constant: Qt enum constant name.
+    :ivar description: Human-readable error description.
     """
 
     code: QNetworkReply.NetworkError
@@ -36,21 +34,19 @@ class QtNetworkErrorInfo:
     description: str
 
     def add_exception_notes(self, error: NgConnectExceptionInfoMixin) -> None:
-        """
-        Add network error details as notes to a NgConnectExceptionInfoMixin.
+        """Add network error details to an exception.
 
-        :param error: The exception to which notes will be added.
-        :type error: NgConnectExceptionInfoMixin
+        :param error: Exception that receives diagnostic notes.
         """
         error.add_note(f"Network error: {self.constant}")
         error.add_note(f"Error description: {self.description}")
 
 
 class QtNetworkError(Enum):
-    """
-    Enumeration of Qt network errors with associated information.
+    """Represent known Qt network errors.
 
-    Each member contains a QtNetworkErrorInfo instance describing the error.
+    Map Qt network error codes to constant names and readable
+    descriptions for diagnostics.
     """
 
     NO_ERROR = QtNetworkErrorInfo(
@@ -228,13 +224,10 @@ class QtNetworkError(Enum):
     def from_qt(
         cls, value: QNetworkReply.NetworkError
     ) -> Optional["QtNetworkError"]:
-        """
-        Get the QtNetworkError enum member corresponding to a QNetworkReply.NetworkError value.
+        """Return the enum member for a Qt network error value.
 
-        :param value: The QNetworkReply.NetworkError value.
-        :type value: QNetworkReply.NetworkError
-        :return: The corresponding QtNetworkError enum member, or None if not found.
-        :rtype: Optional[QtNetworkError]
+        :param value: Qt network error value.
+        :return: Matching enum member or ``None``.
         """
         for error in cls:
             if error.value.code == value:

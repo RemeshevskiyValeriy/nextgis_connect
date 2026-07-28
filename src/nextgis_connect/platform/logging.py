@@ -24,12 +24,10 @@ def _iface() -> QgisInterface:
 
 
 def map_logging_level_to_qgis(level: int) -> Qgis.MessageLevel:
-    """Map Python logging level to QGIS message level.
+    """Map a Python logging level to a QGIS message level.
 
-    :param level: Logging level
-    :type level: int
-    :return: QGIS message level
-    :rtype: Qgis.MessageLevel
+    :param level: Python logging level.
+    :return: Matching QGIS message level.
     """
     if level >= logging.ERROR:
         return Qgis.MessageLevel.Critical
@@ -44,12 +42,10 @@ def map_logging_level_to_qgis(level: int) -> Qgis.MessageLevel:
 
 
 def map_qgis_level_to_logging(level: Qgis.MessageLevel) -> int:
-    """Map QGIS message level to Python logging level.
+    """Map a QGIS message level to a Python logging level.
 
-    :param level: QGIS message level
-    :type level: Qgis.MessageLevel
-    :return: Corresponding Python logging level
-    :rtype: int
+    :param level: QGIS message level.
+    :return: Matching Python logging level.
     """
     if level == Qgis.MessageLevel.Critical:
         return logging.ERROR
@@ -64,23 +60,17 @@ def map_qgis_level_to_logging(level: Qgis.MessageLevel) -> int:
 
 
 class QgisLogger(logging.Logger):
-    """Custom logger for QGIS nextgis_connect.
+    """Integrate Python logging with QGIS.
 
-    Provides integration with QGIS message log and adds a 'success' level.
-
-    :param name: Logger name
-    :type name: str
-    :param level: Logging level
-    :type level: int
+    Route messages through the standard logging API while supporting
+    QGIS message levels and the plugin-specific success level.
     """
 
     def __init__(self, name: str, level: int = logging.NOTSET) -> None:
-        """Initialize QgisLogger instance.
+        """Initialize the logger.
 
-        :param name: Logger name
-        :type name: str
-        :param level: Logging level
-        :type level: int
+        :param name: Logger name.
+        :param level: Initial logging level.
         """
         super().__init__(name, level)
 
@@ -91,12 +81,12 @@ class QgisLogger(logging.Logger):
         *args,
         **kwargs,
     ) -> None:
-        """Log 'msg % args' with the integer severity 'level'.
+        """Log a message with a Python or QGIS severity level.
 
-        To pass exception information, use the keyword argument exc_info with
-        a true value, e.g.
-
-        logger.log(level, "We have a %s", "mysterious problem", exc_info=True)
+        :param level: Python logging level or QGIS message level.
+        :param msg: Log message format string.
+        :param args: Positional formatting arguments.
+        :param kwargs: Keyword options passed to the base logger.
         """
         if isinstance(level, Qgis.MessageLevel):
             level = map_qgis_level_to_logging(level)
@@ -104,26 +94,27 @@ class QgisLogger(logging.Logger):
         super().log(level, msg, *args, **kwargs)
 
     def success(self, message: str, *args, **kwargs) -> None:
-        """Log a message with SUCCESS level.
+        """Log a message with the success level.
 
-        :param message: Log message
-        :type message: str
+        :param message: Log message format string.
+        :param args: Positional formatting arguments.
+        :param kwargs: Keyword options passed to the base logger.
         """
         if self.isEnabledFor(SUCCESS_LEVEL):
             self._log(SUCCESS_LEVEL, message, args, **kwargs)
 
 
 class QgisLoggerHandler(logging.Handler):
-    """Logging handler that sends messages to QGIS message log.
+    """Send logging records to the QGIS message log.
 
-    Formats and routes log records to QgsApplication.messageLog().
+    Convert Python log records into QGIS message log entries using the
+    plugin logger name and message-level mapping.
     """
 
     def emit(self, record: logging.LogRecord) -> None:
-        """Emit a log record to QGIS message log.
+        """Emit a log record to the QGIS message log.
 
-        :param record: Log record
-        :type record: logging.LogRecord
+        :param record: Log record to emit.
         """
         level = map_logging_level_to_qgis(record.levelno)
         message = self.format(record)
@@ -135,12 +126,10 @@ class QgisLoggerHandler(logging.Handler):
         message_log.logMessage(self._process_html(message), record.name, level)
 
     def _process_html(self, message: str) -> str:
-        """Process message for HTML compatibility in QGIS log.
+        """Process a message for QGIS log HTML handling.
 
-        :param message: Log message
-        :type message: str
-        :return: Processed message
-        :rtype: str
+        :param message: Log message.
+        :return: Processed log message.
         """
         message = message.replace(" ", "\u00a0")
 
@@ -158,12 +147,9 @@ class QgisLoggerHandler(logging.Handler):
 
 
 def load_logger() -> QgisLogger:
-    """Create and configure QgisLogger instance.
+    """Create and configure the plugin logger.
 
-    Temporarily sets QgisLogger as the logger class, then restores the original.
-
-    :return: Configured QgisLogger instance
-    :rtype: QgisLogger
+    :return: Configured plugin logger instance.
     """
     original_logger_class = logging.getLoggerClass()
     logging.setLoggerClass(QgisLogger)
@@ -184,13 +170,13 @@ def load_logger() -> QgisLogger:
 
 
 def update_logging_level() -> None:
-    """Update logging level based on nextgis_connect settings."""
+    """Update the plugin logger level from settings."""
     is_debug_logs_enabled = NgConnectSettings().is_debug_enabled
     logger.setLevel(logging.DEBUG if is_debug_logs_enabled else logging.INFO)
 
 
 def unload_logger() -> None:
-    """Remove all handlers and reset logger."""
+    """Remove plugin logger handlers and reset propagation."""
     logger = logging.getLogger(PLUGIN_NAME)
 
     handlers = logger.handlers.copy()
@@ -204,31 +190,28 @@ def unload_logger() -> None:
 
 
 def escape_html(message: str) -> str:
-    """
-    Escape HTML special characters in a string.
+    """Escape HTML special characters when QGIS requires it.
 
-    :param message: The message to escape.
-    :return: The escaped message.
+    :param message: Message to escape.
+    :return: Escaped or original message.
     """
     # https://github.com/qgis/QGIS/issues/45834
     return html.escape(message) if Qgis.versionInt() < QGIS_3_42_2 else message
 
 
 def format_container_data(data: Union[List, Set, Dict]) -> str:
-    """
-    Format container data (list, set, dict) for logging.
+    """Format container data for logging.
 
-    :param data: The container data to format.
-    :return: Formatted string representation of the data.
+    :param data: Container data to format.
+    :return: Formatted string representation.
     """
     return pformat(data)
 
 
 def extract_plugin_logs() -> str:
-    """
-    Extract log messages from QGIS log viewer for the plugin tab.
-    :returns: Log messages as a single string.
-    :rtype: str
+    """Extract messages from the plugin log tab.
+
+    :return: Plugin log messages as a single string.
     """
     iface = _iface()
     log_viewer = iface.mainWindow().logViewer()
@@ -248,9 +231,7 @@ def extract_plugin_logs() -> str:
 
 
 def open_plugin_logs() -> None:
-    """
-    Open QGIS log viewer with the plugin tab selected.
-    """
+    """Open the QGIS log viewer with the plugin tab selected."""
     iface = _iface()
     if Qgis.versionInt() >= 34400:
         iface.openMessageLog(PLUGIN_NAME)
