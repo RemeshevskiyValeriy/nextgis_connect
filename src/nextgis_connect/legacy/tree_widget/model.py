@@ -141,6 +141,7 @@ class NGWResourcesModelJob(QObject):
         self.__job_uuid = str(uuid.uuid4())
         self.__result = None
         self.__error = None
+        self.__is_finished = False
 
         self.__worker.started.connect(self.started.emit)
         self.__worker.dataReceived.connect(self.__rememberResult)
@@ -192,23 +193,49 @@ class NGWResourcesModelJob(QObject):
     def cancel(self) -> None:
         self.__worker.cancel()
 
-    def finishProcess(self):
+    def cancel_and_wait(self) -> None:
+        self.cancel()
         if self.__thread is None:
             return
 
-        self.__worker.started.disconnect()
-        self.__worker.dataReceived.disconnect()
-        self.__worker.statusChanged.disconnect()
-        self.__worker.errorOccurred.disconnect()
-        self.__worker.warningOccurred.disconnect()
-        self.__worker.finished.disconnect()
+        self.__thread.quit()
+        self.__thread.wait()
+        self.__finish(emit_finished=False)
+
+    def finishProcess(self):
+        self.__finish(emit_finished=True)
+
+    def __finish(self, *, emit_finished: bool) -> None:
+        if self.__is_finished:
+            return
+
+        if self.__thread is None:
+            return
+
+        self.__is_finished = True
+        self.__safe_worker_disconnect()
 
         self.__thread.quit()
         self.__thread.wait()
+        self.__thread = None
 
-        self.finished.emit()
-
+        if emit_finished:
+            self.finished.emit()
         NgConnectInterface.instance().enable_synchronization()
+
+    def __safe_worker_disconnect(self) -> None:
+        for signal in (
+            self.__worker.started,
+            self.__worker.dataReceived,
+            self.__worker.statusChanged,
+            self.__worker.errorOccurred,
+            self.__worker.warningOccurred,
+            self.__worker.finished,
+        ):
+            try:
+                signal.disconnect()
+            except (RuntimeError, TypeError):
+                pass
 
 
 class NgwCreateVectorLayersStubs(NGWResourceModelJob):
@@ -928,6 +955,20 @@ class QNGWResourceTreeModelBase(QAbstractItemModel):
             return True
 
         return False
+
+    def shutdown_jobs(self) -> None:
+        if self._version_check_feedback is not None:
+            self._version_check_feedback.cancel()
+            self._version_check_feedback = None
+
+        for job in list(self.jobs):
+            job.cancel_and_wait()
+            self._unlockIndexesByJob(job)
+            if job in self.jobs:
+                self.jobs.remove(job)
+            job.deleteLater()
+
+        self.__sync_loading_indicator_animation()
 
     def __jobStartedProcess(self):
         job = cast(NGWResourcesModelJob, self.sender())

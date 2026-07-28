@@ -793,6 +793,7 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
             self.__set_search_empty,
         )
 
+        self.resource_model.shutdown_jobs()
         self.resources_tree_view.deleteLater()
         self.resource_model.deleteLater()
 
