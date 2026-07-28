@@ -61,3 +61,39 @@ def test_resource_type_suggestions_preserve_opening_quote() -> None:
     )
 
     assert suggestions == ['@type = "raster_layer"']
+
+
+def test_owner_suggestions_are_available_after_owner_equals() -> None:
+    suggestions = TextSearchSuggestionBuilder().owner_suggestions(
+        "@owner = ",
+        ["Alice Smith", "Bob"],
+    )
+
+    assert suggestions == ["@owner = Alice Smith", "@owner = Bob"]
+
+
+def test_owner_suggestions_filter_value_prefix() -> None:
+    suggestions = TextSearchSuggestionBuilder().owner_suggestions(
+        "@owner=ali",
+        ["Alice Smith", "Bob"],
+    )
+
+    assert suggestions == ["@owner=Alice Smith"]
+
+
+def test_owner_suggestions_preserve_opening_quote() -> None:
+    suggestions = TextSearchSuggestionBuilder().owner_suggestions(
+        '@owner = "ali',
+        ["Alice Smith", "Bob"],
+    )
+
+    assert suggestions == ['@owner = "Alice Smith"']
+
+
+def test_owner_suggestions_skip_values_incompatible_with_quote() -> None:
+    suggestions = TextSearchSuggestionBuilder().owner_suggestions(
+        '@owner = "',
+        ['Alice "QA"', "Bob"],
+    )
+
+    assert suggestions == ['@owner = "Bob"']

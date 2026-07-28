@@ -265,7 +265,7 @@ class NgwSearch(NGWResourceModelJob):
         old_query_name: str
         in_supported: bool = True
         visible: bool = True
-        unquoted_eq_supported: bool = False
+        unquoted_eq_pattern: str = ""
 
     INT_TAGS: ClassVar[List[Tag]] = [
         Tag("id", "id", "id"),
@@ -275,10 +275,10 @@ class NgwSearch(NGWResourceModelJob):
     ]
 
     STR_TAGS: ClassVar[List[Tag]] = [
-        Tag("type", "cls", "cls", unquoted_eq_supported=True),
+        Tag("type", "cls", "cls", unquoted_eq_pattern=r"[a-zA-Z0-9_]+"),
         Tag("name", "display_name", "display_name"),
         Tag("keyname", "keyname", "keyname"),
-        Tag("owner", "owner", "owner_user_id"),
+        Tag("owner", "owner", "owner_user_id", unquoted_eq_pattern=r"[^'\"]+"),
     ]
 
     def __init__(
@@ -449,8 +449,8 @@ class NgwSearch(NGWResourceModelJob):
             rf"|^@{tag_name}\s+ILIKE\s+(['\"])(.*?)\3$"
             rf"|^@{tag_name}\s+IN\s*\((.*?)\)$"
         )
-        if tag.unquoted_eq_supported:
-            pattern += rf"|^@{tag_name}\s*=\s*([a-zA-Z0-9_]+)$"
+        if tag.unquoted_eq_pattern != "":
+            pattern += rf"|^@{tag_name}\s*=\s*({tag.unquoted_eq_pattern})$"
 
         matches = re.findall(pattern, search_string, flags=re.IGNORECASE)
         if not matches:
@@ -469,8 +469,8 @@ class NgwSearch(NGWResourceModelJob):
                 values.extend(
                     match for pair in matches for match in pair if match
                 )
-            elif tag.unquoted_eq_supported and match[5]:
-                values.append(match[5])
+            elif tag.unquoted_eq_pattern != "" and match[5]:
+                values.append(match[5].strip())
 
         if tag_name == "owner":
             values = self.__extract_user_ids(operator, values)

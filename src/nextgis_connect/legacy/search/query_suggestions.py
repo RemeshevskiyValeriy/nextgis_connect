@@ -10,6 +10,13 @@ class ResourceTypeSuggestionContext:
     value_prefix: str
 
 
+@dataclass(frozen=True)
+class OwnerSuggestionContext:
+    base_text: str
+    closing_quote: str
+    value_prefix: str
+
+
 class TextSearchSuggestionBuilder:
     KEYWORDS: Tuple[str, ...] = (
         "id",
@@ -26,6 +33,11 @@ class TextSearchSuggestionBuilder:
     _TYPE_PATTERN = re.compile(
         r"^@type(?P<before_equals>\s*)=(?P<after_equals>\s*)"
         r"(?P<quote>['\"]?)(?P<value>[a-z0-9_]*)$",
+        re.IGNORECASE,
+    )
+    _OWNER_PATTERN = re.compile(
+        r"^@owner(?P<before_equals>\s*)=(?P<after_equals>\s*)"
+        r"(?P<quote>['\"]?)(?P<value>[^'\"]*)$",
         re.IGNORECASE,
     )
 
@@ -92,6 +104,61 @@ class TextSearchSuggestionBuilder:
             )
 
         return suggestions
+
+    def owner_context(
+        self,
+        search_string: str,
+    ) -> Optional[OwnerSuggestionContext]:
+        fragment = self._last_tag_fragment(search_string)
+        if fragment is None:
+            return None
+
+        prefix, tag_text = fragment
+        match = self._OWNER_PATTERN.match(tag_text)
+        if match is None:
+            return None
+
+        quote = match.group("quote")
+        base_text = (
+            f"{prefix}@owner"
+            f"{match.group('before_equals')}="
+            f"{match.group('after_equals')}"
+            f"{quote}"
+        )
+        return OwnerSuggestionContext(
+            base_text=base_text,
+            closing_quote=quote,
+            value_prefix=match.group("value").lower(),
+        )
+
+    def owner_suggestions(
+        self,
+        search_string: str,
+        owners: Iterable[str],
+    ) -> Optional[List[str]]:
+        context = self.owner_context(search_string)
+        if context is None:
+            return None
+
+        suggestions = []
+        for owner in owners:
+            if not owner.lower().startswith(context.value_prefix):
+                continue
+
+            if not self._can_use_quoted_value(owner, context.closing_quote):
+                continue
+
+            suggestions.append(
+                f"{context.base_text}{owner}{context.closing_quote}"
+            )
+
+        return suggestions
+
+    def _can_use_quoted_value(self, value: str, quote: str) -> bool:
+        if quote != "":
+            return quote not in value
+
+        return '"' not in value and "'" not in value
 
     def _last_tag_fragment(
         self,

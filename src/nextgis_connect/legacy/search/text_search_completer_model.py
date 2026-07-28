@@ -21,6 +21,9 @@ from nextgis_connect.legacy.search.query_suggestions import (
 from nextgis_connect.legacy.search.resource_blueprint import (
     ResourceBlueprintTypeParser,
 )
+from nextgis_connect.legacy.search.resource_owners import (
+    ResourceOwnerSuggestionParser,
+)
 from nextgis_connect.legacy.search.search_settings import SearchSettings
 from nextgis_connect.platform.logging import logger
 
@@ -35,13 +38,16 @@ class TextSearchCompleterModel(QStringListModel):
     __network_manager: Optional[QgsNetworkAccessManager]
     __suggestions_network_reply: Optional[QNetworkReply]
     __resource_types_network_reply: Optional[QNetworkReply]
+    __owners_network_reply: Optional[QNetworkReply]
 
     __prefix: str
     __history_suggestions: List[str]
     __search_suggestions: List[str]
     __resource_type_suggestions_cache: Optional[List[str]]
+    __owner_suggestions_cache: Optional[List[str]]
     __suggestion_builder: TextSearchSuggestionBuilder
     __blueprint_type_parser: ResourceBlueprintTypeParser
+    __owner_parser: ResourceOwnerSuggestionParser
 
     def __init__(
         self, connection_id: Optional[str], parent: Optional[QObject] = None
@@ -58,12 +64,15 @@ class TextSearchCompleterModel(QStringListModel):
         self.__network_manager = None
         self.__suggestions_network_reply = None
         self.__resource_types_network_reply = None
+        self.__owners_network_reply = None
 
         # Prefix string for the search
         self.__prefix = ""
         self.__resource_type_suggestions_cache = None
+        self.__owner_suggestions_cache = None
         self.__suggestion_builder = TextSearchSuggestionBuilder()
         self.__blueprint_type_parser = ResourceBlueprintTypeParser()
+        self.__owner_parser = ResourceOwnerSuggestionParser()
 
         # Fetch history suggestions from settings
         self.__update_history_suggestions()
@@ -79,10 +88,17 @@ class TextSearchCompleterModel(QStringListModel):
         if self.__update_keyword_suggestions():
             self.__stop_name_suggestion_fetching()
             self.__discard_resource_type_fetching()
+            self.__discard_owner_fetching()
             return
 
         if self.__update_resource_type_suggestions():
             self.__stop_name_suggestion_fetching()
+            self.__discard_owner_fetching()
+            return
+
+        if self.__update_owner_suggestions():
+            self.__stop_name_suggestion_fetching()
+            self.__discard_resource_type_fetching()
             return
 
         if self.__prefix.strip().startswith("@"):
@@ -92,6 +108,7 @@ class TextSearchCompleterModel(QStringListModel):
             return
 
         self.__discard_resource_type_fetching()
+        self.__discard_owner_fetching()
         self.__search_suggestions = []
         self.__combine()
 
@@ -112,7 +129,9 @@ class TextSearchCompleterModel(QStringListModel):
         connection_id = connection_id if connection_id != "" else None
         self.__connection_id = connection_id
         self.__resource_type_suggestions_cache = None
+        self.__owner_suggestions_cache = None
         self.__discard_resource_type_fetching()
+        self.__discard_owner_fetching()
         self.__search_suggestions = []
         self.__combine()
 
@@ -180,6 +199,26 @@ class TextSearchCompleterModel(QStringListModel):
         self.__fetch_resource_types()
         return True
 
+    def __update_owner_suggestions(self) -> bool:
+        context = self.__suggestion_builder.owner_context(self.__prefix)
+        if context is None:
+            return False
+
+        if self.__owner_suggestions_cache is not None:
+            suggestions = (
+                self.__suggestion_builder.owner_suggestions(
+                    self.__prefix,
+                    self.__owner_suggestions_cache,
+                )
+                or []
+            )
+            self.__set_syntax_suggestions(suggestions)
+            return True
+
+        self.__set_syntax_suggestions([])
+        self.__fetch_owners()
+        return True
+
     def __discard_previous_fetching(self) -> None:
         """Abort any ongoing network request for suggestions"""
         if self.__suggestions_network_reply is None:
@@ -195,6 +234,13 @@ class TextSearchCompleterModel(QStringListModel):
         self.__resource_types_network_reply.abort()
         logger.debug("Resource type suggestions fetching has been cancelled")
 
+    def __discard_owner_fetching(self) -> None:
+        if self.__owners_network_reply is None:
+            return
+
+        self.__owners_network_reply.abort()
+        logger.debug("Owner suggestions fetching has been cancelled")
+
     def __stop_name_suggestion_fetching(self) -> None:
         self.__bouncing_timer.stop()
         self.__discard_previous_fetching()
@@ -203,6 +249,7 @@ class TextSearchCompleterModel(QStringListModel):
         """Stop the bouncing timer and abort previous fetching"""
         self.__stop_name_suggestion_fetching()
         self.__discard_resource_type_fetching()
+        self.__discard_owner_fetching()
 
     @pyqtSlot()
     def __fetch_suggestions(self) -> None:
@@ -262,6 +309,29 @@ class TextSearchCompleterModel(QStringListModel):
 
         self.fetching_started.emit()
         logger.debug("↓ Fetching resource type suggestions")
+
+    def __fetch_owners(self) -> None:
+        if (
+            self.__connection_id is None
+            or self.__owners_network_reply is not None
+        ):
+            return
+
+        connections_manager = NgwConnectionsManager()
+        connection = connections_manager.connection(self.__connection_id)
+        assert connection is not None
+
+        request = QNetworkRequest(
+            QUrl(connection.url + "/api/component/auth/user/?brief=true")
+        )
+        connection.update_network_request(request)
+
+        self.__network_manager = QgsNetworkAccessManager()
+        self.__owners_network_reply = self.__network_manager.get(request)
+        self.__owners_network_reply.finished.connect(self.__update_owners)
+
+        self.fetching_started.emit()
+        logger.debug("↓ Fetching owner suggestions")
 
     @pyqtSlot()
     def __update_suggestions(self) -> None:
@@ -330,3 +400,33 @@ class TextSearchCompleterModel(QStringListModel):
         self.__resource_types_network_reply = None
 
         self.__update_resource_type_suggestions()
+
+    @pyqtSlot()
+    def __update_owners(self) -> None:
+        self.fetching_finished.emit()
+
+        if self.__owners_network_reply is None:
+            return
+
+        if (
+            self.__owners_network_reply.error()  # type: ignore
+            != QNetworkReply.NetworkError.NoError
+        ):
+            self.__owners_network_reply.deleteLater()
+            self.__owners_network_reply = None
+            return
+
+        try:
+            users = json.loads(
+                self.__owners_network_reply.readAll().data().decode()
+            )
+            self.__owner_suggestions_cache = self.__owner_parser.parse(users)
+        except Exception:
+            logger.exception("Can't fetch owner suggestions")
+            self.__owner_suggestions_cache = []
+
+        self.__owners_network_reply.close()
+        self.__owners_network_reply.deleteLater()
+        self.__owners_network_reply = None
+
+        self.__update_owner_suggestions()
