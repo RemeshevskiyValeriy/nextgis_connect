@@ -25,6 +25,9 @@ from nextgis_connect.ngw.core.ngw_resource_factory import (
     NGWResourceFactory,
 )
 from nextgis_connect.ngw.core.ngw_vector_layer import NGWVectorLayer
+from nextgis_connect.ngw.core.vector_layer_export import (
+    VectorLayerExportParams,
+)
 from nextgis_connect.ngw.qgis.qgis_ngw_connection import QgsNgwConnection
 from nextgis_connect.platform.logging import logger
 from nextgis_connect.platform.qgis.errors import (
@@ -82,18 +85,12 @@ class FillLayerWithoutVersioningTask(DetachedEditingTask):
 
     def __download_layer(self, ngw_connection: QgsNgwConnection) -> None:
         resource_id = self._metadata.resource_id
-        srs_id = self._metadata.srs_id
-
-        export_params = {
-            "format": "GPKG",
-            "srs": srs_id,
-            "fid": self._metadata.fid_field,
-            "zipped": "false",
-        }
-        export_url = (
-            f"/api/resource/{resource_id}/export?"
-            + urllib.parse.urlencode(export_params)
-        )
+        export_query = VectorLayerExportParams(
+            fid_field=self._metadata.fid_field,
+            has_geometry=self._metadata.geom_field is not None,
+            srs_id=self._metadata.srs_id,
+        ).to_query()
+        export_url = f"/api/resource/{resource_id}/export?{export_query}"
 
         logger.debug("Downloading layer")
         ngw_connection.download(export_url, str(self.__temp_path))

@@ -26,6 +26,9 @@ from qgis.core import QgsProviderRegistry
 from nextgis_connect.legacy.ngw_connection.application.connections_manager import (
     NgwConnectionsManager,
 )
+from nextgis_connect.ngw.core.vector_layer_export import (
+    VectorLayerExportParams,
+)
 
 from .ngw_abstract_vector_resource import NGWAbstractVectorResource
 from .ngw_feature import NGWFeature
@@ -221,11 +224,19 @@ class NGWVectorLayer(NGWAbstractVectorResource):
         versioning = feature_layer.setdefault("versioning", {})
         versioning["enabled"] = enabled
 
-    def export(self, path: str, format: str = "GPKG", srs: int = 3857) -> None:
+    def export(
+        self,
+        path: str,
+        format: str = "GPKG",
+        srs: Optional[int] = 3857,
+    ) -> None:
         url = self.get_relative_api_url()
-        export_url = (
-            f"{url}/export?format={format}&srs={srs}&fid=&zipped=false"
-        )
+        export_query = VectorLayerExportParams(
+            format_name=format,
+            has_geometry=self.geom_name not in (None, "NONE"),
+            srs_id=srs,
+        ).to_query()
+        export_url = f"{url}/export?{export_query}"
 
         connection = self.res_factory.connection
         connection.download(export_url, path)

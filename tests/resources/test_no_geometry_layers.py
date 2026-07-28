@@ -1,3 +1,4 @@
+import urllib.parse
 from copy import deepcopy
 from pathlib import Path
 from typing import cast
@@ -13,6 +14,9 @@ from nextgis_connect.legacy.detached_editing.utils import (
     detached_layer_uri,
 )
 from nextgis_connect.ngw.core import NGWVectorLayer
+from nextgis_connect.ngw.core.vector_layer_export import (
+    VectorLayerExportParams,
+)
 from nextgis_connect.ngw.qgis.ngw_resource_model_4qgis import (
     QGISResourceJob,
 )
@@ -48,6 +52,56 @@ class TestNoGeometryLayers(NgConnectTestCase):
         job = QGISResourceJob()
 
         self.assertEqual(job.isSuitableLayer(layer), job.SUITABLE_LAYER)
+
+    def test_ngw_vector_layer_export_omits_srs_without_geometry(self) -> None:
+        layer = self._make_ngw_no_geometry_layer()
+        export_path = self.create_temp_file(".gpkg")
+
+        layer.export(str(export_path))
+
+        connection = layer.res_factory.connection
+        connection.download.assert_called_once()
+        export_url = connection.download.call_args.args[0]
+        query = urllib.parse.parse_qs(
+            urllib.parse.urlsplit(export_url).query,
+            keep_blank_values=True,
+        )
+        self.assertNotIn("srs", query)
+        self.assertEqual(query["format"], ["GPKG"])
+        self.assertEqual(query["fid"], [""])
+        self.assertEqual(query["zipped"], ["false"])
+
+    def test_vector_layer_export_query_omits_srs_without_geometry(
+        self,
+    ) -> None:
+        export_query = VectorLayerExportParams(
+            has_geometry=False,
+            srs_id=3857,
+        ).to_query()
+        query = urllib.parse.parse_qs(
+            export_query,
+            keep_blank_values=True,
+        )
+
+        self.assertNotIn("srs", query)
+        self.assertEqual(query["format"], ["GPKG"])
+        self.assertEqual(query["fid"], [""])
+        self.assertEqual(query["zipped"], ["false"])
+
+    def test_vector_layer_export_query_omits_zero_srs(self) -> None:
+        export_query = VectorLayerExportParams(
+            fid_field="fid",
+            srs_id=0,
+        ).to_query()
+        query = urllib.parse.parse_qs(
+            export_query,
+            keep_blank_values=True,
+        )
+
+        self.assertNotIn("srs", query)
+        self.assertEqual(query["format"], ["GPKG"])
+        self.assertEqual(query["fid"], ["fid"])
+        self.assertEqual(query["zipped"], ["false"])
 
     def test_export_without_geometry_requires_supported_ngw_version(
         self,
