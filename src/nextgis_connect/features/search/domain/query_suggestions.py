@@ -2,6 +2,8 @@ import re
 from dataclasses import dataclass
 from typing import Iterable, List, Optional, Tuple
 
+from nextgis_connect.features.search.domain.query import SearchQueryParser
+
 
 @dataclass(frozen=True)
 class ResourceTypeSuggestionContext:
@@ -30,6 +32,8 @@ class TagOperationSyntax:
 
 
 class TextSearchSuggestionBuilder:
+    LOGICAL_OPERATIONS: Tuple[str, ...] = ("AND", "OR")
+
     KEYWORDS: Tuple[str, ...] = (
         "id",
         "parent",
@@ -104,6 +108,10 @@ class TextSearchSuggestionBuilder:
         r"^@(?P<tag>[a-z_]+)(?:\s+(?P<operation>[a-z]*))?$",
         re.IGNORECASE,
     )
+    _LOGICAL_OPERATION_PATTERN = re.compile(
+        r"^(?P<expression>.+)\s+(?P<operation>[a-z]*)$",
+        re.IGNORECASE,
+    )
     _TYPE_PATTERN = re.compile(
         r"^@type(?P<before_equals>\s*)=(?P<after_equals>\s*)"
         r"(?P<quote>['\"]?)(?P<value>[a-z0-9_]*)$",
@@ -114,6 +122,12 @@ class TextSearchSuggestionBuilder:
         r"(?P<quote>['\"]?)(?P<value>[^'\"]*)$",
         re.IGNORECASE,
     )
+
+    def __init__(
+        self,
+        query_parser: Optional[SearchQueryParser] = None,
+    ) -> None:
+        self._query_parser = query_parser or SearchQueryParser()
 
     def keyword_suggestions(self, search_string: str) -> Optional[List[str]]:
         fragment = self._last_tag_fragment(search_string)
@@ -164,6 +178,41 @@ class TextSearchSuggestionBuilder:
                 return syntax
 
         return None
+
+    def logical_operation_suggestions(
+        self,
+        search_string: str,
+    ) -> Optional[List[str]]:
+        match = self._LOGICAL_OPERATION_PATTERN.match(search_string)
+        if match is None:
+            return None
+
+        expression = match.group("expression").rstrip()
+        operation_prefix = match.group("operation").lower()
+        parsed_search = self._query_parser.parse(expression)
+        if parsed_search.is_fallback:
+            return None
+
+        return [
+            f"{expression} {operation} "
+            for operation in self._allowed_logical_operations(expression)
+            if operation.lower().startswith(operation_prefix)
+        ]
+
+    def _allowed_logical_operations(self, expression: str) -> Tuple[str, ...]:
+        has_and_operator = re.search(r"(?i)\sand\s", expression) is not None
+        has_or_operator = re.search(r"(?i)\sor\s", expression) is not None
+
+        if has_and_operator and not has_or_operator:
+            return ("AND",)
+
+        if has_or_operator and not has_and_operator:
+            return ("OR",)
+
+        if has_and_operator and has_or_operator:
+            return ()
+
+        return self.LOGICAL_OPERATIONS
 
     def resource_type_context(
         self,

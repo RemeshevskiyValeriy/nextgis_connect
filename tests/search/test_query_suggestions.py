@@ -90,6 +90,54 @@ def test_operation_suggestions_ignore_metadata_tag() -> None:
     assert suggestions is None
 
 
+def test_logical_operation_suggestions_are_available_after_predicate() -> None:
+    suggestions = TextSearchSuggestionBuilder().logical_operation_suggestions(
+        "@id = 1 "
+    )
+
+    assert suggestions == ["@id = 1 AND ", "@id = 1 OR "]
+
+
+def test_logical_operation_suggestions_filter_by_prefix() -> None:
+    suggestions = TextSearchSuggestionBuilder().logical_operation_suggestions(
+        "@id = 1 a"
+    )
+
+    assert suggestions == ["@id = 1 AND "]
+
+
+def test_logical_operation_suggestions_continue_and_queries() -> None:
+    suggestions = TextSearchSuggestionBuilder().logical_operation_suggestions(
+        '@id = 1 AND @name = "Roads" '
+    )
+
+    assert suggestions == ['@id = 1 AND @name = "Roads" AND ']
+
+
+def test_logical_operation_suggestions_continue_or_queries() -> None:
+    suggestions = TextSearchSuggestionBuilder().logical_operation_suggestions(
+        "@id = 1 OR @id = 2 o"
+    )
+
+    assert suggestions == ["@id = 1 OR @id = 2 OR "]
+
+
+def test_logical_operation_suggestions_ignore_incomplete_predicate() -> None:
+    suggestions = TextSearchSuggestionBuilder().logical_operation_suggestions(
+        "@id = "
+    )
+
+    assert suggestions is None
+
+
+def test_logical_operation_suggestions_ignore_default_search() -> None:
+    suggestions = TextSearchSuggestionBuilder().logical_operation_suggestions(
+        "Roads "
+    )
+
+    assert suggestions is None
+
+
 def test_resource_type_suggestions_are_available_after_type_equals() -> None:
     suggestions = TextSearchSuggestionBuilder().resource_type_suggestions(
         "@type = ",
