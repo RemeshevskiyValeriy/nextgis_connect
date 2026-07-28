@@ -163,6 +163,29 @@ class QNGWResourceTreeView(QTreeView):
     def set_search_empty(self, value: bool) -> None:
         self._overlay_state_model.update(search_empty=value)
 
+    def set_search_connection_target(
+        self,
+        *,
+        exists: bool,
+        url: str,
+        name: str = "",
+    ) -> None:
+        self._overlay_state_model.update(
+            has_search_connection_target=True,
+            search_connection_url=url,
+            search_connection_name=name,
+            search_connection_exists=exists,
+            search_empty=False,
+        )
+
+    def clear_search_connection_target(self) -> None:
+        self._overlay_state_model.update(
+            has_search_connection_target=False,
+            search_connection_url="",
+            search_connection_name="",
+            search_connection_exists=False,
+        )
+
     def clear_availability_state(self) -> None:
         self._overlay_state_model.update(
             is_available=True,

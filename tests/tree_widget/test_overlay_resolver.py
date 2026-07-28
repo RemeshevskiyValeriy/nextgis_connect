@@ -236,3 +236,45 @@ def test_search_empty_is_used_when_other_states_are_clear() -> None:
     )
 
     assert state.kind == OverlayKind.SEARCH_EMPTY
+    assert state.draw_background is True
+    assert state.logo_action == OverlayAction.NONE
+    assert state.title_icon_name == "inbox"
+
+
+def test_search_connection_target_offers_saved_connection_switch() -> None:
+    state = PluginOverlayResolver().resolve(
+        OverlayFacts(
+            has_connections=True,
+            has_search_connection_target=True,
+            search_connection_exists=True,
+            search_connection_url="https://target.nextgis.com",
+            search_connection_name="Target",
+            search_empty=True,
+        )
+    )
+
+    assert state.kind == OverlayKind.SEARCH_CONNECTION
+    assert state.details == "Target"
+    assert (
+        state.primary_action.action == OverlayAction.SWITCH_SEARCH_CONNECTION
+    )
+    assert state.logo_action == OverlayAction.NONE
+
+
+def test_search_connection_target_offers_new_connection_creation() -> None:
+    state = PluginOverlayResolver().resolve(
+        OverlayFacts(
+            has_connections=True,
+            has_search_connection_target=True,
+            search_connection_exists=False,
+            search_connection_url="https://new.nextgis.com",
+            search_empty=True,
+        )
+    )
+
+    assert state.kind == OverlayKind.SEARCH_CONNECTION
+    assert state.details == "https://new.nextgis.com"
+    assert (
+        state.primary_action.action == OverlayAction.CREATE_SEARCH_CONNECTION
+    )
+    assert state.logo_action == OverlayAction.NONE

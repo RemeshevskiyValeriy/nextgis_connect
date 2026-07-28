@@ -137,6 +137,10 @@ from nextgis_connect.legacy.plugin_update import (
 from nextgis_connect.legacy.resource_properties.resource_properties_dialog import (
     ResourcePropertiesDialog,
 )
+from nextgis_connect.legacy.search.connection_url import (
+    SearchConnectionTarget,
+    SearchConnectionTargetResolver,
+)
 from nextgis_connect.legacy.search.search_panel import SearchPanel
 from nextgis_connect.legacy.search.search_settings import SearchSettings
 from nextgis_connect.legacy.search.utils import SearchType
@@ -268,6 +272,13 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
         self.__plugin_update_task: Optional[PluginUpdateCheckTask] = None
         self.__active_plugin_update: Optional[PluginUpdate] = None
         self.__skipped_plugin_update_ids: Set[str] = set()
+        self.__search_connection_target_resolver = (
+            SearchConnectionTargetResolver()
+        )
+        self.__search_connection_target: Optional[SearchConnectionTarget] = (
+            None
+        )
+        self.__pending_search_string = ""
 
         self.actionOpenInNGW = QAction(self.tr("Open in Web GIS"), self)
         self.actionOpenInNGW.setIcon(
@@ -1719,6 +1730,14 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
             self.__try_sandbox_web_gis()
             return
 
+        if action == OverlayAction.SWITCH_SEARCH_CONNECTION:
+            self.__switch_to_search_connection_target()
+            return
+
+        if action == OverlayAction.CREATE_SEARCH_CONNECTION:
+            self.__create_search_connection_target()
+            return
+
         if action == OverlayAction.OPEN_PLUGIN_SETTINGS:
             self.iface.showOptionsDialog(
                 self.iface.mainWindow(), "NextGIS Connect"
@@ -1799,6 +1818,7 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
         self.resources_tree_view.set_auth_required(False)
         self.resources_tree_view.set_migration_required(False)
         self.resources_tree_view.set_search_empty(False)
+        self.resources_tree_view.clear_search_connection_target()
         self.resources_tree_view.end_loading()
 
         # clear tree and states
@@ -1923,6 +1943,7 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
     def __toggle_filter(self, state: bool) -> None:
         if not state:
             self.resource_model.reset_search()
+            self.__clear_search_connection_target()
         else:
             self.search_panel.clear()
             self.search_panel.focus()
@@ -3833,14 +3854,101 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
     def __on_search_requested(self, search_string: str) -> None:
         if len(search_string) == 0:
             self.__on_search_reset()
-        else:
-            self.resources_tree_view.set_search_empty(False)
-            self.resource_model.search(search_string)
+            return
+
+        connections_manager = NgwConnectionsManager()
+        search_connection_target = (
+            self.__search_connection_target_resolver.resolve(
+                search_string,
+                connections_manager.current_connection,
+                connections_manager.connections,
+            )
+        )
+        if search_connection_target is not None:
+            self.__show_search_connection_target(
+                search_string,
+                search_connection_target,
+            )
+            return
+
+        self.__start_search(search_string)
 
     @pyqtSlot()
     def __on_search_reset(self) -> None:
         self.resource_model.reset_search()
         self.resources_tree_view.set_search_empty(False)
+        self.__clear_search_connection_target()
+
+    def __start_search(self, search_string: str) -> None:
+        self.__clear_search_connection_target()
+        self.resources_tree_view.set_search_empty(False)
+        self.resource_model.search(search_string)
+
+    def __show_search_connection_target(
+        self,
+        search_string: str,
+        search_connection_target: SearchConnectionTarget,
+    ) -> None:
+        self.resource_model.reset_search()
+        self.__pending_search_string = search_string
+        self.__search_connection_target = search_connection_target
+
+        connection = search_connection_target.connection
+        self.resources_tree_view.set_search_connection_target(
+            exists=connection is not None,
+            url=search_connection_target.url,
+            name="" if connection is None else connection.name,
+        )
+
+    def __clear_search_connection_target(self) -> None:
+        self.__pending_search_string = ""
+        self.__search_connection_target = None
+        self.resources_tree_view.clear_search_connection_target()
+
+    def __switch_to_search_connection_target(self) -> None:
+        search_connection_target = self.__search_connection_target
+        if (
+            search_connection_target is None
+            or search_connection_target.connection is None
+        ):
+            return
+
+        self.__activate_search_connection(search_connection_target.connection)
+
+    def __create_search_connection_target(self) -> None:
+        search_connection_target = self.__search_connection_target
+        if search_connection_target is None:
+            return
+
+        dialog = NgwConnectionEditDialog(self)
+        dialog.set_url(search_connection_target.url)
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return
+
+        self.__activate_search_connection(dialog.connection())
+
+    def __activate_search_connection(self, connection: NgwConnection) -> None:
+        search_string = self.__pending_search_string
+        connections_manager = NgwConnectionsManager()
+        connections_manager.current_connection_id = connection.id
+        connections_manager.save()
+        self.search_panel.set_connection_id(connection.id)
+
+        self.reinit_tree(force=True)
+        if not self.resource_model.is_connected:
+            self.__hide_search_after_connection_problem()
+            return
+
+        self.__clear_search_connection_target()
+        if len(search_string) > 0:
+            self.__start_search(search_string)
+
+    def __hide_search_after_connection_problem(self) -> None:
+        self.resource_model.reset_search()
+        self.resources_tree_view.set_search_empty(False)
+        self.__clear_search_connection_target()
+        self.search_button.setChecked(False)
+        self.search_panel.setVisible(False)
 
     @pyqtSlot(bool)
     def __on_search_type_changed(self, value: bool) -> None:

@@ -335,6 +335,10 @@ class NgwConnectionEditDialog(QDialog, WIDGET):
 
         return self.__build_connection()
 
+    def set_url(self, url: str) -> None:
+        self.urlLineEdit.setText(url)
+        self.urlLineEdit.setFocus()
+
     def set_message(
         self,
         text: str,

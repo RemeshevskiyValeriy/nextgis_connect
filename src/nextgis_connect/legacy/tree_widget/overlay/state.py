@@ -13,6 +13,7 @@ class OverlayKind(Enum):
     AUTH_REQUIRED = auto()
     UNAVAILABLE = auto()
     ERROR = auto()
+    SEARCH_CONNECTION = auto()
     SEARCH_EMPTY = auto()
 
 
@@ -32,6 +33,8 @@ class OverlayAction(Enum):
     TRY_AGAIN = auto()
     CANCEL = auto()
     SKIP_PLUGIN_UPDATE = auto()
+    SWITCH_SEARCH_CONNECTION = auto()
+    CREATE_SEARCH_CONNECTION = auto()
 
 
 @dataclass(frozen=True)
@@ -111,6 +114,10 @@ class OverlayFacts:
     error_secondary_action: OverlayButtonState = field(
         default_factory=OverlayButtonState
     )
+    has_search_connection_target: bool = False
+    search_connection_url: str = ""
+    search_connection_name: str = ""
+    search_connection_exists: bool = False
     search_empty: bool = False
 
 

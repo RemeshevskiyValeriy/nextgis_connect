@@ -145,6 +145,39 @@ class PluginOverlayResolver:
                 logo_action=OverlayAction.OPEN_NEXTGIS_SITE,
             )
 
+        if facts.has_search_connection_target:
+            if facts.search_connection_exists:
+                connection_name = (
+                    facts.search_connection_name or facts.search_connection_url
+                )
+                return OverlayState(
+                    kind=OverlayKind.SEARCH_CONNECTION,
+                    title=self._translate("Search in another Web GIS"),
+                    message=self._translate(
+                        "Switch to the saved connection to continue searching."
+                    ),
+                    details=connection_name,
+                    primary_action=OverlayButtonState(
+                        action=OverlayAction.SWITCH_SEARCH_CONNECTION,
+                        text=self._translate("Switch connection"),
+                    ),
+                    draw_background=True,
+                )
+
+            return OverlayState(
+                kind=OverlayKind.SEARCH_CONNECTION,
+                title=self._translate("Connection required"),
+                message=self._translate(
+                    "Create a connection to this Web GIS to continue searching."
+                ),
+                details=facts.search_connection_url,
+                primary_action=OverlayButtonState(
+                    action=OverlayAction.CREATE_SEARCH_CONNECTION,
+                    text=self._translate("Add connection"),
+                ),
+                draw_background=True,
+            )
+
         if facts.search_empty:
             return OverlayState(
                 kind=OverlayKind.SEARCH_EMPTY,
@@ -152,7 +185,8 @@ class PluginOverlayResolver:
                 message=self._translate(
                     "No resources match the current search query."
                 ),
-                draw_background=False,
+                title_icon_name="inbox",
+                draw_background=True,
             )
 
         return OverlayState(kind=OverlayKind.NONE)
