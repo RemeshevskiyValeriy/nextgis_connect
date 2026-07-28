@@ -37,9 +37,6 @@ class QModelItem(QTreeWidgetItem):
             self._locked = False
 
     def flags(self) -> Qt.ItemFlags:
-        if self._locked:
-            return Qt.ItemFlags() | Qt.ItemFlag.NoItemFlags
-
         return (
             Qt.ItemFlags()
             | Qt.ItemFlag.ItemIsEnabled

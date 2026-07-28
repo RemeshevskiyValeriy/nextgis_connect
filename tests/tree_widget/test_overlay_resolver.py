@@ -136,25 +136,95 @@ def test_controller_accepts_footer_and_logo_actions() -> None:
     ]
 
 
-def test_unavailable_state_propagates_action_and_illustration() -> None:
+def test_unavailable_update_state_uses_title_icon() -> None:
     state = PluginOverlayResolver().resolve(
         OverlayFacts(
             has_connections=True,
             is_available=False,
-            unavailable_title="Version mismatch",
-            unavailable_message="Update the plugin.",
+            unavailable_title="Update is available",
+            unavailable_message=(
+                "Please update the plugin from the QGIS plugin manager."
+            ),
             unavailable_details="Details",
             unavailable_icon="update",
             unavailable_action=OverlayButtonState(
                 action=OverlayAction.OPEN_PLUGIN_MANAGER,
-                text="Update plugin",
+                text="Upgrade plugin",
             ),
         )
     )
 
     assert state.kind == OverlayKind.UNAVAILABLE
-    assert state.illustration_name == "update"
+    assert state.title == "Update is available"
+    assert "Update is available" not in state.message
+    assert state.title_icon_name == "update"
+    assert state.illustration_name == ""
     assert state.primary_action.action == OverlayAction.OPEN_PLUGIN_MANAGER
+
+
+def test_plugin_update_state_reuses_update_overlay_with_skip_action() -> None:
+    state = PluginOverlayResolver().resolve(
+        OverlayFacts(
+            has_connections=True,
+            has_plugin_update=True,
+            plugin_update_title="Update is available",
+            plugin_update_message=(
+                "Please update the plugin from the QGIS plugin manager."
+            ),
+            plugin_update_details="Details",
+            plugin_update_icon="update",
+            plugin_update_action=OverlayButtonState(
+                action=OverlayAction.OPEN_PLUGIN_MANAGER,
+                text="Upgrade plugin",
+            ),
+            plugin_update_footer_action=OverlayButtonState(
+                action=OverlayAction.SKIP_PLUGIN_UPDATE,
+                text="Skip this time",
+                text_opacity=0.5,
+            ),
+        )
+    )
+
+    assert state.kind == OverlayKind.UNAVAILABLE
+    assert state.title == "Update is available"
+    assert "Update is available" not in state.message
+    assert state.title_icon_name == "update"
+    assert state.illustration_name == ""
+    assert state.primary_action.action == OverlayAction.OPEN_PLUGIN_MANAGER
+    assert state.footer_action.action == OverlayAction.SKIP_PLUGIN_UPDATE
+    assert state.footer_action.text == "Skip this time"
+    assert state.footer_action.text_opacity == 0.5
+
+
+def test_unsupported_version_state_has_priority_over_skippable_update() -> (
+    None
+):
+    state = PluginOverlayResolver().resolve(
+        OverlayFacts(
+            has_connections=True,
+            is_available=False,
+            unavailable_title="Update is available",
+            unavailable_message=(
+                "Please update the plugin from the QGIS plugin manager."
+            ),
+            unavailable_icon="update",
+            unavailable_action=OverlayButtonState(
+                action=OverlayAction.OPEN_PLUGIN_MANAGER,
+                text="Upgrade plugin",
+            ),
+            has_plugin_update=True,
+            plugin_update_footer_action=OverlayButtonState(
+                action=OverlayAction.SKIP_PLUGIN_UPDATE,
+                text="Skip this time",
+                text_opacity=0.5,
+            ),
+        )
+    )
+
+    assert state.kind == OverlayKind.UNAVAILABLE
+    assert state.title_icon_name == "update"
+    assert state.primary_action.action == OverlayAction.OPEN_PLUGIN_MANAGER
+    assert state.footer_action.action == OverlayAction.NONE
 
 
 def test_search_empty_is_used_when_other_states_are_clear() -> None:

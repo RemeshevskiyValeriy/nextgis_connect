@@ -1,6 +1,6 @@
 from typing import Optional
 
-from qgis.PyQt.QtCore import QEvent, Qt, pyqtSignal
+from qgis.PyQt.QtCore import QEvent, QSize, Qt, pyqtSignal
 from qgis.PyQt.QtGui import QPalette
 from qgis.PyQt.QtWidgets import QBoxLayout, QLabel, QSizePolicy, QWidget
 
@@ -15,6 +15,7 @@ from nextgis_connect.legacy.tree_widget.overlay.widgets.surface import (
     MaterialIllustrationWidget,
     OverlaySurfaceWidget,
 )
+from nextgis_connect.ui_kit.icons.icon import material_icon
 from nextgis_connect.ui_kit.rendering.graphics.decorator import (
     NextgisDecorator,
 )
@@ -32,11 +33,26 @@ class ActionOverlayWidget(OverlaySurfaceWidget):
     _MINIMUM_BUTTON_SPACING = 6
     _ICON_HIDE_WIDTH = 360
     _ICON_SHOW_WIDTH = 400
+    _TITLE_ICON_SIZE = 24
 
     action_requested = pyqtSignal(object)
 
     def __init__(self, parent: Optional[QWidget] = None) -> None:
         super().__init__(parent)
+
+        self._title_layout = QBoxLayout(QBoxLayout.Direction.LeftToRight)
+        self._title_layout.setContentsMargins(0, 0, 0, 0)
+        self._title_layout.setSpacing(8)
+
+        self._title_icon_label = QLabel(self._content_widget)
+        self._title_icon_label.setFixedSize(
+            QSize(self._TITLE_ICON_SIZE, self._TITLE_ICON_SIZE)
+        )
+        self._title_icon_label.setSizePolicy(
+            QSizePolicy.Policy.Fixed,
+            QSizePolicy.Policy.Fixed,
+        )
+        self._title_icon_label.hide()
 
         self._title_label = QLabel(self._content_widget)
         title_font = self._title_label.font()
@@ -51,6 +67,12 @@ class ActionOverlayWidget(OverlaySurfaceWidget):
             QSizePolicy.Policy.Fixed,
         )
 
+        self._title_layout.addWidget(
+            self._title_icon_label,
+            alignment=Qt.AlignmentFlag.AlignVCenter,
+        )
+        self._title_layout.addWidget(self._title_label)
+
         self._illustration_widget = MaterialIllustrationWidget(
             self._content_widget
         )
@@ -64,7 +86,7 @@ class ActionOverlayWidget(OverlaySurfaceWidget):
         details_palette = QPalette(self._details_label.palette())
         details_palette.setColor(
             QPalette.ColorRole.WindowText,
-            NextgisDecorator.helper_text_color(self.palette()),
+            NextgisDecorator.system_muted_text_color(self.palette()),
         )
         self._details_label.setPalette(details_palette)
 
@@ -101,7 +123,7 @@ class ActionOverlayWidget(OverlaySurfaceWidget):
             self._illustration_widget,
             alignment=Qt.AlignmentFlag.AlignHCenter,
         )
-        self._content_layout.addWidget(self._title_label)
+        self._content_layout.addLayout(self._title_layout)
         self._content_layout.addWidget(self._message_label)
         self._content_layout.addWidget(self._details_label)
         self._content_layout.addLayout(self._buttons_layout)
@@ -114,12 +136,14 @@ class ActionOverlayWidget(OverlaySurfaceWidget):
         self._secondary_action = OverlayButtonState()
         self._buttons_direction = QBoxLayout.Direction.LeftToRight
         self._is_icon_visible_by_layout = True
+        self._title_icon_name = ""
 
     def set_state(self, state: OverlayState) -> None:
         """Apply a new state to the action overlay."""
         self.set_draw_background(state.draw_background)
         self.set_logo_action(state.logo_action)
 
+        self._set_title_icon(state.title_icon_name)
         self._title_label.setText(self._display_text(state.title))
         self._message_label.setText(self._display_text(state.message))
 
@@ -133,11 +157,13 @@ class ActionOverlayWidget(OverlaySurfaceWidget):
             themed=state.illustration_themed,
         )
         self._is_icon_visible_by_layout = self._illustration_widget.has_icon()
-        self._title_label.setAlignment(
-            Qt.AlignmentFlag.AlignCenter
-            if self._illustration_widget.has_icon()
-            else Qt.AlignmentFlag.AlignLeft
-        )
+        if self._title_icon_name != "":
+            title_alignment = Qt.AlignmentFlag.AlignLeft
+        elif self._illustration_widget.has_icon():
+            title_alignment = Qt.AlignmentFlag.AlignCenter
+        else:
+            title_alignment = Qt.AlignmentFlag.AlignLeft
+        self._title_label.setAlignment(title_alignment)
 
         is_welcome = state.kind == OverlayKind.WELCOME
         self._apply_button_state(
@@ -169,11 +195,27 @@ class ActionOverlayWidget(OverlaySurfaceWidget):
             details_palette = QPalette(self._details_label.palette())
             details_palette.setColor(
                 QPalette.ColorRole.WindowText,
-                NextgisDecorator.helper_text_color(self.palette()),
+                NextgisDecorator.system_muted_text_color(self.palette()),
             )
             self._details_label.setPalette(details_palette)
+            self._sync_title_icon()
 
         super().changeEvent(event)
+
+    def _set_title_icon(self, icon_name: str) -> None:
+        self._title_icon_name = icon_name
+        self._title_icon_label.setVisible(icon_name != "")
+        self._sync_title_icon()
+
+    def _sync_title_icon(self) -> None:
+        if self._title_icon_name == "":
+            self._title_icon_label.clear()
+            return
+
+        icon = material_icon(self._title_icon_name, size=self._TITLE_ICON_SIZE)
+        self._title_icon_label.setPixmap(
+            icon.pixmap(self._TITLE_ICON_SIZE, self._TITLE_ICON_SIZE)
+        )
 
     def _horizontal_content_width_for_preferred_layout(self) -> int:
         visible_buttons = [

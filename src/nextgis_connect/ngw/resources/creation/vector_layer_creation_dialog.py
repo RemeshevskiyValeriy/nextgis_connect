@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Any, ClassVar, Dict, List, Optional, cast
+from typing import Any, Callable, ClassVar, Dict, List, Optional, cast
 
 from qgis.core import (
     QgsApplication,
@@ -42,6 +42,7 @@ from nextgis_connect.ui_kit.delegates.checkbox_delegate import (
 from nextgis_connect.ui_kit.delegates.header_with_cenetered_icon_proxy_style import (
     HeaderWithCenteredIconProxyStyle,
 )
+from nextgis_connect.ui_kit.widgets.buttons.loading import LoadingPushButton
 
 VectorLayerCreationDialogBase, _ = uic.loadUiType(
     str(Path(__file__).parent / "vector_layer_creation_dialog_base.ui")
@@ -73,11 +74,25 @@ class VectorLayerCreationDialog(QDialog, VectorLayerCreationDialogBase):
         self.__resources_model = resources_model
         self.__parent_resource_index = parent_resource_index
         self.__result_resource = None
+        self.__create_resource = None
+        self.__create_button: Optional[LoadingPushButton] = None
+        self.__is_creating = False
         self.__has_boolean_support = False
         self.__has_json_support = False
         self.__setup_ui()
 
     def accept(self) -> None:
+        self.__result_resource = self.__build_resource()
+        self.__save_creation_settings()
+        return super().accept()
+
+    def set_create_resource_callback(
+        self,
+        callback: Callable[[Dict[str, Any]], Optional[Any]],
+    ) -> None:
+        self.__create_resource = callback
+
+    def __build_resource(self) -> Dict[str, Any]:
         parent_id = self.__resources_model.data(
             self.__parent_resource_index, QNGWResourceItem.NGWResourceIdRole
         )
@@ -89,7 +104,7 @@ class VectorLayerCreationDialog(QDialog, VectorLayerCreationDialogBase):
             geometry_type = QgsWkbTypes.addZ(geometry_type)
         geometry_type = QgsWkbTypes.displayString(geometry_type).upper()
 
-        self.__result_resource = dict(
+        return dict(
             resource=dict(
                 cls=NGWVectorLayer.type_id,
                 parent=dict(id=parent_id),
@@ -106,10 +121,10 @@ class VectorLayerCreationDialog(QDialog, VectorLayerCreationDialogBase):
             ),
         )
 
+    def __save_creation_settings(self) -> None:
         NgConnectSettings().add_vector_layer_after_creation = (
             self.add_to_project_checkbox.isChecked()
         )
-        return super().accept()
 
     @property
     def resource(self) -> Optional[Dict[str, Any]]:
@@ -417,19 +432,88 @@ class VectorLayerCreationDialog(QDialog, VectorLayerCreationDialogBase):
             NgConnectSettings().add_vector_layer_after_creation
         )
 
-        add_button = self.button_box.button(
+        original_add_button = self.button_box.button(
             QDialogButtonBox.StandardButton.Save
+        )
+        assert original_add_button is not None
+
+        add_button = LoadingPushButton(
+            icon=original_add_button.icon(),
+            parent=self.button_box,
         )
         add_button.setText(self.tr("Create"))
         add_button.setEnabled(False)
+        add_button.setAutoDefault(original_add_button.autoDefault())
+        add_button.setDefault(original_add_button.isDefault())
+        self.button_box.removeButton(original_add_button)
+        original_add_button.hide()
+        original_add_button.deleteLater()
+        self.button_box.addButton(
+            add_button,
+            QDialogButtonBox.ButtonRole.AcceptRole,
+        )
+        self.__create_button = add_button
 
-        add_button.clicked.connect(self.accept)
+        add_button.clicked.connect(self.__create_clicked)
         self.validity_changed.connect(add_button.setEnabled)
 
         close_button = self.button_box.button(
             QDialogButtonBox.StandardButton.Cancel
         )
         close_button.clicked.connect(self.reject)
+
+    def __create_clicked(self) -> None:
+        if self.__is_creating:
+            return
+
+        if self.__create_resource is None:
+            self.accept()
+            return
+
+        self.__result_resource = self.__build_resource()
+        self.__save_creation_settings()
+        assert self.__result_resource is not None
+
+        self.__start_creation()
+        response = self.__create_resource(self.__result_resource)
+        if response is None:
+            self.__stop_creation()
+            return
+
+        response.done.connect(self.__creation_done)
+        response.failed.connect(self.__creation_failed)
+        response.finished.connect(self.__creation_finished)
+
+    def __start_creation(self) -> None:
+        self.__is_creating = True
+        assert self.__create_button is not None
+        self.__create_button.start()
+        close_button = self.button_box.button(
+            QDialogButtonBox.StandardButton.Cancel
+        )
+        if close_button is not None:
+            close_button.setEnabled(False)
+
+    def __stop_creation(self) -> None:
+        self.__is_creating = False
+        assert self.__create_button is not None
+        self.__create_button.stop()
+        close_button = self.button_box.button(
+            QDialogButtonBox.StandardButton.Cancel
+        )
+        if close_button is not None:
+            close_button.setEnabled(True)
+
+    def __creation_done(self, _: QModelIndex) -> None:
+        self.__stop_creation()
+        super().accept()
+
+    def __creation_failed(self, _: object) -> None:
+        self.__stop_creation()
+
+    def __creation_finished(self) -> None:
+        if self.__is_creating:
+            self.__stop_creation()
 
     def __validate_new_field(self):
         keyname = self.field_keyname_lineedit.text()

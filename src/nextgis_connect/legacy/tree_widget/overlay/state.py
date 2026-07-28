@@ -31,6 +31,7 @@ class OverlayAction(Enum):
     RELOAD_TREE = auto()
     TRY_AGAIN = auto()
     CANCEL = auto()
+    SKIP_PLUGIN_UPDATE = auto()
 
 
 @dataclass(frozen=True)
@@ -38,6 +39,7 @@ class OverlayButtonState:
     action: OverlayAction = OverlayAction.NONE
     text: str = ""
     tooltip: str = ""
+    text_opacity: float = 1.0
 
 
 @dataclass(frozen=True)
@@ -56,6 +58,7 @@ class OverlayState:
         default_factory=OverlayButtonState
     )
     logo_action: OverlayAction = OverlayAction.NONE
+    title_icon_name: str = ""
     illustration_name: str = ""
     illustration_size: int = 64
     illustration_themed: bool = True
@@ -83,6 +86,17 @@ class OverlayFacts:
     unavailable_details: Optional[str] = None
     unavailable_icon: str = ""
     unavailable_action: OverlayButtonState = field(
+        default_factory=OverlayButtonState
+    )
+    has_plugin_update: bool = False
+    plugin_update_title: str = ""
+    plugin_update_message: str = ""
+    plugin_update_details: Optional[str] = None
+    plugin_update_icon: str = ""
+    plugin_update_action: OverlayButtonState = field(
+        default_factory=OverlayButtonState
+    )
+    plugin_update_footer_action: OverlayButtonState = field(
         default_factory=OverlayButtonState
     )
     has_auth_error: bool = False

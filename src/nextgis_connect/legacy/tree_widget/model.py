@@ -22,12 +22,13 @@ from qgis.PyQt.QtCore import (
     QAbstractItemModel,
     QModelIndex,
     QObject,
+    QSize,
     Qt,
     QThread,
     QVariant,
     pyqtSignal,
 )
-from qgis.PyQt.QtGui import QFont
+from qgis.PyQt.QtGui import QBrush, QFont
 
 from nextgis_connect.bootstrap.plugin_interface import NgConnectInterface
 from nextgis_connect.legacy.detached_editing.container.container_factory import (
@@ -86,6 +87,13 @@ from nextgis_connect.platform.qgis.errors import (
     NgwConnectionError,
     NgwError,
 )
+from nextgis_connect.ui_kit.rendering.graphics import (
+    NextgisDecorator,
+    mix_colors,
+)
+from nextgis_connect.ui_kit.widgets.loading_indicator import (
+    LoadingIndicatorIconAnimator,
+)
 
 from .item import QModelItem, QNGWResourceItem
 
@@ -94,6 +102,8 @@ __all__ = ["QNGWResourceTreeModel"]
 
 class NGWResourceModelResponse(QObject):
     done = pyqtSignal(QModelIndex)
+    failed = pyqtSignal(object)
+    finished = pyqtSignal()
     select = pyqtSignal(list)
 
     def __init__(self, parent: Optional[QObject] = None) -> None:
@@ -605,6 +615,8 @@ class NgwSearch(NGWResourceModelJob):
 
 
 class QNGWResourceTreeModelBase(QAbstractItemModel):
+    _LOCKED_ITEM_TEXT_FADE: ClassVar[float] = 0.32
+
     jobStarted = pyqtSignal(str)
     jobStatusChanged = pyqtSignal(str, str)
     errorOccurred = pyqtSignal(str, str, Exception)
@@ -633,8 +645,16 @@ class QNGWResourceTreeModelBase(QAbstractItemModel):
 
         self.__indexes_locked_by_jobs = {}
         self.__indexes_locked_by_job_errors = {}
+        self.__loading_icon = LoadingIndicatorIconAnimator(
+            QSize(16, 16),
+            parent=self,
+        )
+        self.__loading_icon.frame_changed.connect(
+            self.__emit_locked_indexes_decoration_changed
+        )
 
     def resetModel(self, ngw_connection: Optional[QgsNgwConnection]):
+        self.__loading_icon.stop()
         self.beginResetModel()
 
         self._ngw_connection = ngw_connection
@@ -786,6 +806,21 @@ class QNGWResourceTreeModelBase(QAbstractItemModel):
     ) -> QVariant:
         item = self.item(index)
         resource_id = item.data(QNGWResourceItem.NGWResourceIdRole)
+
+        if (
+            role == Qt.ItemDataRole.DecorationRole
+            and index.isValid()
+            and item.locked
+        ):
+            return self.__loading_icon.current_icon()
+
+        if (
+            role == Qt.ItemDataRole.ForegroundRole
+            and index.isValid()
+            and item.locked
+        ):
+            return self.__locked_item_foreground()
+
         data = item.data(role)
 
         if (
@@ -813,6 +848,15 @@ class QNGWResourceTreeModelBase(QAbstractItemModel):
 
     def flags(self, index: QModelIndex) -> Qt.ItemFlags:
         return self.item(index).flags()
+
+    def __locked_item_foreground(self) -> QBrush:
+        palette = NextgisDecorator.system_palette()
+        color = mix_colors(
+            NextgisDecorator.system_text_color(palette),
+            NextgisDecorator.system_window_color(palette),
+            self._LOCKED_ITEM_TEXT_FADE,
+        )
+        return QBrush(color)
 
     def _startJob(
         self,
@@ -917,6 +961,7 @@ class QNGWResourceTreeModelBase(QAbstractItemModel):
             item.lock()
             self.dataChanged.emit(index, index)
 
+        self.__sync_loading_indicator_animation()
         self.indexesLocked.emit()
 
     def _unlockIndexesByJob(self, job):
@@ -931,6 +976,7 @@ class QNGWResourceTreeModelBase(QAbstractItemModel):
 
             self.dataChanged.emit(index, index)
 
+        self.__sync_loading_indicator_animation()
         self.indexesUnlocked.emit()
 
     def _isIndexLockedByJob(self, index):
@@ -941,6 +987,25 @@ class QNGWResourceTreeModelBase(QAbstractItemModel):
 
     def _isIndexLockedByJobError(self, index):
         return index in self.__indexes_locked_by_job_errors
+
+    def __locked_indexes(self) -> List[QModelIndex]:
+        result = []
+
+        for indexes in self.__indexes_locked_by_jobs.values():
+            result.extend(index for index in indexes if index.isValid())
+
+        return result
+
+    def __sync_loading_indicator_animation(self) -> None:
+        if len(self.__locked_indexes()) > 0:
+            self.__loading_icon.start()
+            return
+
+        self.__loading_icon.stop()
+
+    def __emit_locked_indexes_decoration_changed(self) -> None:
+        for index in self.__locked_indexes():
+            self.dataChanged.emit(index, index)
 
     def index_from_id(self, ngw_resource_id, parent=None):
         if parent is None:
@@ -1170,6 +1235,8 @@ def modelRequest(
             return None
         response = NGWResourceModelResponse(self)
         job.setResponseObject(response)
+        job.errorOccurred.connect(response.failed.emit)
+        job.finished.connect(response.finished.emit)
         return response
 
     return wrapper

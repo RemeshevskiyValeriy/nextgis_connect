@@ -97,6 +97,9 @@ from nextgis_connect.bootstrap.plugin_interface import NgConnectInterface
 from nextgis_connect.legacy.action_style_import_or_update import (
     ActionStyleImportUpdate,
 )
+from nextgis_connect.legacy.detached_editing.container.cache_lifecycle import (
+    CachedDetachedContainerLifecycle,
+)
 from nextgis_connect.legacy.detached_editing.container.container_factory import (
     DetachedContainerFactory,
 )
@@ -126,6 +129,11 @@ from nextgis_connect.legacy.ngw_connection.presentation.diagnostics.dialog impor
     NgwConnectionDiagnosticsDialog,
 )
 from nextgis_connect.legacy.ngw_resources_adder import NgwResourcesAdder
+from nextgis_connect.legacy.plugin_update import (
+    PluginUpdate,
+    PluginUpdateCheckResult,
+    PluginUpdateCheckTask,
+)
 from nextgis_connect.legacy.resource_properties.resource_properties_dialog import (
     ResourcePropertiesDialog,
 )
@@ -257,6 +265,9 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
         self.__promo_banner_container: Optional[QFrame] = None
         self.__search_menu = None
         self.__is_closed = False
+        self.__plugin_update_task: Optional[PluginUpdateCheckTask] = None
+        self.__active_plugin_update: Optional[PluginUpdate] = None
+        self.__skipped_plugin_update_ids: Set[str] = set()
 
         self.actionOpenInNGW = QAction(self.tr("Open in Web GIS"), self)
         self.actionOpenInNGW.setIcon(
@@ -619,6 +630,7 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
 
         # update state
         QTimer.singleShot(0, lambda: self.reinit_tree(force=True))
+        QTimer.singleShot(0, self.__start_plugin_update_check)
 
         self.main_tool_bar.fix_icons_size()
 
@@ -720,6 +732,14 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
             )
             self.__ngstd_connection = None
 
+        if self.__plugin_update_task is not None:
+            self.__safe_disconnect(
+                self.__plugin_update_task.signals.finished,
+                self.__on_plugin_update_check_finished,
+            )
+            self.__plugin_update_task.cancel()
+            self.__plugin_update_task = None
+
         self.__safe_disconnect(
             self.resource_model.errorOccurred,
             self.__model_error_process,
@@ -771,6 +791,40 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
             signal.disconnect(slot)
         except (RuntimeError, TypeError):
             pass
+
+    def __start_plugin_update_check(self) -> None:
+        if self.__is_closed or self.__plugin_update_task is not None:
+            return
+
+        self.__plugin_update_task = PluginUpdateCheckTask()
+        self.__plugin_update_task.signals.finished.connect(
+            self.__on_plugin_update_check_finished
+        )
+        NgConnectInterface.instance().task_manager.addTask(
+            self.__plugin_update_task
+        )
+
+    @pyqtSlot(object)
+    def __on_plugin_update_check_finished(
+        self, result: PluginUpdateCheckResult
+    ) -> None:
+        self.__plugin_update_task = None
+        if self.__is_closed:
+            return
+
+        update = result.update
+        if update is None:
+            return
+
+        if update.skip_id in self.__skipped_plugin_update_ids:
+            return
+
+        self.__active_plugin_update = update
+        self.resources_tree_view.set_plugin_update_state(
+            update.installed_version,
+            update.available_version,
+            update.repository_name,
+        )
 
     def __set_search_empty(self, resources) -> None:
         self.resources_tree_view.set_search_empty(-1 in resources)
@@ -1676,7 +1730,11 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
             return
 
         if action == OverlayAction.OPEN_PLUGIN_MANAGER:
-            self.iface.pluginManagerInterface().showPluginManager(3)
+            self.__open_plugin_manager_updates()
+            return
+
+        if action == OverlayAction.SKIP_PLUGIN_UPDATE:
+            self.__skip_active_plugin_update()
             return
 
         if action == OverlayAction.CONVERT_CONNECTIONS:
@@ -1705,6 +1763,25 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
 
         if action == OverlayAction.OPEN_NEXTGIS_SITE:
             QDesktopServices.openUrl(QUrl(utils.nextgis_domain()))
+
+    def __open_plugin_manager_updates(self) -> None:
+        try:
+            import pyplugin_installer
+
+            pyplugin_installer.instance().showPluginManagerWhenReady(3)
+        except Exception:
+            self.iface.pluginManagerInterface().showPluginManager(3)
+
+    def __skip_active_plugin_update(self) -> None:
+        if self.__active_plugin_update is None:
+            self.resources_tree_view.clear_plugin_update_state()
+            return
+
+        self.__skipped_plugin_update_ids.add(
+            self.__active_plugin_update.skip_id
+        )
+        self.__active_plugin_update = None
+        self.resources_tree_view.clear_plugin_update_state()
 
     def reinit_tree(self, force=False):
         self.__is_reinit_tree = True
@@ -2402,27 +2479,35 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
             dialog.enable_boolean_field_type()
         if connection.has_support_for_feature(NgwServerFeature.JSON_TYPE):
             dialog.enable_json_field_type()
+
+        def create_resource(resource):
+            response = self.resource_model.createVectorLayer(
+                parent_resource_index, resource
+            )
+            if response is None:
+                return None
+
+            self.create_vector_layer_responce = response
+
+            response.done.connect(
+                lambda index: self.resources_tree_view.setCurrentIndex(
+                    self.proxy_model.mapFromSource(index)
+                )
+            )
+            if dialog.add_to_project:
+                response.done.connect(
+                    lambda index: self.__download_indices([index])
+                )
+
+            return response
+
+        dialog.set_create_resource_callback(create_resource)
         result = dialog.exec()
         if result != VectorLayerCreationDialog.DialogCode.Accepted:
             return
 
-        resource = dialog.resource
-        add_to_project = dialog.add_to_project
-        self.create_vector_layer_responce = (
-            self.resource_model.createVectorLayer(
-                parent_resource_index, resource
-            )
-        )
-
-        self.create_vector_layer_responce.done.connect(
-            lambda index: self.resources_tree_view.setCurrentIndex(
-                self.proxy_model.mapFromSource(index)
-            )
-        )
-        if add_to_project:
-            self.create_vector_layer_responce.done.connect(
-                lambda index: self.__download_indices([index])
-            )
+        if dialog.resource is None:
+            return
 
     def upload_project_resources(self):
         """
@@ -2649,10 +2734,23 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
             )
 
         container_path = self.__detached_container_path(ngw_layer)
+        connection = self.__ngw_connection(ngw_layer)
         if container_path.exists():
             if not is_detached_ngw_container(container_path):
                 raise NgConnectError(
                     f"Detached container is invalid: {container_path}",
+                    user_message=self.tr(
+                        "Detached layer container is invalid"
+                    ),
+                    code=ErrorCode.ContainerIsInvalid,
+                )
+            if not CachedDetachedContainerLifecycle().reconcile(
+                container_path,
+                ngw_layer,
+                connection,
+            ):
+                raise NgConnectError(
+                    f"Detached container is incompatible: {container_path}",
                     user_message=self.tr(
                         "Detached layer container is invalid"
                     ),

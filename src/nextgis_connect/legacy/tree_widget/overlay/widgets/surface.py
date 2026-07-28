@@ -15,7 +15,7 @@ from qgis.PyQt.QtCore import (
     QVariantAnimation,
     pyqtSignal,
 )
-from qgis.PyQt.QtGui import QPainter, QPalette
+from qgis.PyQt.QtGui import QColor, QPainter, QPalette
 from qgis.PyQt.QtWidgets import (
     QFrame,
     QLabel,
@@ -33,8 +33,8 @@ from nextgis_connect.legacy.tree_widget.overlay.state import (
 from nextgis_connect.ui_kit.rendering.graphics import (
     CustomSvgRenderer,
     NextgisBackgroundPainter,
-    NextgisColor,
     NextgisDecorator,
+    NextgisRadius,
 )
 
 
@@ -92,7 +92,7 @@ class LogoLinkWidget(QWidget):
             QSizePolicy.Policy.Fixed,
             QSizePolicy.Policy.Fixed,
         )
-        self._sync_color_renderer()
+        self._sync_logo_renderers()
 
     def set_clickable(self, clickable: bool) -> None:
         self._clickable = clickable
@@ -128,7 +128,7 @@ class LogoLinkWidget(QWidget):
             QEvent.Type.PaletteChange,
             QEvent.Type.ApplicationPaletteChange,
         ):
-            self._sync_color_renderer()
+            self._sync_logo_renderers()
 
         super().changeEvent(event)
 
@@ -171,8 +171,10 @@ class LogoLinkWidget(QWidget):
         self._color_opacity = value
         self.update()
 
-    def _sync_color_renderer(self) -> None:
-        replacement_color = NextgisDecorator.text_color(self.palette())
+    def _sync_logo_renderers(self) -> None:
+        replacement_color = NextgisDecorator.system_text_color(self.palette())
+        self._monochrome_renderer.set_fill_color(replacement_color)
+        self._monochrome_renderer.set_stroke_color(replacement_color)
         self._color_renderer.set_replacements(
             {
                 "#231F20": replacement_color,
@@ -316,6 +318,8 @@ class MaterialIllustrationWidget(QWidget):
 class FooterLinkLabel(QLabel):
     """Rich-text footer label that emits the configured overlay action."""
 
+    _SKIP_UPDATE_HOVER_TEXT_OPACITY = 0.8
+
     action_requested = pyqtSignal(object)
 
     def __init__(self, parent: Optional[QWidget] = None) -> None:
@@ -385,7 +389,7 @@ class FooterLinkLabel(QLabel):
             return
 
         text_decoration = "underline" if self._is_hovered else "none"
-        link_color = NextgisDecorator.corporate_color(NextgisColor.MAIN).name()
+        link_color = self._link_color()
         self.setText(
             '<a href="overlay" style="'
             f"color: {link_color}; text-decoration: {text_decoration};"
@@ -393,6 +397,50 @@ class FooterLinkLabel(QLabel):
             f"{self._action_state.text}"
             "</a>"
         )
+
+    def _link_color(self) -> str:
+        opacity = self._effective_text_opacity()
+        link_color = QColor(NextgisDecorator.brand_color())
+        if opacity >= 1.0:
+            return link_color.name()
+
+        background_color = self.palette().color(QPalette.ColorRole.Window)
+        return QColor(
+            round(
+                background_color.red()
+                + (link_color.red() - background_color.red()) * opacity
+            ),
+            round(
+                background_color.green()
+                + (link_color.green() - background_color.green()) * opacity
+            ),
+            round(
+                background_color.blue()
+                + (link_color.blue() - background_color.blue()) * opacity
+            ),
+        ).name()
+
+    def _effective_text_opacity(self) -> float:
+        return self._effective_text_opacity_for(
+            self._action_state,
+            is_hovered=self._is_hovered,
+        )
+
+    @classmethod
+    def _effective_text_opacity_for(
+        cls,
+        action_state: OverlayButtonState,
+        *,
+        is_hovered: bool,
+    ) -> float:
+        opacity = action_state.text_opacity
+        if (
+            is_hovered
+            and action_state.action == OverlayAction.SKIP_PLUGIN_UPDATE
+        ):
+            opacity = cls._SKIP_UPDATE_HOVER_TEXT_OPACITY
+
+        return min(1.0, max(0.0, opacity))
 
 
 class OverlaySurfaceWidget(QWidget):
@@ -544,7 +592,7 @@ class OverlaySurfaceWidget(QWidget):
 
     def paintEvent(self, event) -> None:
         palette = QPalette(self.palette())
-        overlay_color = palette.color(QPalette.ColorRole.Window)
+        overlay_color = NextgisDecorator.system_window_color(palette)
         overlay_color.setAlpha(255 if self._draw_background else 210)
         full_rect = self.rect()
 
@@ -570,7 +618,9 @@ class OverlaySurfaceWidget(QWidget):
                     "QFrame#overlayCard",
                     {
                         "border": "1px solid palette(mid)",
-                        "border-radius": "6px",
+                        "border-radius": (
+                            f"{NextgisDecorator.radius(NextgisRadius.CARD)}px"
+                        ),
                         "background-color": "palette(base)",
                     },
                 ),
@@ -580,7 +630,7 @@ class OverlaySurfaceWidget(QWidget):
         compact_palette = QPalette(self._compact_label.palette())
         compact_palette.setColor(
             QPalette.ColorRole.WindowText,
-            NextgisDecorator.helper_text_color(self.palette()),
+            NextgisDecorator.system_muted_text_color(self.palette()),
         )
         self._compact_label.setPalette(compact_palette)
 

@@ -52,13 +52,19 @@ class PluginOverlayResolver:
             )
 
         if not facts.is_available:
+            is_update_state = facts.unavailable_icon == "update"
             return OverlayState(
                 kind=OverlayKind.UNAVAILABLE,
                 title=facts.unavailable_title
                 or self._translate("Web GIS is unavailable"),
                 message=facts.unavailable_message,
                 details=facts.unavailable_details,
-                illustration_name=facts.unavailable_icon,
+                title_icon_name=(
+                    facts.unavailable_icon if is_update_state else ""
+                ),
+                illustration_name=(
+                    "" if is_update_state else facts.unavailable_icon
+                ),
                 primary_action=facts.unavailable_action,
                 logo_action=OverlayAction.OPEN_NEXTGIS_SITE,
             )
@@ -89,6 +95,20 @@ class PluginOverlayResolver:
                     action=OverlayAction.CONVERT_CONNECTIONS,
                     text=self._translate("Convert connections"),
                 ),
+                logo_action=OverlayAction.OPEN_NEXTGIS_SITE,
+            )
+
+        if facts.has_plugin_update:
+            return OverlayState(
+                kind=OverlayKind.UNAVAILABLE,
+                title=facts.plugin_update_title
+                or self._translate("Update NextGIS Connect"),
+                message=facts.plugin_update_message
+                or self._translate("A newer plugin version is available."),
+                details=facts.plugin_update_details,
+                title_icon_name=facts.plugin_update_icon or "update",
+                primary_action=facts.plugin_update_action,
+                footer_action=facts.plugin_update_footer_action,
                 logo_action=OverlayAction.OPEN_NEXTGIS_SITE,
             )
 

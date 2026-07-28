@@ -2,6 +2,7 @@ import platform
 from enum import Enum, auto
 from functools import lru_cache
 from itertools import islice
+from pathlib import Path
 from typing import TYPE_CHECKING, Any, Optional, Tuple, Union
 
 from qgis.core import (
@@ -84,7 +85,10 @@ class ChooserDialog(QDialog):
 
 
 def open_plugin_help():
-    dialog = AboutDialog(PACKAGE_NAME)
+    components_path = (
+        Path(__file__).resolve().parents[2] / "assets" / "components.json"
+    )
+    dialog = AboutDialog(PACKAGE_NAME, components_path=components_path)
     dialog.exec()
 
 

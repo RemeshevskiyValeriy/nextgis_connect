@@ -173,6 +173,48 @@ class QNGWResourceTreeView(QTreeView):
             unavailable_action=OverlayButtonState(),
         )
 
+    def clear_plugin_update_state(self) -> None:
+        self._overlay_state_model.update(
+            has_plugin_update=False,
+            plugin_update_title="",
+            plugin_update_message="",
+            plugin_update_details=None,
+            plugin_update_icon="",
+            plugin_update_action=OverlayButtonState(),
+            plugin_update_footer_action=OverlayButtonState(),
+        )
+
+    def set_plugin_update_state(
+        self,
+        installed_version: str,
+        available_version: str,
+        repository_name: str,
+    ) -> None:
+        self._overlay_state_model.update(
+            has_plugin_update=True,
+            plugin_update_title=self.tr("Update is available"),
+            plugin_update_message=self.tr(
+                "Please update the plugin from the QGIS plugin manager."
+            ),
+            plugin_update_details=self.tr(
+                "NextGIS Connect: {installed_version}\nAvailable version: {available_version}\nRepository: {repository_name}"
+            ).format(
+                installed_version=installed_version,
+                available_version=available_version,
+                repository_name=repository_name,
+            ),
+            plugin_update_icon="update",
+            plugin_update_action=OverlayButtonState(
+                action=OverlayAction.OPEN_PLUGIN_MANAGER,
+                text=self.tr("Upgrade plugin"),
+            ),
+            plugin_update_footer_action=OverlayButtonState(
+                action=OverlayAction.SKIP_PLUGIN_UPDATE,
+                text=self.tr("Skip this time"),
+                text_opacity=0.5,
+            ),
+        )
+
     def set_unavailable_state(
         self,
         status: SupportStatus,
@@ -181,19 +223,21 @@ class QNGWResourceTreeView(QTreeView):
     ) -> None:
         if status == SupportStatus.OLD_CONNECT:
             message = self.tr(
-                "NextGIS Connect version is outdated. Please update the plugin from the QGIS plugin manager."
+                "Please update the plugin from the QGIS plugin manager."
             )
             action = OverlayButtonState(
                 action=OverlayAction.OPEN_PLUGIN_MANAGER,
-                text=self.tr("Update plugin"),
+                text=self.tr("Upgrade plugin"),
             )
             icon_name = "update"
+            title = self.tr("Update is available")
         else:
             message = self.tr(
                 "The connected Web GIS version is no longer supported by this plugin.\nContact the server administrator."
             )
             action = OverlayButtonState()
             icon_name = ""
+            title = self.tr("Version mismatch")
 
         details = self.tr(
             "NextGIS Connect: {ngc_version}\nNextGIS Web: {ngw_version}"
@@ -203,7 +247,7 @@ class QNGWResourceTreeView(QTreeView):
         )
         self._overlay_state_model.update(
             is_available=False,
-            unavailable_title=self.tr("Version mismatch"),
+            unavailable_title=title,
             unavailable_message=message,
             unavailable_details=details,
             unavailable_icon=icon_name,
