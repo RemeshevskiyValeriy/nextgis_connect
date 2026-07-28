@@ -292,7 +292,12 @@ class NgwSearch(NGWResourceModelJob):
         old_query_name: str
         in_supported: bool = True
         visible: bool = True
-        unquoted_eq_pattern: str = ""
+        unquoted_value_pattern: str = ""
+
+    @dataclass
+    class StringQueryMatch:
+        operator: str
+        values: List[str]
 
     INT_TAGS: ClassVar[List[Tag]] = [
         Tag("id", "id", "id"),
@@ -302,11 +307,17 @@ class NgwSearch(NGWResourceModelJob):
     ]
 
     STR_TAGS: ClassVar[List[Tag]] = [
-        Tag("type", "cls", "cls", unquoted_eq_pattern=r"[a-zA-Z0-9_]+"),
+        Tag("type", "cls", "cls", unquoted_value_pattern=r"[a-zA-Z0-9_]+"),
         Tag("name", "display_name", "display_name"),
         Tag("keyname", "keyname", "keyname"),
-        Tag("owner", "owner", "owner_user_id", unquoted_eq_pattern=r"[^'\"]+"),
+        Tag(
+            "owner",
+            "owner",
+            "owner_user_id",
+            unquoted_value_pattern=r"[^'\"]+",
+        ),
     ]
+    CURRENT_USER_ALIAS: ClassVar[str] = "me"
 
     def __init__(
         self,
@@ -319,6 +330,7 @@ class NgwSearch(NGWResourceModelJob):
         self.populated_resources = populated_resources
         self.users_keyname = {}
         self.users_username = {}
+        self.current_user_id: Optional[int] = None
         self.parents = []
         self._feedback = QgsFeedback()
 
@@ -488,36 +500,14 @@ class NgwSearch(NGWResourceModelJob):
                 )
 
     def __str_queries(self, search_string: str, tag: Tag) -> List[str]:
-        tag_name = re.escape(tag.name)
-        pattern = (
-            rf"^@{tag_name}\s*=\s*(['\"])(.*?)\1$"
-            rf"|^@{tag_name}\s+ILIKE\s+(['\"])(.*?)\3$"
-            rf"|^@{tag_name}\s+IN\s*\((.*?)\)$"
-        )
-        if tag.unquoted_eq_pattern != "":
-            pattern += rf"|^@{tag_name}\s*=\s*({tag.unquoted_eq_pattern})$"
-
-        matches = re.findall(pattern, search_string, flags=re.IGNORECASE)
-        if not matches:
+        string_query_match = self.__match_str_query(search_string, tag)
+        if string_query_match is None:
             return []
 
-        operator = "__eq"
-        values = []
-        for match in matches:
-            if match[1]:  # '='
-                values.append(match[1])
-            elif match[3]:  # 'ILIKE'
-                operator = "__ilike"
-                values.append(match[3])
-            elif match[4]:  # IN
-                matches = re.findall(r"\"(.*?)\"|'(.*?)'", match[4])
-                values.extend(
-                    match for pair in matches for match in pair if match
-                )
-            elif tag.unquoted_eq_pattern != "" and match[5]:
-                values.append(match[5].strip())
+        operator = string_query_match.operator
+        values = string_query_match.values
 
-        if tag_name == "owner":
+        if tag.name == "owner":
             values = self.__extract_user_ids(operator, values)
             operator = "__eq"
 
@@ -535,6 +525,77 @@ class NgwSearch(NGWResourceModelJob):
                 map(lambda value: quote_plus(str(value)), values)
             )
             return [f"{tag.query_name}__in={joined_values}"]
+
+    def __match_str_query(
+        self, search_string: str, tag: Tag
+    ) -> Optional[StringQueryMatch]:
+        tag_name = re.escape(tag.name)
+        quoted_eq_match = re.match(
+            rf"^@{tag_name}\s*=\s*(?P<quote>['\"])(?P<value>.*?)"
+            rf"(?P=quote)$",
+            search_string,
+            flags=re.IGNORECASE,
+        )
+        if quoted_eq_match is not None:
+            return self.StringQueryMatch(
+                operator="__eq",
+                values=[quoted_eq_match.group("value")],
+            )
+
+        quoted_like_match = re.match(
+            rf"^@{tag_name}\s+(?P<operation>ILIKE|LIKE)\s+"
+            rf"(?P<quote>['\"])(?P<value>.*?)(?P=quote)$",
+            search_string,
+            flags=re.IGNORECASE,
+        )
+        if quoted_like_match is not None:
+            operation = quoted_like_match.group("operation").lower()
+            return self.StringQueryMatch(
+                operator=f"__{operation}",
+                values=[quoted_like_match.group("value")],
+            )
+
+        in_match = re.match(
+            rf"^@{tag_name}\s+IN\s*\((?P<values>.*?)\)$",
+            search_string,
+            flags=re.IGNORECASE,
+        )
+        if in_match is not None:
+            matches = re.findall(
+                r"\"(.*?)\"|'(.*?)'", in_match.group("values")
+            )
+            values = [match for pair in matches for match in pair if match]
+            return self.StringQueryMatch(operator="__eq", values=values)
+
+        if tag.unquoted_value_pattern == "":
+            return None
+
+        unquoted_eq_match = re.match(
+            rf"^@{tag_name}\s*=\s*"
+            rf"(?P<value>{tag.unquoted_value_pattern})$",
+            search_string,
+            flags=re.IGNORECASE,
+        )
+        if unquoted_eq_match is not None:
+            return self.StringQueryMatch(
+                operator="__eq",
+                values=[unquoted_eq_match.group("value").strip()],
+            )
+
+        unquoted_like_match = re.match(
+            rf"^@{tag_name}\s+(?P<operation>ILIKE|LIKE)\s+"
+            rf"(?P<value>{tag.unquoted_value_pattern})$",
+            search_string,
+            flags=re.IGNORECASE,
+        )
+        if unquoted_like_match is None:
+            return None
+
+        operation = unquoted_like_match.group("operation").lower()
+        return self.StringQueryMatch(
+            operator=f"__{operation}",
+            values=[unquoted_like_match.group("value").strip()],
+        )
 
     def __metadata_queries(self, search_string: str) -> List[str]:
         pattern = r'@metadata\["([^"]+)"\]\s*=\s*(?:"([^"]+)"|([^"]\S*))'
@@ -566,32 +627,44 @@ class NgwSearch(NGWResourceModelJob):
         if len(self.users_keyname) > 0:
             return
 
+        self.__raise_if_canceled()
+
         connections_manager = NgwConnectionsManager()
         connection_id = connections_manager.current_connection_id
         try:
             assert connection_id is not None
             ngw_connection = QgsNgwConnection(connection_id)
-            result = ngw_connection.get("api/component/auth/user/?brief=true")
+            result = ngw_connection.get(
+                "api/component/auth/user/?brief=true",
+                feedback=self._feedback,
+            )
+            self.__raise_if_canceled()
             for user in result:
                 self.users_keyname[user["keyname"]] = user["id"]
                 self.users_username[user["display_name"]] = user["id"]
         except Exception:
+            if self.__is_canceled():
+                raise
+
             logger.exception("Can't fetch users")
 
     def __extract_user_ids(
         self, operator: str, values: List[str]
     ) -> List[int]:
-        self.__fetch_users()
-
         user_ids = set()
 
         if operator == "__eq":
+            non_alias_values = [
+                value
+                for value in values
+                if not self.__is_current_user_alias(value)
+            ]
+            if len(non_alias_values) > 0:
+                self.__fetch_users()
+
             missing_values = []
             for value in values:
-                user_id = self.users_keyname.get(
-                    value,
-                    self.users_username.get(value),
-                )
+                user_id = self.__user_id_for_owner_value(value)
                 if user_id is None:
                     missing_values.append(value)
                     continue
@@ -601,9 +674,22 @@ class NgwSearch(NGWResourceModelJob):
             if len(missing_values) > 0:
                 self.__raise_user_not_found(missing_values)
 
-        elif operator == "__ilike":
-            regex_pattern = values[0].replace("%", ".*").replace("_", ".")
-            regex = re.compile(f"^{regex_pattern}$", re.IGNORECASE)
+        elif operator in ("__ilike", "__like"):
+            if len(values) == 0:
+                return []
+
+            if self.__is_current_user_alias(values[0]):
+                current_user_id = self.__fetch_current_user_id()
+                if current_user_id is None:
+                    self.__raise_user_not_found(values)
+
+                return [current_user_id]
+
+            self.__fetch_users()
+
+            regex_pattern = self.__like_value_regex_pattern(values[0])
+            regex_flags = re.IGNORECASE if operator == "__ilike" else 0
+            regex = re.compile(f"^{regex_pattern}$", regex_flags)
             user_ids.update(
                 value
                 for key, value in self.users_keyname.items()
@@ -618,7 +704,66 @@ class NgwSearch(NGWResourceModelJob):
             if len(user_ids) == 0:
                 self.__raise_user_not_found(values)
 
-        return list(user_ids)
+        return sorted(user_ids)
+
+    def __user_id_for_owner_value(self, value: str) -> Optional[int]:
+        if self.__is_current_user_alias(value):
+            return self.__fetch_current_user_id()
+
+        return self.users_keyname.get(
+            value,
+            self.users_username.get(value),
+        )
+
+    def __is_current_user_alias(self, value: str) -> bool:
+        return value.strip().casefold() == self.CURRENT_USER_ALIAS
+
+    def __fetch_current_user_id(self) -> Optional[int]:
+        if self.current_user_id is not None:
+            return self.current_user_id
+
+        self.__raise_if_canceled()
+
+        connections_manager = NgwConnectionsManager()
+        connection_id = connections_manager.current_connection_id
+        try:
+            assert connection_id is not None
+            ngw_connection = QgsNgwConnection(connection_id)
+            result = ngw_connection.get(
+                "api/component/auth/current_user",
+                feedback=self._feedback,
+            )
+            self.__raise_if_canceled()
+            if not isinstance(result, dict):
+                return None
+
+            user_id = result.get("id")
+            if isinstance(user_id, int) and not isinstance(user_id, bool):
+                self.current_user_id = user_id
+                return self.current_user_id
+
+            if isinstance(user_id, str) and user_id.isdecimal():
+                self.current_user_id = int(user_id)
+                return self.current_user_id
+        except Exception:
+            if self.__is_canceled():
+                raise
+
+            logger.exception("Can't fetch current user")
+
+        return None
+
+    def __like_value_regex_pattern(self, value: str) -> str:
+        pattern = []
+        for character in value:
+            if character == "%":
+                pattern.append(".*")
+            elif character == "_":
+                pattern.append(".")
+            else:
+                pattern.append(re.escape(character))
+
+        return "".join(pattern)
 
     def __raise_user_not_found(self, values: List[str]) -> None:
         raise NgConnectError(

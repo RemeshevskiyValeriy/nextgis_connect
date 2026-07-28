@@ -56,3 +56,26 @@ def test_parser_ignores_invalid_users() -> None:
     )
 
     assert owner_names == ["Bob"]
+
+
+def test_parser_ignores_system_users() -> None:
+    parser = ResourceOwnerSuggestionParser()
+
+    owner_names = parser.parse(
+        [
+            {
+                "id": 1,
+                "keyname": "system",
+                "display_name": "System",
+                "system": True,
+            },
+            {
+                "id": 2,
+                "keyname": "alice",
+                "display_name": "Alice Smith",
+                "system": False,
+            },
+        ]
+    )
+
+    assert owner_names == ["Alice Smith"]

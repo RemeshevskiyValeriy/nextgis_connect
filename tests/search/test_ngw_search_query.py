@@ -40,6 +40,62 @@ def test_owner_query_keeps_quoted_display_name_support() -> None:
     assert queries == ["owner=1"]
 
 
+def test_owner_query_accepts_current_user_alias() -> None:
+    search = NgwSearch("@owner = me", set())
+    search.current_user_id = 7
+
+    queries = search._NgwSearch__queries()
+
+    assert queries == ["owner=7"]
+
+
+def test_owner_in_query_accepts_current_user_alias() -> None:
+    search = NgwSearch('@owner IN ("me", "Alice Smith")', set())
+    search.users_keyname = {"alice": 1}
+    search.users_username = {"Alice Smith": 1}
+    search.current_user_id = 7
+
+    queries = search._NgwSearch__queries()
+
+    assert queries == ["owner__in=1,7"]
+
+
+def test_owner_ilike_query_accepts_current_user_alias() -> None:
+    search = NgwSearch("@owner ILIKE me", set())
+    search.current_user_id = 7
+
+    queries = search._NgwSearch__queries()
+
+    assert queries == ["owner=7"]
+
+
+def test_owner_like_query_accepts_current_user_alias() -> None:
+    search = NgwSearch('@owner LIKE "me"', set())
+    search.current_user_id = 7
+
+    queries = search._NgwSearch__queries()
+
+    assert queries == ["owner=7"]
+
+
+def test_owner_like_query_matches_users_case_sensitively() -> None:
+    search = NgwSearch('@owner LIKE "Alice%"', set())
+    search.users_keyname = {"alice": 1}
+    search.users_username = {"Alice Smith": 1}
+
+    queries = search._NgwSearch__queries()
+
+    assert queries == ["owner=1"]
+
+
+def test_name_query_supports_like_operator() -> None:
+    search = NgwSearch('@name LIKE "Roads"', set())
+
+    queries = search._NgwSearch__queries()
+
+    assert queries == ["display_name__like=Roads"]
+
+
 def test_owner_query_raises_when_user_is_missing() -> None:
     search = NgwSearch("@owner = Missing User", set())
     search.users_keyname = {"alice": 1}
@@ -60,6 +116,15 @@ def test_owner_query_raises_when_quoted_user_is_missing() -> None:
 
 def test_owner_ilike_query_raises_when_user_is_missing() -> None:
     search = NgwSearch('@owner ILIKE "Missing%"', set())
+    search.users_keyname = {"alice": 1}
+    search.users_username = {"Alice Smith": 1}
+
+    with pytest.raises(NgConnectError, match="User not found: Missing%"):
+        search._NgwSearch__queries()
+
+
+def test_owner_like_query_raises_when_user_is_missing() -> None:
+    search = NgwSearch('@owner LIKE "Missing%"', set())
     search.users_keyname = {"alice": 1}
     search.users_username = {"Alice Smith": 1}
 

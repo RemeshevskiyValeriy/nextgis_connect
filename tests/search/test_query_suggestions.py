@@ -69,7 +69,11 @@ def test_owner_suggestions_are_available_after_owner_equals() -> None:
         ["Alice Smith", "Bob"],
     )
 
-    assert suggestions == ["@owner = Alice Smith", "@owner = Bob"]
+    assert suggestions == [
+        "@owner = me",
+        "@owner = Alice Smith",
+        "@owner = Bob",
+    ]
 
 
 def test_owner_suggestions_filter_value_prefix() -> None:
@@ -78,7 +82,16 @@ def test_owner_suggestions_filter_value_prefix() -> None:
         ["Alice Smith", "Bob"],
     )
 
-    assert suggestions == ["@owner=Alice Smith"]
+    assert suggestions == ["@owner = Alice Smith"]
+
+
+def test_owner_suggestions_include_current_user_alias() -> None:
+    suggestions = TextSearchSuggestionBuilder().owner_suggestions(
+        "@owner = m",
+        ["Alice Smith", "Bob"],
+    )
+
+    assert suggestions == ["@owner = me"]
 
 
 def test_owner_suggestions_preserve_opening_quote() -> None:
@@ -96,4 +109,4 @@ def test_owner_suggestions_skip_values_incompatible_with_quote() -> None:
         ['Alice "QA"', "Bob"],
     )
 
-    assert suggestions == ['@owner = "Bob"']
+    assert suggestions == ['@owner = "me"', '@owner = "Bob"']

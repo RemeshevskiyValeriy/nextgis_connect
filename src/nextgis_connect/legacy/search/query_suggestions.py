@@ -18,6 +18,8 @@ class OwnerSuggestionContext:
 
 
 class TextSearchSuggestionBuilder:
+    OWNER_ALIASES: Tuple[str, ...] = ("me",)
+
     KEYWORDS: Tuple[str, ...] = (
         "id",
         "parent",
@@ -119,12 +121,7 @@ class TextSearchSuggestionBuilder:
             return None
 
         quote = match.group("quote")
-        base_text = (
-            f"{prefix}@owner"
-            f"{match.group('before_equals')}="
-            f"{match.group('after_equals')}"
-            f"{quote}"
-        )
+        base_text = f"{prefix}@owner = {quote}"
         return OwnerSuggestionContext(
             base_text=base_text,
             closing_quote=quote,
@@ -141,8 +138,13 @@ class TextSearchSuggestionBuilder:
             return None
 
         suggestions = []
-        for owner in owners:
+        added_owners = set()
+        for owner in self._owner_suggestion_values(owners):
             if not owner.lower().startswith(context.value_prefix):
+                continue
+
+            owner_key = owner.casefold()
+            if owner_key in added_owners:
                 continue
 
             if not self._can_use_quoted_value(owner, context.closing_quote):
@@ -151,8 +153,16 @@ class TextSearchSuggestionBuilder:
             suggestions.append(
                 f"{context.base_text}{owner}{context.closing_quote}"
             )
+            added_owners.add(owner_key)
 
         return suggestions
+
+    def _owner_suggestion_values(
+        self,
+        owners: Iterable[str],
+    ) -> Iterable[str]:
+        yield from self.OWNER_ALIASES
+        yield from owners
 
     def _can_use_quoted_value(self, value: str, quote: str) -> bool:
         if quote != "":

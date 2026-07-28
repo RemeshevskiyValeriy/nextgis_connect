@@ -59,7 +59,7 @@ class TextSearchLineEdit(AbstractSearchLineEdit):
             self.__hide_loading_icon
         )
         self.__completer_model.complete_requested.connect(
-            self._completer.complete
+            self.__show_completions
         )
         self.search_requested.connect(self.__completer_model.stop_fetching)
         self._completer.setModel(self.__completer_model)
@@ -103,6 +103,11 @@ class TextSearchLineEdit(AbstractSearchLineEdit):
                     search_string = f"@id = {resource_id}"
 
         self.search_requested.emit(search_string)
+
+    @pyqtSlot()
+    def __show_completions(self) -> None:
+        self._completer.setCompletionPrefix("")
+        self._completer.complete()
 
     @pyqtSlot()
     def update_history(self) -> None:

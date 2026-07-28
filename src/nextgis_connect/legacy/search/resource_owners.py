@@ -11,6 +11,9 @@ class ResourceOwnerSuggestionParser:
             if not isinstance(user, dict):
                 continue
 
+            if user.get("system") is True:
+                continue
+
             owner_name = self._owner_name(user)
             if owner_name == "":
                 continue
