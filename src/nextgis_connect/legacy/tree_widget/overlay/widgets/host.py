@@ -3,7 +3,10 @@ from typing import Optional
 from qgis.PyQt.QtCore import Qt, QTimer, pyqtSignal
 from qgis.PyQt.QtWidgets import QStackedLayout, QWidget
 
-from nextgis_connect.tree_widget.overlay.state import OverlayKind, OverlayState
+from nextgis_connect.legacy.tree_widget.overlay.state import (
+    OverlayKind,
+    OverlayState,
+)
 
 from .action import ActionOverlayWidget
 from .loading import LoadingOverlayWidget

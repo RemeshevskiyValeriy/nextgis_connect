@@ -3,11 +3,11 @@ from typing import Optional, Union
 
 from qgis.core import QgsTask
 
+from nextgis_connect.legacy.settings import NgConnectSettings
 from nextgis_connect.platform.logging import logger
 from nextgis_connect.platform.qgis.errors import (
     NgConnectError,
 )
-from nextgis_connect.settings import NgConnectSettings
 
 
 class NgConnectTask(QgsTask):

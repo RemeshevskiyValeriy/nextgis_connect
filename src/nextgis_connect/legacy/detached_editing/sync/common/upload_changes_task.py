@@ -3,10 +3,10 @@ from itertools import islice
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence, Set, Tuple, Union
 
-from nextgis_connect.detached_editing.container.editing.container_sessions import (
+from nextgis_connect.legacy.detached_editing.container.editing.container_sessions import (
     ContainerReadWriteSession,
 )
-from nextgis_connect.detached_editing.sync.common.changes import (
+from nextgis_connect.legacy.detached_editing.sync.common.changes import (
     AttachmentCreation,
     AttachmentRestoration,
     AttachmentSource,
@@ -14,28 +14,28 @@ from nextgis_connect.detached_editing.sync.common.changes import (
     DescriptionPut,
     FeatureChange,
 )
-from nextgis_connect.detached_editing.sync.common.changes_extractor import (
+from nextgis_connect.legacy.detached_editing.sync.common.changes_extractor import (
     ChangesExtractor,
 )
-from nextgis_connect.detached_editing.sync.common.detached_editing_task import (
+from nextgis_connect.legacy.detached_editing.sync.common.detached_editing_task import (
     DetachedEditingTask,
 )
-from nextgis_connect.detached_editing.sync.non_versioned import (
+from nextgis_connect.legacy.detached_editing.sync.non_versioned import (
     FeatureApiChangesApplier,
     FeatureApiChangesSerializer,
 )
-from nextgis_connect.detached_editing.sync.versioned.versioned_changes_applier import (
+from nextgis_connect.legacy.detached_editing.sync.versioned.versioned_changes_applier import (
     VersionedChangesApplier,
 )
-from nextgis_connect.detached_editing.sync.versioned.versioned_changes_serializer import (
+from nextgis_connect.legacy.detached_editing.sync.versioned.versioned_changes_serializer import (
     VersionedChangesSerializer,
+)
+from nextgis_connect.legacy.settings.ng_connect_cache_manager import (
+    NgConnectCacheManager,
 )
 from nextgis_connect.ngw.qgis.qgis_ngw_connection import QgsNgwConnection
 from nextgis_connect.platform.logging import logger
 from nextgis_connect.platform.qgis.errors import SynchronizationError
-from nextgis_connect.settings.ng_connect_cache_manager import (
-    NgConnectCacheManager,
-)
 from nextgis_connect.shared.types import (
     FeatureId,
     NgwAttachmentId,

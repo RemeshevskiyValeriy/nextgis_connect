@@ -1,15 +1,15 @@
 from qgis.core import QgsGeometry
 
-from nextgis_connect.detached_editing.conflicts.auto_resolver import (
+from nextgis_connect.legacy.detached_editing.conflicts.auto_resolver import (
     ConflictsAutoResolver,
 )
-from nextgis_connect.detached_editing.conflicts.conflict_resolution import (
+from nextgis_connect.legacy.detached_editing.conflicts.conflict_resolution import (
     AttachmentConflictResolution,
     DescriptionConflictResolution,
     FeatureConflictResolution,
     ResolutionType,
 )
-from nextgis_connect.detached_editing.conflicts.conflicts import (
+from nextgis_connect.legacy.detached_editing.conflicts.conflicts import (
     AttachmentDataConflict,
     DescriptionConflict,
     FeatureDataConflict,
@@ -17,7 +17,7 @@ from nextgis_connect.detached_editing.conflicts.conflicts import (
     LocalFeatureDeletionConflict,
     RemoteFeatureDeletionConflict,
 )
-from nextgis_connect.detached_editing.sync.common.changes import (
+from nextgis_connect.legacy.detached_editing.sync.common.changes import (
     AttachmentDeletion,
     AttachmentRestoration,
     AttachmentUpdate,
@@ -26,7 +26,7 @@ from nextgis_connect.detached_editing.sync.common.changes import (
     FeatureRestoration,
     FeatureUpdate,
 )
-from nextgis_connect.detached_editing.sync.versioned.actions import (
+from nextgis_connect.legacy.detached_editing.sync.versioned.actions import (
     AttachmentDeleteAction,
     AttachmentRestoreAction,
     AttachmentUpdateAction,

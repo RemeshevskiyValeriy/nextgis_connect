@@ -2,18 +2,20 @@ from contextlib import closing
 from pathlib import Path
 from typing import Dict, List, Set
 
-from nextgis_connect.detached_editing.sync.common import DetachedEditingTask
-from nextgis_connect.detached_editing.utils import (
+from nextgis_connect.legacy.detached_editing.sync.common import (
+    DetachedEditingTask,
+)
+from nextgis_connect.legacy.detached_editing.utils import (
     container_metadata,
     ensure_required_fields_metadata,
     make_connection,
 )
 from nextgis_connect.ngw.qgis.qgis_ngw_connection import QgsNgwConnection
+from nextgis_connect.ngw.resources.ngw_field import FieldId
 from nextgis_connect.platform.logging import logger
 from nextgis_connect.platform.qgis.errors import (
     SynchronizationError,
 )
-from nextgis_connect.resources.ngw_field import FieldId
 
 
 class FetchAdditionalDataTask(DetachedEditingTask):

@@ -1,7 +1,6 @@
 from pathlib import Path
 from typing import TYPE_CHECKING, Optional
 
-from nextgis_connect.detached_editing.utils import DetachedLayerState
 from qgis.core import QgsApplication
 from qgis.PyQt import uic
 from qgis.PyQt.QtCore import QSize, pyqtSlot
@@ -14,8 +13,10 @@ from qgis.PyQt.QtWidgets import (
     QWidget,
 )
 
+from nextgis_connect.legacy.detached_editing.utils import DetachedLayerState
+
 if TYPE_CHECKING:
-    from nextgis_connect.detached_editing.container.container import (
+    from nextgis_connect.legacy.detached_editing.container.container import (
         DetachedContainer,
     )
 

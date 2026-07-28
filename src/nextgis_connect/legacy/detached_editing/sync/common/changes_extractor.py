@@ -10,10 +10,10 @@ from qgis.core import (
 )
 from qgis.PyQt.QtCore import Qt, QTime
 
-from nextgis_connect.detached_editing.container.editing import (
+from nextgis_connect.legacy.detached_editing.container.editing import (
     ContainerReadOnlySession,
 )
-from nextgis_connect.detached_editing.sync.common.changes import (
+from nextgis_connect.legacy.detached_editing.sync.common.changes import (
     AttachmentCreation,
     AttachmentDeletion,
     AttachmentRestoration,
@@ -25,21 +25,21 @@ from nextgis_connect.detached_editing.sync.common.changes import (
     FeatureRestoration,
     FeatureUpdate,
 )
-from nextgis_connect.detached_editing.sync.common.serialization import (
+from nextgis_connect.legacy.detached_editing.sync.common.serialization import (
     simplify_value,
 )
-from nextgis_connect.detached_editing.utils import (
+from nextgis_connect.legacy.detached_editing.utils import (
     DetachedContainerContext,
     FeatureMetadata,
     detached_layer_uri,
 )
+from nextgis_connect.ngw.resources.ngw_data_type import NgwDataType
+from nextgis_connect.ngw.resources.ngw_field import NgwField
 from nextgis_connect.platform.qgis.errors import (
     ContainerError,
     ErrorCode,
     SynchronizationError,
 )
-from nextgis_connect.resources.ngw_data_type import NgwDataType
-from nextgis_connect.resources.ngw_field import NgwField
 from nextgis_connect.shared.types import FeatureId, FieldId, Unset, UnsetType
 
 

@@ -20,10 +20,10 @@ from qgis.PyQt.QtWidgets import (
     QWidget,
 )
 
-from nextgis_connect.detached_editing.conflicts.conflict_resolution import (
+from nextgis_connect.legacy.detached_editing.conflicts.conflict_resolution import (
     ConflictResolution,
 )
-from nextgis_connect.detached_editing.conflicts.conflict_resolving_item import (
+from nextgis_connect.legacy.detached_editing.conflicts.conflict_resolving_item import (
     AttachmentDataConflictResolvingItem,
     AttachmentDeleteConflictResolvingItem,
     BaseConflictResolvingItem,
@@ -31,38 +31,38 @@ from nextgis_connect.detached_editing.conflicts.conflict_resolving_item import (
     FeatureDataConflictResolvingItem,
     FeatureDeleteConflictResolvingItem,
 )
-from nextgis_connect.detached_editing.conflicts.conflict_resolving_item_extractor import (
+from nextgis_connect.legacy.detached_editing.conflicts.conflict_resolving_item_extractor import (
     ConflictResolvingItemExtractor,
 )
-from nextgis_connect.detached_editing.conflicts.conflicts import (
+from nextgis_connect.legacy.detached_editing.conflicts.conflicts import (
     VersioningConflict,
 )
-from nextgis_connect.detached_editing.conflicts.conflicts_model import (
+from nextgis_connect.legacy.detached_editing.conflicts.conflicts_model import (
     ConflictsResolvingModel,
 )
-from nextgis_connect.detached_editing.conflicts.item_to_resolution_converter import (
+from nextgis_connect.legacy.detached_editing.conflicts.item_to_resolution_converter import (
     ItemToResolutionConverter,
 )
-from nextgis_connect.detached_editing.conflicts.ui.attachment_data_conflict_tab import (
+from nextgis_connect.legacy.detached_editing.conflicts.ui.attachment_data_conflict_tab import (
     AttachmentDataConflictTab,
 )
-from nextgis_connect.detached_editing.conflicts.ui.attachment_delete_conflict_tab import (
+from nextgis_connect.legacy.detached_editing.conflicts.ui.attachment_delete_conflict_tab import (
     AttachmentDeleteConflictTab,
 )
-from nextgis_connect.detached_editing.conflicts.ui.description_conflict_tab import (
+from nextgis_connect.legacy.detached_editing.conflicts.ui.description_conflict_tab import (
     DescriptionConflictTab,
 )
-from nextgis_connect.detached_editing.conflicts.ui.feature_data_conflict_tab import (
+from nextgis_connect.legacy.detached_editing.conflicts.ui.feature_data_conflict_tab import (
     FeatureDataConflictTab,
 )
-from nextgis_connect.detached_editing.conflicts.ui.feature_delete_conflict_tab import (
+from nextgis_connect.legacy.detached_editing.conflicts.ui.feature_delete_conflict_tab import (
     FeatureDeleteConflictTab,
 )
-from nextgis_connect.detached_editing.utils import (
+from nextgis_connect.legacy.detached_editing.utils import (
     DetachedContainerContext,
     detached_layer_uri,
 )
-from nextgis_connect.ngw_connection import NgwConnectionsManager
+from nextgis_connect.legacy.ngw_connection import NgwConnectionsManager
 from nextgis_connect.platform.qgis.compat import GeometryType
 from nextgis_connect.shared.types import NgwFeatureId
 from nextgis_connect.ui_kit.icons.icon import material_icon

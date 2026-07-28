@@ -25,6 +25,7 @@ from typing import Any, Dict, List, Optional, Union, cast
 from qgis.core import QgsFeedback, QgsMapLayer
 from qgis.PyQt.QtCore import QObject, pyqtSignal
 
+from nextgis_connect.legacy.settings import NgConnectSettings
 from nextgis_connect.ngw.core.ngw_error import NGWError
 from nextgis_connect.ngw.core.ngw_group_resource import NGWGroupResource
 from nextgis_connect.ngw.core.ngw_qgis_style import NGWQGISStyle
@@ -41,10 +42,9 @@ from nextgis_connect.ngw.core.ngw_webmap import (
     NGWWebMapRoot,
 )
 from nextgis_connect.ngw.qgis.qgis_ngw_connection import QgsNgwConnection
+from nextgis_connect.ngw.resources.utils import generate_unique_name
 from nextgis_connect.platform.logging import logger
 from nextgis_connect.platform.qgis.errors import NgConnectError
-from nextgis_connect.resources.utils import generate_unique_name
-from nextgis_connect.settings import NgConnectSettings
 
 from .qt_ngw_resource_model_job_error import (
     JobNGWError,

@@ -5,7 +5,7 @@ from typing import Any, Dict, Iterable, Iterator, List, Optional, Union, cast
 
 from qgis.core import QgsField, QgsFieldConstraints, QgsFields, QgsVectorLayer
 
-from nextgis_connect.resources.ngw_field import FieldId, NgwField
+from nextgis_connect.ngw.resources.ngw_field import FieldId, NgwField
 
 
 class NgwFields(Sequence):

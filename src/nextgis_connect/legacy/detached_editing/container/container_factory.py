@@ -15,17 +15,18 @@ from qgis.core import (
     edit,
 )
 
-from nextgis_connect.detached_editing.utils import (
+from nextgis_connect.legacy.detached_editing.utils import (
     DetachedContainerMetaData,
     container_metadata,
     detached_layer_uri,
     make_connection,
 )
+from nextgis_connect.legacy.ngw_connection import NgwConnectionsManager
+from nextgis_connect.legacy.settings import NgConnectSettings
 from nextgis_connect.ngw.core.ngw_vector_layer import NGWVectorLayer
 from nextgis_connect.ngw.qgis.qgis_ngw_connection import (
     NgwServerFeature,
 )
-from nextgis_connect.ngw_connection import NgwConnectionsManager
 from nextgis_connect.platform.logging import logger
 from nextgis_connect.platform.qgis.compat import FieldType
 from nextgis_connect.platform.qgis.errors import (
@@ -38,7 +39,6 @@ from nextgis_connect.platform.qgis.utils import (
     wrap_sql_table_name,
     wrap_sql_value,
 )
-from nextgis_connect.settings import NgConnectSettings
 
 
 class DetachedContainerFactory:

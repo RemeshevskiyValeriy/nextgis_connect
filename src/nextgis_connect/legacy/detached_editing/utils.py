@@ -16,6 +16,8 @@ from qgis.core import (
 )
 
 from nextgis_connect.bootstrap.plugin_interface import NgConnectInterface
+from nextgis_connect.ngw.resources.ngw_field import NgwField
+from nextgis_connect.ngw.resources.ngw_fields import NgwFields
 from nextgis_connect.platform.logging import logger
 from nextgis_connect.platform.qgis.compat import QgsFeatureId
 from nextgis_connect.platform.qgis.errors import (
@@ -27,8 +29,6 @@ from nextgis_connect.platform.qgis.utils import (
     wrap_sql_table_name,
     wrap_sql_value,
 )
-from nextgis_connect.resources.ngw_field import NgwField
-from nextgis_connect.resources.ngw_fields import NgwFields
 from nextgis_connect.shared.types import (
     AttachmentId,
     FeatureId,

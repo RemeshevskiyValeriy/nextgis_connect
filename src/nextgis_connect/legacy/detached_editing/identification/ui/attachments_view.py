@@ -4,7 +4,7 @@ from qgis.PyQt.QtCore import QAbstractItemModel, QModelIndex, Qt, pyqtSignal
 from qgis.PyQt.QtGui import QContextMenuEvent, QKeyEvent, QMouseEvent
 from qgis.PyQt.QtWidgets import QListView, QWidget
 
-from nextgis_connect.detached_editing.identification.ui.attachment_delegate import (
+from nextgis_connect.legacy.detached_editing.identification.ui.attachment_delegate import (
     AttachmentDelegate,
 )
 

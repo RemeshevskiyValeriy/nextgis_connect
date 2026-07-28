@@ -1,10 +1,12 @@
 from qgis.core import QgsFeature, QgsGeometry, QgsVectorLayer, edit
 
-from nextgis_connect.detached_editing.container.editing.container_sessions import (
+from nextgis_connect.legacy.detached_editing.container.editing.container_sessions import (
     ContainerReadWriteSession,
 )
-from nextgis_connect.detached_editing.detached_layer import DetachedLayer
-from nextgis_connect.detached_editing.sync.common.changes import (
+from nextgis_connect.legacy.detached_editing.detached_layer import (
+    DetachedLayer,
+)
+from nextgis_connect.legacy.detached_editing.sync.common.changes import (
     AttachmentCreation,
     AttachmentDeletion,
     AttachmentRestoration,
@@ -15,18 +17,18 @@ from nextgis_connect.detached_editing.sync.common.changes import (
     FeatureRestoration,
     FeatureUpdate,
 )
-from nextgis_connect.detached_editing.sync.common.changes_extractor import (
+from nextgis_connect.legacy.detached_editing.sync.common.changes_extractor import (
     ChangesExtractor,
 )
-from nextgis_connect.detached_editing.utils import (
+from nextgis_connect.legacy.detached_editing.utils import (
     AttachmentMetadata,
     DetachedContainerContext,
 )
+from nextgis_connect.ngw.resources.ngw_data_type import NgwDataType
 from nextgis_connect.platform.qgis.errors import (
     ErrorCode,
     SynchronizationError,
 )
-from nextgis_connect.resources.ngw_data_type import NgwDataType
 from nextgis_connect.shared.types import Unset
 from tests.detached_editing.utils import mock_container
 from tests.ng_connect_testcase import NgConnectTestCase, TestData

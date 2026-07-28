@@ -4,10 +4,10 @@ from typing import Any, List, Optional, Set, Union, cast
 
 from qgis.core import QgsFeature
 
-from nextgis_connect.detached_editing.conflicts.conflict_resolution import (
+from nextgis_connect.legacy.detached_editing.conflicts.conflict_resolution import (
     ResolutionType,
 )
-from nextgis_connect.detached_editing.conflicts.conflicts import (
+from nextgis_connect.legacy.detached_editing.conflicts.conflicts import (
     AttachmentConflict,
     AttachmentDataConflict,
     DescriptionConflict,
@@ -15,8 +15,8 @@ from nextgis_connect.detached_editing.conflicts.conflicts import (
     LocalFeatureDeletionConflict,
     RemoteFeatureDeletionConflict,
 )
-from nextgis_connect.detached_editing.utils import AttachmentMetadata
-from nextgis_connect.resources.ngw_field import FieldId
+from nextgis_connect.legacy.detached_editing.utils import AttachmentMetadata
+from nextgis_connect.ngw.resources.ngw_field import FieldId
 from nextgis_connect.shared.types import Unset, Unsettable, UnsetType
 
 

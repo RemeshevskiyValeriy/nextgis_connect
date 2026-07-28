@@ -3,12 +3,14 @@ from typing import TYPE_CHECKING, Optional
 
 from qgis.core import QgsApplication, QgsAuthMethodConfig, QgsFeedback
 
-from nextgis_connect.ngw_connection.application.diagnostics.checks.base import (
+from nextgis_connect.legacy.ngw_connection.application.diagnostics.checks.base import (
     BaseConnectionCheck,
     UpdateReporter,
 )
-from nextgis_connect.ngw_connection.domain.connection import NgwConnection
-from nextgis_connect.ngw_connection.domain.diagnostics import (
+from nextgis_connect.legacy.ngw_connection.domain.connection import (
+    NgwConnection,
+)
+from nextgis_connect.legacy.ngw_connection.domain.diagnostics import (
     ConnectionCheckId,
     ConnectionCheckResult,
     ConnectionDiagnosticContext,

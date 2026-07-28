@@ -22,7 +22,7 @@ from qgis.core import (
     QgsVectorLayer,
 )
 
-from nextgis_connect.detached_editing.conflicts.conflict_resolution import (
+from nextgis_connect.legacy.detached_editing.conflicts.conflict_resolution import (
     AttachmentConflictResolution,
     AttachmentResolutionData,
     ConflictResolution,
@@ -31,7 +31,7 @@ from nextgis_connect.detached_editing.conflicts.conflict_resolution import (
     FeatureResolutionData,
     ResolutionType,
 )
-from nextgis_connect.detached_editing.conflicts.conflicts import (
+from nextgis_connect.legacy.detached_editing.conflicts.conflicts import (
     AttachmentDataConflict,
     DescriptionConflict,
     FeatureDataConflict,
@@ -40,11 +40,11 @@ from nextgis_connect.detached_editing.conflicts.conflicts import (
     RemoteAttachmentDeletionConflict,
     RemoteFeatureDeletionConflict,
 )
-from nextgis_connect.detached_editing.container.editing.container_sessions import (
+from nextgis_connect.legacy.detached_editing.container.editing.container_sessions import (
     ContainerReadOnlySession,
     ContainerReadWriteSession,
 )
-from nextgis_connect.detached_editing.sync.common.changes import (
+from nextgis_connect.legacy.detached_editing.sync.common.changes import (
     AttachmentCreation,
     AttachmentDeletion,
     AttachmentRestoration,
@@ -53,28 +53,28 @@ from nextgis_connect.detached_editing.sync.common.changes import (
     FeatureRestoration,
     FeatureUpdate,
 )
-from nextgis_connect.detached_editing.sync.common.serialization import (
+from nextgis_connect.legacy.detached_editing.sync.common.serialization import (
     deserialize_geometry,
     deserialize_value,
     serialize_geometry,
     serialize_value,
     simplify_value,
 )
-from nextgis_connect.detached_editing.sync.versioned.actions import (
+from nextgis_connect.legacy.detached_editing.sync.versioned.actions import (
     AttachmentDeleteAction,
     AttachmentRestoreAction,
     AttachmentUpdateAction,
     FeatureDeleteAction,
     VersioningAction,
 )
-from nextgis_connect.detached_editing.utils import (
+from nextgis_connect.legacy.detached_editing.utils import (
     DetachedContainerContext,
     DetachedContainerMetaData,
     detached_layer_uri,
 )
+from nextgis_connect.ngw.resources.ngw_field import FieldId
 from nextgis_connect.platform.logging import logger
 from nextgis_connect.platform.qgis.errors import DetachedEditingError
-from nextgis_connect.resources.ngw_field import FieldId
 from nextgis_connect.shared.types import (
     AttachmentId,
     FeatureId,

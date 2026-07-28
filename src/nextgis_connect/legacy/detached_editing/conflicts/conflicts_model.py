@@ -12,15 +12,15 @@ from qgis.PyQt.QtCore import (
 )
 from qgis.PyQt.QtGui import QIcon
 
-from nextgis_connect.detached_editing.conflicts.conflict_resolving_item import (
+from nextgis_connect.legacy.detached_editing.conflicts.conflict_resolving_item import (
     BaseConflictResolvingItem,
 )
-from nextgis_connect.detached_editing.conflicts.conflicts import (
+from nextgis_connect.legacy.detached_editing.conflicts.conflicts import (
     AttachmentConflict,
     DescriptionConflict,
     FeatureChangeConflict,
 )
-from nextgis_connect.detached_editing.utils import (
+from nextgis_connect.legacy.detached_editing.utils import (
     DetachedContainerContext,
 )
 from nextgis_connect.shared.types import UnsetType

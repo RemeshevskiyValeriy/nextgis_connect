@@ -4,7 +4,9 @@ from typing import TYPE_CHECKING
 from nextgis_connect.platform.qgis.compat import UndoCommand
 
 if TYPE_CHECKING:
-    from nextgis_connect.detached_editing.detached_layer import DetachedLayer
+    from nextgis_connect.legacy.detached_editing.detached_layer import (
+        DetachedLayer,
+    )
 
 
 class UndoCommandType(IntEnum):

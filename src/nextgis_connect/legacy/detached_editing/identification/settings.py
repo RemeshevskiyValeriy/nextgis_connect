@@ -4,7 +4,7 @@ from qgis.core import QgsSettings
 from qgis.gui import QgsMapToolIdentify
 from qgis.PyQt.QtCore import Qt
 
-from nextgis_connect.detached_editing.identification.types import (
+from nextgis_connect.legacy.detached_editing.identification.types import (
     AttachmentsSortMode,
     IdentificationTab,
 )

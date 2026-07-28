@@ -17,17 +17,17 @@ from qgis.core import QgsFeature
 from qgis.gui import QgsFilterLineEdit
 
 from nextgis_connect.platform.qgis.compat import GeometryType
-from nextgis_connect.detached_editing.conflicts.ui.base_feature_conflict_tab import (
+from nextgis_connect.legacy.detached_editing.conflicts.ui.base_feature_conflict_tab import (
     FeatureConflictBaseTab,
 )
-from nextgis_connect.detached_editing.conflicts.conflict_resolving_item import (
+from nextgis_connect.legacy.detached_editing.conflicts.conflict_resolving_item import (
     FeatureDataConflictResolvingItem,
 )
-from nextgis_connect.detached_editing.sync.common.serialization import (
+from nextgis_connect.legacy.detached_editing.sync.common.serialization import (
     simplify_value,
 )
-from nextgis_connect.resources.ngw_data_type import NgwDataType
-from nextgis_connect.resources.ngw_field import NgwField
+from nextgis_connect.ngw.resources.ngw_data_type import NgwDataType
+from nextgis_connect.ngw.resources.ngw_field import NgwField
 from nextgis_connect.shared.types import UnsetType
 from nextgis_connect.ui_kit.icons.icon import draw_icon, material_icon
 

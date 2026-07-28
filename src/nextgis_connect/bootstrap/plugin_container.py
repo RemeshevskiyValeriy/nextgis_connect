@@ -47,26 +47,32 @@ from nextgis_connect.bootstrap.services_bootstrap import (
     initialize_connections,
     schedule_cache_purging,
 )
-from nextgis_connect.detached_editing.detached_editing import DetachedEditing
-from nextgis_connect.notifier.message_bar_notifier import MessageBarNotifier
-from nextgis_connect.notifier.notifier_interface import NotifierInterface
+from nextgis_connect.legacy.detached_editing.detached_editing import (
+    DetachedEditing,
+)
+from nextgis_connect.legacy.notifier.message_bar_notifier import (
+    MessageBarNotifier,
+)
+from nextgis_connect.legacy.notifier.notifier_interface import (
+    NotifierInterface,
+)
+from nextgis_connect.legacy.settings.ng_connect_cache_manager import (
+    NgConnectCacheManager,
+)
+from nextgis_connect.legacy.settings.ui.ng_connect_settings_page import (
+    NgConnectOptionsWidgetFactory,
+)
+from nextgis_connect.legacy.shell.presentation.dock.ng_connect_dock import (
+    NgConnectDock,
+)
 from nextgis_connect.platform.logging import logger
 from nextgis_connect.platform.qgis.compat import LayerType
 from nextgis_connect.platform.qgis.errors import (
     NgConnectError,
     NgConnectReloadAfterUpdateWarning,
 )
-from nextgis_connect.settings.ng_connect_cache_manager import (
-    NgConnectCacheManager,
-)
-from nextgis_connect.settings.ui.ng_connect_settings_page import (
-    NgConnectOptionsWidgetFactory,
-)
 from nextgis_connect.shared.constants import PLUGIN_NAME
 from nextgis_connect.shell.presentation.about.about_dialog import AboutDialog
-from nextgis_connect.shell.presentation.dock.ng_connect_dock import (
-    NgConnectDock,
-)
 
 if TYPE_CHECKING:
     from nextgis_connect.bootstrap.plugin_interface import NgConnectInterface
@@ -145,6 +151,7 @@ class PluginContainer:
     def unload(self) -> None:
         logger.debug("<b>Start plugin unloading</b>")
 
+        self.__unload_cache_purging()
         self.__unload_ng_connect_settings_page()
         self.__unload_ng_layer_actions()
         self.__unload_ng_connect_menus()
@@ -291,7 +298,9 @@ class PluginContainer:
         )
 
         self.__show_ngw_resources_tree_action = QAction(
-            QIcon(str(self.plugin_dir / "icons/branding/connect_logo.svg")),
+            QIcon(
+                str(self.plugin_dir / "assets/icons/branding/connect_logo.svg")
+            ),
             self._plugin.tr("Show/Hide NextGIS Connect panel"),
             self.iface.mainWindow(),
         )
@@ -334,13 +343,20 @@ class PluginContainer:
             if action.text() != PLUGIN_NAME:
                 continue
             action.setIcon(
-                QIcon(str(self.plugin_dir / "icons/branding/connect_logo.svg"))
+                QIcon(
+                    str(
+                        self.plugin_dir
+                        / "assets/icons/branding/connect_logo.svg"
+                    )
+                )
             )
             break
 
         # Add adction to Help > Plugins
         self.__show_help_action = QAction(
-            QIcon(str(self.plugin_dir / "icons/branding/connect_logo.svg")),
+            QIcon(
+                str(self.plugin_dir / "assets/icons/branding/connect_logo.svg")
+            ),
             PLUGIN_NAME,
             self.iface.mainWindow(),
         )
@@ -448,6 +464,19 @@ class PluginContainer:
 
     def __init_cache_purging(self) -> None:
         self.__purge_cache_task = schedule_cache_purging()
+
+    def __unload_cache_purging(self) -> None:
+        purge_cache_task = getattr(
+            self,
+            "_PluginContainer__purge_cache_task",
+            None,
+        )
+        if purge_cache_task is None:
+            return
+
+        purge_cache_task.cancel()
+        purge_cache_task.waitForFinished(1000)
+        self.__purge_cache_task = None
 
     def __open_about(self) -> None:
         dialog = AboutDialog(str(self.plugin_dir.name))

@@ -29,20 +29,20 @@ from qgis.PyQt.QtWidgets import (
     QWidget,
 )
 
-from nextgis_connect.detached_editing.conflicts.conflict_resolution import (
+from nextgis_connect.legacy.detached_editing.conflicts.conflict_resolution import (
     ResolutionType,
 )
-from nextgis_connect.detached_editing.conflicts.conflict_resolving_item import (
+from nextgis_connect.legacy.detached_editing.conflicts.conflict_resolving_item import (
     FeatureDeleteConflictResolvingItem,
 )
-from nextgis_connect.detached_editing.conflicts.conflicts import (
+from nextgis_connect.legacy.detached_editing.conflicts.conflicts import (
     LocalFeatureDeletionConflict,
     RemoteFeatureDeletionConflict,
 )
-from nextgis_connect.detached_editing.conflicts.ui.base_feature_conflict_tab import (
+from nextgis_connect.legacy.detached_editing.conflicts.ui.base_feature_conflict_tab import (
     FeatureConflictBaseTab,
 )
-from nextgis_connect.detached_editing.sync.common.changes import (
+from nextgis_connect.legacy.detached_editing.sync.common.changes import (
     AttachmentCreation,
     AttachmentDeletion,
     DescriptionPut,
@@ -50,7 +50,7 @@ from nextgis_connect.detached_editing.sync.common.changes import (
     FeatureChange,
     FeatureDataMixin,
 )
-from nextgis_connect.detached_editing.sync.versioned.actions import (
+from nextgis_connect.legacy.detached_editing.sync.versioned.actions import (
     AttachmentCreateAction,
     AttachmentDeleteAction,
     AttachmentUpdateAction,
@@ -58,7 +58,7 @@ from nextgis_connect.detached_editing.sync.versioned.actions import (
     FeatureDataChangeMixin,
     VersioningAction,
 )
-from nextgis_connect.detached_editing.utils import AttachmentMetadata
+from nextgis_connect.legacy.detached_editing.utils import AttachmentMetadata
 from nextgis_connect.platform.logging import logger
 from nextgis_connect.platform.qgis.compat import GeometryType
 from nextgis_connect.shared.types import (

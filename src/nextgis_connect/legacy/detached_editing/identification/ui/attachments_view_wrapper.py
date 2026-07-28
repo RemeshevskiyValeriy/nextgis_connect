@@ -20,18 +20,18 @@ from qgis.PyQt.QtWidgets import (
     QWidget,
 )
 
-from nextgis_connect.detached_editing.identification.attachments_model import (
+from nextgis_connect.legacy.detached_editing.identification.attachments_model import (
     AttachmentsModel,
 )
-from nextgis_connect.detached_editing.identification.ui.attachments_view import (
+from nextgis_connect.legacy.detached_editing.identification.ui.attachments_view import (
     AttachmentsView,
 )
-from nextgis_connect.platform.logging import logger
-from nextgis_connect.tree_widget.overlay import (
+from nextgis_connect.legacy.tree_widget.overlay import (
     OverlayHostWidget,
     OverlayKind,
     OverlayState,
 )
+from nextgis_connect.platform.logging import logger
 from nextgis_connect.ui_kit.icons.icon import draw_icon, material_icon
 
 

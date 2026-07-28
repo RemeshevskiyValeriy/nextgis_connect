@@ -3,11 +3,11 @@ from typing import TYPE_CHECKING
 
 from qgis.core import Qgis, QgsFeedback
 
-from nextgis_connect.ngw_connection.application.diagnostics.parsers import (
+from nextgis_connect.legacy.ngw_connection.application.diagnostics.parsers import (
     PluginVersionProvider,
     QgisPluginRepositoryParser,
 )
-from nextgis_connect.ngw_connection.domain.diagnostics import (
+from nextgis_connect.legacy.ngw_connection.domain.diagnostics import (
     ConnectionCheckId,
     ConnectionCheckResult,
     ConnectionDiagnosticContext,

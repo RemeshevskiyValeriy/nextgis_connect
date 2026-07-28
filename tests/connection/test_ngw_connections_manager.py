@@ -4,7 +4,7 @@ from dataclasses import replace
 
 from qgis.core import QgsApplication, QgsAuthMethodConfig
 
-from nextgis_connect.ngw_connection import (
+from nextgis_connect.legacy.ngw_connection import (
     ConnectionUpdateState,
     NgwConnection,
     NgwConnectionSettingsMigrator,

@@ -3,7 +3,7 @@ from typing import cast
 
 from qgis.core import QgsVectorLayer, edit
 
-from nextgis_connect.detached_editing.conflicts.conflict_resolution import (
+from nextgis_connect.legacy.detached_editing.conflicts.conflict_resolution import (
     AttachmentConflictResolution,
     AttachmentResolutionData,
     ConflictResolution,
@@ -12,26 +12,28 @@ from nextgis_connect.detached_editing.conflicts.conflict_resolution import (
     FeatureResolutionData,
     ResolutionType,
 )
-from nextgis_connect.detached_editing.conflicts.conflicts import (
+from nextgis_connect.legacy.detached_editing.conflicts.conflicts import (
     AttachmentDataConflict,
     DescriptionConflict,
     FeatureDataConflict,
     RemoteAttachmentDeletionConflict,
 )
-from nextgis_connect.detached_editing.conflicts.resolutions_applier import (
+from nextgis_connect.legacy.detached_editing.conflicts.resolutions_applier import (
     ConflictsResolutionApplier,
 )
-from nextgis_connect.detached_editing.container.editing.container_sessions import (
+from nextgis_connect.legacy.detached_editing.container.editing.container_sessions import (
     ContainerReadWriteSession,
 )
-from nextgis_connect.detached_editing.detached_layer import DetachedLayer
-from nextgis_connect.detached_editing.sync.common.changes_extractor import (
+from nextgis_connect.legacy.detached_editing.detached_layer import (
+    DetachedLayer,
+)
+from nextgis_connect.legacy.detached_editing.sync.common.changes_extractor import (
     ChangesExtractor,
 )
-from nextgis_connect.detached_editing.sync.common.serialization import (
+from nextgis_connect.legacy.detached_editing.sync.common.serialization import (
     serialize_geometry,
 )
-from nextgis_connect.detached_editing.sync.versioned.actions import (
+from nextgis_connect.legacy.detached_editing.sync.versioned.actions import (
     AttachmentDeleteAction,
     AttachmentRestoreAction,
     AttachmentUpdateAction,
@@ -39,7 +41,7 @@ from nextgis_connect.detached_editing.sync.versioned.actions import (
     FeatureRestoreAction,
     FeatureUpdateAction,
 )
-from nextgis_connect.detached_editing.utils import (
+from nextgis_connect.legacy.detached_editing.utils import (
     AttachmentMetadata,
 )
 from tests.detached_editing.utils import mock_container

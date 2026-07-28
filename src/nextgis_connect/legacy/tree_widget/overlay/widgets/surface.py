@@ -26,7 +26,7 @@ from qgis.PyQt.QtWidgets import (
 )
 
 from nextgis_connect.bootstrap.plugin_interface import NgConnectInterface
-from nextgis_connect.tree_widget.overlay.state import (
+from nextgis_connect.legacy.tree_widget.overlay.state import (
     OverlayAction,
     OverlayButtonState,
 )
@@ -301,7 +301,7 @@ class MaterialIllustrationWidget(QWidget):
         self._renderer.render(painter, QRectF(self.rect()))
 
     def _material_icon_path(self, icon_name: str) -> Optional[Path]:
-        icons_directory = self._plugin_path / "icons" / "material"
+        icons_directory = self._plugin_path / "assets" / "icons" / "material"
         matches = sorted(icons_directory.glob(f"{icon_name}*.svg"))
         if not matches:
             return None
@@ -432,7 +432,11 @@ class OverlaySurfaceWidget(QWidget):
 
         self._plugin_path = NgConnectInterface.instance().path
         self._background_painter = NextgisBackgroundPainter(
-            self._plugin_path / "icons" / "branding" / "isolines.svg",
+            self._plugin_path
+            / "assets"
+            / "icons"
+            / "branding"
+            / "isolines.svg",
             self,
         )
         self._draw_background = True
@@ -475,7 +479,11 @@ class OverlaySurfaceWidget(QWidget):
         self._card_stack.addWidget(self._compact_label)
 
         self._logo_widget = LogoLinkWidget(
-            self._plugin_path / "icons" / "branding" / "nextgis_full_logo.svg",
+            self._plugin_path
+            / "assets"
+            / "icons"
+            / "branding"
+            / "nextgis_full_logo.svg",
             self,
         )
         self._logo_widget.clicked.connect(self._emit_logo_action)

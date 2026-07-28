@@ -6,7 +6,9 @@ from qgis.PyQt.QtCore import pyqtSlot
 from qgis.PyQt.QtWidgets import QTextEdit, QVBoxLayout, QWidget
 
 from nextgis_connect.bootstrap.plugin_interface import NgConnectInterface
-from nextgis_connect.detached_editing.detached_layer import DetachedLayer
+from nextgis_connect.legacy.detached_editing.detached_layer import (
+    DetachedLayer,
+)
 from nextgis_connect.platform.qgis.compat import QgsFeatureId
 from nextgis_connect.ui_kit.widgets.description_text_editor import (
     DescriptionTextEditor,

@@ -1,6 +1,6 @@
 from qgis.core import QgsGeometry
 
-from nextgis_connect.detached_editing.conflicts.conflicts import (
+from nextgis_connect.legacy.detached_editing.conflicts.conflicts import (
     AttachmentDataConflict,
     DescriptionConflict,
     FeatureDataConflict,
@@ -9,10 +9,10 @@ from nextgis_connect.detached_editing.conflicts.conflicts import (
     RemoteAttachmentDeletionConflict,
     RemoteFeatureDeletionConflict,
 )
-from nextgis_connect.detached_editing.conflicts.detector import (
+from nextgis_connect.legacy.detached_editing.conflicts.detector import (
     ConflictsDetector,
 )
-from nextgis_connect.detached_editing.sync.common.changes import (
+from nextgis_connect.legacy.detached_editing.sync.common.changes import (
     AttachmentCreation,
     AttachmentDeletion,
     AttachmentRestoration,
@@ -22,7 +22,7 @@ from nextgis_connect.detached_editing.sync.common.changes import (
     FeatureRestoration,
     FeatureUpdate,
 )
-from nextgis_connect.detached_editing.sync.versioned.actions import (
+from nextgis_connect.legacy.detached_editing.sync.versioned.actions import (
     AttachmentCreateAction,
     AttachmentDeleteAction,
     AttachmentRestoreAction,

@@ -1,6 +1,6 @@
 from typing import Any, List, Optional, Sequence, Tuple, Union, cast
 
-from nextgis_connect.detached_editing.sync.common.changes import (
+from nextgis_connect.legacy.detached_editing.sync.common.changes import (
     AttachmentCreation,
     AttachmentDeletion,
     AttachmentRestoration,
@@ -12,21 +12,21 @@ from nextgis_connect.detached_editing.sync.common.changes import (
     FeatureRestoration,
     FeatureUpdate,
 )
-from nextgis_connect.detached_editing.sync.common.changes_applier import (
+from nextgis_connect.legacy.detached_editing.sync.common.changes_applier import (
     ChangesApplier,
 )
-from nextgis_connect.detached_editing.utils import (
+from nextgis_connect.legacy.detached_editing.utils import (
     AttachmentMetadata,
     DetachedContainerContext,
     FeatureMetadata,
+)
+from nextgis_connect.legacy.settings.ng_connect_cache_manager import (
+    NgConnectCacheManager,
 )
 from nextgis_connect.platform.logging import logger
 from nextgis_connect.platform.qgis.errors import (
     ContainerError,
     SynchronizationError,
-)
-from nextgis_connect.settings.ng_connect_cache_manager import (
-    NgConnectCacheManager,
 )
 from nextgis_connect.shared.types import AttachmentId, FileObjectId, Unset
 

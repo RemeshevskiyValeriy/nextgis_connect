@@ -5,7 +5,9 @@ from typing import Dict, List, Optional, Tuple
 from qgis.core import QgsApplication, QgsAuthMethodConfig
 from qgis.PyQt.QtCore import QSettings
 
-from nextgis_connect.ngw_connection.domain.connection import NgwConnection
+from nextgis_connect.legacy.ngw_connection.domain.connection import (
+    NgwConnection,
+)
 
 
 class NgwConnectionSettingsMigrator:

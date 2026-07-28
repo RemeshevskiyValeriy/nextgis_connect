@@ -34,14 +34,14 @@ from qgis.PyQt.QtWidgets import (
 )
 
 from nextgis_connect.platform.qgis.compat import GeometryType
-from nextgis_connect.detached_editing.conflicts.conflict_resolving_item import (
+from nextgis_connect.legacy.detached_editing.conflicts.conflict_resolving_item import (
     BaseConflictResolvingItem,
 )
-from nextgis_connect.detached_editing.identification.settings import (
+from nextgis_connect.legacy.detached_editing.identification.settings import (
     IdentificationSettings,
 )
-from nextgis_connect.resources.ngw_data_type import NgwDataType
-from nextgis_connect.resources.ngw_field import NgwField
+from nextgis_connect.ngw.resources.ngw_data_type import NgwDataType
+from nextgis_connect.ngw.resources.ngw_field import NgwField
 
 
 TConflictItem = TypeVar("TConflictItem", bound=BaseConflictResolvingItem)

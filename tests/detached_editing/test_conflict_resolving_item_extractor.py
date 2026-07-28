@@ -3,10 +3,10 @@ from typing import Union
 
 from qgis.core import QgsGeometry, QgsVectorLayer, edit
 
-from nextgis_connect.detached_editing.conflicts.conflict_resolution import (
+from nextgis_connect.legacy.detached_editing.conflicts.conflict_resolution import (
     ResolutionType,
 )
-from nextgis_connect.detached_editing.conflicts.conflict_resolving_item import (
+from nextgis_connect.legacy.detached_editing.conflicts.conflict_resolving_item import (
     AttachmentConflictResolvingItem,
     AttachmentDataConflictResolvingItem,
     AttachmentDeleteConflictResolvingItem,
@@ -14,10 +14,10 @@ from nextgis_connect.detached_editing.conflicts.conflict_resolving_item import (
     FeatureDataConflictResolvingItem,
     FeatureDeleteConflictResolvingItem,
 )
-from nextgis_connect.detached_editing.conflicts.conflict_resolving_item_extractor import (
+from nextgis_connect.legacy.detached_editing.conflicts.conflict_resolving_item_extractor import (
     ConflictResolvingItemExtractor,
 )
-from nextgis_connect.detached_editing.conflicts.conflicts import (
+from nextgis_connect.legacy.detached_editing.conflicts.conflicts import (
     AttachmentDataConflict,
     DescriptionConflict,
     FeatureDataConflict,
@@ -26,21 +26,23 @@ from nextgis_connect.detached_editing.conflicts.conflicts import (
     RemoteAttachmentDeletionConflict,
     RemoteFeatureDeletionConflict,
 )
-from nextgis_connect.detached_editing.container.editing.container_sessions import (
+from nextgis_connect.legacy.detached_editing.container.editing.container_sessions import (
     ContainerReadWriteSession,
 )
-from nextgis_connect.detached_editing.detached_layer import DetachedLayer
-from nextgis_connect.detached_editing.sync.common.changes import (
+from nextgis_connect.legacy.detached_editing.detached_layer import (
+    DetachedLayer,
+)
+from nextgis_connect.legacy.detached_editing.sync.common.changes import (
     AttachmentDeletion,
     AttachmentUpdate,
     DescriptionPut,
     FeatureDeletion,
     FeatureUpdate,
 )
-from nextgis_connect.detached_editing.sync.common.changes_extractor import (
+from nextgis_connect.legacy.detached_editing.sync.common.changes_extractor import (
     ChangesExtractor,
 )
-from nextgis_connect.detached_editing.sync.versioned.actions import (
+from nextgis_connect.legacy.detached_editing.sync.versioned.actions import (
     AttachmentDeleteAction,
     AttachmentUpdateAction,
     DescriptionPutAction,
@@ -48,9 +50,11 @@ from nextgis_connect.detached_editing.sync.versioned.actions import (
     FeatureRestoreAction,
     FeatureUpdateAction,
 )
-from nextgis_connect.detached_editing.utils import AttachmentMetadata
-from nextgis_connect.resources.ngw_field import NgwField
-from nextgis_connect.settings.ng_connect_settings import NgConnectSettings
+from nextgis_connect.legacy.detached_editing.utils import AttachmentMetadata
+from nextgis_connect.legacy.settings.ng_connect_settings import (
+    NgConnectSettings,
+)
+from nextgis_connect.ngw.resources.ngw_field import NgwField
 from nextgis_connect.shared.types import Unset, UnsetType
 from tests.detached_editing.utils import mock_container
 from tests.ng_connect_testcase import NgConnectTestCase, TestData

@@ -1,15 +1,17 @@
 from qgis.core import QgsApplication
 
 from nextgis_connect.bootstrap.service_container import ServiceContainer
-from nextgis_connect.detached_editing.detached_editing import DetachedEditing
-from nextgis_connect.ngw_connection.application.connections_manager import (
+from nextgis_connect.legacy.detached_editing.detached_editing import (
+    DetachedEditing,
+)
+from nextgis_connect.legacy.ngw_connection.application.connections_manager import (
     NgwConnectionsManager,
+)
+from nextgis_connect.legacy.settings.tasks.purge_ng_connect_cache_task import (
+    PurgeNgConnectCacheTask,
 )
 from nextgis_connect.platform.tasks.ng_connect_task_manager import (
     NgConnectTaskManager,
-)
-from nextgis_connect.settings.tasks.purge_ng_connect_cache_task import (
-    PurgeNgConnectCacheTask,
 )
 
 

@@ -2,6 +2,7 @@ import uuid
 from pathlib import Path
 from typing import Dict, List, Optional, cast
 
+import qgis.utils
 from qgis.core import (
     Qgis,
     QgsLayerTreeLayer,
@@ -14,40 +15,45 @@ from qgis.core import (
 from qgis.gui import QgisInterface
 from qgis.PyQt.QtCore import QObject, QTimer, pyqtSlot
 from qgis.PyQt.QtWidgets import QAction
-from qgis.utils import iface  # type: ignore
 
-from nextgis_connect.detached_editing import utils
-from nextgis_connect.detached_editing.container.container import (
+from nextgis_connect.legacy.detached_editing import utils
+from nextgis_connect.legacy.detached_editing.container.container import (
     DetachedContainer,
 )
-from nextgis_connect.detached_editing.container.container_factory import (
+from nextgis_connect.legacy.detached_editing.container.container_factory import (
     DetachedContainerFactory,
 )
-from nextgis_connect.detached_editing.container.path_preprocessor import (
+from nextgis_connect.legacy.detached_editing.container.path_preprocessor import (
     DetachedEditingPathPreprocessor,
 )
-from nextgis_connect.detached_editing.container.ui.layer_config_widget import (
+from nextgis_connect.legacy.detached_editing.container.ui.layer_config_widget import (
     DetachedLayerConfigWidgetFactory,
 )
-from nextgis_connect.detached_editing.detached_layer import DetachedLayer
-from nextgis_connect.detached_editing.identification.identification_manager import (
+from nextgis_connect.legacy.detached_editing.detached_layer import (
+    DetachedLayer,
+)
+from nextgis_connect.legacy.detached_editing.identification.identification_manager import (
     IdentificationManager,
 )
+from nextgis_connect.legacy.ngw_connection import NgwConnection
+from nextgis_connect.legacy.ngw_connection.application.connections_manager import (
+    ConnectionUpdateState,
+    NgwConnectionsManager,
+)
+from nextgis_connect.legacy.settings import NgConnectSettings
 from nextgis_connect.ngw.core.ngw_resource_factory import (
     NGWResourceFactory,
 )
 from nextgis_connect.ngw.core.ngw_vector_layer import NGWVectorLayer
 from nextgis_connect.ngw.qgis.qgis_ngw_connection import QgsNgwConnection
-from nextgis_connect.ngw_connection import NgwConnection
-from nextgis_connect.ngw_connection.application.connections_manager import (
-    ConnectionUpdateState,
-    NgwConnectionsManager,
-)
 from nextgis_connect.platform.logging import logger
 from nextgis_connect.platform.qgis.compat import QGIS_3_34
-from nextgis_connect.settings import NgConnectSettings
 
-iface: QgisInterface
+
+def _iface() -> QgisInterface:
+    iface = qgis.utils.iface
+    assert isinstance(iface, QgisInterface)
+    return iface
 
 
 class DetachedEditing(QObject):
@@ -76,6 +82,7 @@ class DetachedEditing(QObject):
         self.__timer.start()
 
         self.__properties_factory = DetachedLayerConfigWidgetFactory()
+        iface = _iface()
         iface.registerMapLayerConfigWidgetFactory(self.__properties_factory)
 
         project = QgsProject.instance()
@@ -124,7 +131,9 @@ class DetachedEditing(QObject):
             QgsPathResolver.removePathPreprocessor(self.__path_preprocessor_id)
             del self.__path_preprocessor
 
-        iface.unregisterMapLayerConfigWidgetFactory(self.__properties_factory)
+        _iface().unregisterMapLayerConfigWidgetFactory(
+            self.__properties_factory
+        )
         del self.__properties_factory
 
     @property

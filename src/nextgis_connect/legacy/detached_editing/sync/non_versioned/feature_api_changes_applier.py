@@ -1,6 +1,6 @@
 from typing import Any, Sequence, Type, Union, cast
 
-from nextgis_connect.detached_editing.sync.common.changes import (
+from nextgis_connect.legacy.detached_editing.sync.common.changes import (
     AttachmentCreation,
     AttachmentDeletion,
     AttachmentUpdate,
@@ -10,10 +10,10 @@ from nextgis_connect.detached_editing.sync.common.changes import (
     FeatureDeletion,
     FeatureUpdate,
 )
-from nextgis_connect.detached_editing.sync.common.changes_applier import (
+from nextgis_connect.legacy.detached_editing.sync.common.changes_applier import (
     ChangesApplier,
 )
-from nextgis_connect.detached_editing.utils import (
+from nextgis_connect.legacy.detached_editing.utils import (
     AttachmentMetadata,
     DetachedContainerContext,
     FeatureMetadata,

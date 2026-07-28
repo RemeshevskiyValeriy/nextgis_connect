@@ -5,19 +5,19 @@ from os import close
 from pathlib import Path
 from typing import cast
 
-from nextgis_connect.detached_editing.container.container_factory import (
+from nextgis_connect.legacy.detached_editing.container.container_factory import (
     DetachedContainerFactory,
 )
-from nextgis_connect.detached_editing.sync.common.detached_editing_task import (
+from nextgis_connect.legacy.detached_editing.sync.common.detached_editing_task import (
     DetachedEditingTask,
 )
-from nextgis_connect.detached_editing.sync.versioned.actions_applier import (
+from nextgis_connect.legacy.detached_editing.sync.versioned.actions_applier import (
     ActionApplier,
 )
-from nextgis_connect.detached_editing.sync.versioned.actions_serializer import (
+from nextgis_connect.legacy.detached_editing.sync.versioned.actions_serializer import (
     ActionSerializer,
 )
-from nextgis_connect.detached_editing.utils import (
+from nextgis_connect.legacy.detached_editing.utils import (
     container_metadata,
     make_connection,
 )

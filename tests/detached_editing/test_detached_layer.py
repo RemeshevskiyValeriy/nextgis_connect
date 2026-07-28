@@ -10,16 +10,21 @@ from qgis.core import QgsFeature, QgsField, QgsGeometry, QgsVectorLayer, edit
 from qgis.PyQt.QtCore import QObject, pyqtSlot
 from qgis.PyQt.QtWidgets import QMessageBox
 
-from nextgis_connect.detached_editing.detached_layer import DetachedLayer
-from nextgis_connect.detached_editing.sync.common.serialization import (
+from nextgis_connect.legacy.detached_editing.detached_layer import (
+    DetachedLayer,
+)
+from nextgis_connect.legacy.detached_editing.sync.common.serialization import (
     deserialize_geometry,
     deserialize_value,
     serialize_value,
     simplify_value,
 )
-from nextgis_connect.detached_editing.utils import (
+from nextgis_connect.legacy.detached_editing.utils import (
     AttachmentMetadata,
     make_connection,
+)
+from nextgis_connect.legacy.settings.ng_connect_settings import (
+    NgConnectSettings,
 )
 from nextgis_connect.platform.qgis.compat import (
     FieldType,
@@ -32,7 +37,6 @@ from nextgis_connect.platform.qgis.errors import (
     ContainerError,
     DetachedEditingError,
 )
-from nextgis_connect.settings.ng_connect_settings import NgConnectSettings
 from tests.detached_editing.utils import mock_container
 from tests.ng_connect_testcase import (
     NgConnectTestCase,
@@ -225,7 +229,7 @@ class TestDetachedLayer(NgConnectTestCase):
         # Pre-enable editing to check signal behavior on instantiation
         qgs_layer.startEditing()
 
-        module = "nextgis_connect.detached_editing.detached_layer"
+        module = "nextgis_connect.legacy.detached_editing.detached_layer"
         with patch(
             f"{module}.DetachedLayer.editing_started"
         ) as editing_started_mock, patch(
@@ -1756,7 +1760,7 @@ class TestDetachedLayerAttachments(NgConnectTestCase):
     ) -> None:
         layer = DetachedLayer(container_mock, qgs_layer)
 
-        module = "nextgis_connect.detached_editing.detached_layer"
+        module = "nextgis_connect.legacy.detached_editing.detached_layer"
         with patch(f"{module}.QgsNgwConnection") as connection_mock:
             ngw_connection = connection_mock.return_value
             ngw_connection.get.side_effect = [
@@ -1832,7 +1836,7 @@ class TestDetachedLayerAttachments(NgConnectTestCase):
         local_file_path = self.create_temp_file(".txt")
         local_file_path.write_text("local attachment")
 
-        module = "nextgis_connect.detached_editing.detached_layer"
+        module = "nextgis_connect.legacy.detached_editing.detached_layer"
         with patch(f"{module}.QgsNgwConnection") as connection_mock:
             ngw_connection = connection_mock.return_value
             ngw_connection.get.side_effect = [

@@ -9,14 +9,16 @@ from qgis.PyQt.QtWidgets import (
     QWidget,
 )
 
-from nextgis_connect.ngw_connection.application.diagnostics.runner import (
+from nextgis_connect.legacy.ngw_connection.application.diagnostics.runner import (
     NgwConnectionDiagnostics,
 )
-from nextgis_connect.ngw_connection.domain.connection import NgwConnection
-from nextgis_connect.ngw_connection.domain.diagnostics import (
+from nextgis_connect.legacy.ngw_connection.domain.connection import (
+    NgwConnection,
+)
+from nextgis_connect.legacy.ngw_connection.domain.diagnostics import (
     ConnectionDiagnosticsReport,
 )
-from nextgis_connect.ngw_connection.presentation.diagnostics.ui import (
+from nextgis_connect.legacy.ngw_connection.presentation.diagnostics.ui import (
     NgwConnectionDiagnosticsWidget,
 )
 from nextgis_connect.platform.qgis.utils import set_clipboard_data

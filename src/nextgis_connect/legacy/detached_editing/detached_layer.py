@@ -28,28 +28,28 @@ from qgis.core import (
 from qgis.PyQt.QtCore import QObject, pyqtSignal, pyqtSlot
 from qgis.PyQt.QtWidgets import QMessageBox
 
-from nextgis_connect.detached_editing.container.editing.commands.attachment_add import (
+from nextgis_connect.legacy.detached_editing.container.editing.commands.attachment_add import (
     AttachmentAddCommand,
 )
-from nextgis_connect.detached_editing.container.editing.commands.attachment_remove import (
+from nextgis_connect.legacy.detached_editing.container.editing.commands.attachment_remove import (
     AttachmentRemoveCommand,
 )
-from nextgis_connect.detached_editing.container.editing.commands.attachment_update import (
+from nextgis_connect.legacy.detached_editing.container.editing.commands.attachment_update import (
     AttachmentUpdateCommand,
 )
-from nextgis_connect.detached_editing.container.editing.commands.description_update import (
+from nextgis_connect.legacy.detached_editing.container.editing.commands.description_update import (
     DescriptionUpdateCommand,
 )
-from nextgis_connect.detached_editing.detached_layer_edit_buffer import (
+from nextgis_connect.legacy.detached_editing.detached_layer_edit_buffer import (
     DetachedLayerEditBuffer,
 )
-from nextgis_connect.detached_editing.sync.common.serialization import (
+from nextgis_connect.legacy.detached_editing.sync.common.serialization import (
     deserialize_value,
     serialize_geometry,
     serialize_value,
     simplify_value,
 )
-from nextgis_connect.detached_editing.utils import (
+from nextgis_connect.legacy.detached_editing.utils import (
     AttachmentMetadata,
     DetachedContainerMetaData,
     detached_layer_uri,
@@ -57,9 +57,13 @@ from nextgis_connect.detached_editing.utils import (
     is_feature_new,
     make_connection,
 )
+from nextgis_connect.legacy.settings.ng_connect_cache_manager import (
+    NgConnectCacheManager,
+)
 from nextgis_connect.ngw.qgis.qgis_ngw_connection import (
     QgsNgwConnection,
 )
+from nextgis_connect.ngw.resources.ngw_field import FieldId
 from nextgis_connect.platform.logging import logger
 from nextgis_connect.platform.qgis.compat import (
     QgsAttributeList,
@@ -75,10 +79,6 @@ from nextgis_connect.platform.qgis.errors import (
     ErrorCode,
 )
 from nextgis_connect.platform.qgis.utils import wrap_sql_value
-from nextgis_connect.resources.ngw_field import FieldId
-from nextgis_connect.settings.ng_connect_cache_manager import (
-    NgConnectCacheManager,
-)
 from nextgis_connect.shared.types import (
     AttachmentId,
     FileObjectId,

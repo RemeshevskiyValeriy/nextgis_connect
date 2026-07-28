@@ -15,16 +15,16 @@ from qgis.PyQt.QtWidgets import (
     QWidget,
 )
 
-from nextgis_connect.detached_editing.conflicts.conflict_resolving_item import (
+from nextgis_connect.legacy.detached_editing.conflicts.conflict_resolving_item import (
     AttachmentDataConflictResolvingItem,
 )
-from nextgis_connect.detached_editing.conflicts.conflicts import (
+from nextgis_connect.legacy.detached_editing.conflicts.conflicts import (
     AttachmentDataConflict,
 )
-from nextgis_connect.detached_editing.conflicts.ui.base_feature_conflict_tab import (
+from nextgis_connect.legacy.detached_editing.conflicts.ui.base_feature_conflict_tab import (
     ConflictTabBase,
 )
-from nextgis_connect.detached_editing.utils import AttachmentMetadata
+from nextgis_connect.legacy.detached_editing.utils import AttachmentMetadata
 from nextgis_connect.shared.types import Unset, UnsetType
 from nextgis_connect.ui_kit.icons.icon import (
     draw_icon,

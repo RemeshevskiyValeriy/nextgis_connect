@@ -12,7 +12,7 @@ from qgis.core import (
 )
 from qgis.PyQt.QtCore import QObject, pyqtSlot
 
-from nextgis_connect.detached_editing.sync.versioned.actions import (
+from nextgis_connect.legacy.detached_editing.sync.versioned.actions import (
     ActionType,
     AttachmentCreateAction,
     AttachmentDeleteAction,
@@ -25,7 +25,7 @@ from nextgis_connect.detached_editing.sync.versioned.actions import (
     FeatureDeleteAction,
     FeatureUpdateAction,
 )
-from nextgis_connect.detached_editing.utils import (
+from nextgis_connect.legacy.detached_editing.utils import (
     DetachedContainerMetaData,
     FeatureMetadata,
     detached_layer_uri,

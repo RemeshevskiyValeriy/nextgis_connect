@@ -14,20 +14,20 @@ from qgis.core import (
     QgsVectorLayer,
 )
 
-from nextgis_connect.detached_editing.container.container_factory import (
+from nextgis_connect.legacy.detached_editing.container.container_factory import (
     DetachedContainerFactory,
 )
-from nextgis_connect.detached_editing.utils import (
+from nextgis_connect.legacy.detached_editing.utils import (
     DetachedContainerMetaData,
     container_metadata,
     detached_layer_uri,
     make_connection,
 )
+from nextgis_connect.legacy.ngw_connection import NgwConnection
+from nextgis_connect.legacy.settings import NgConnectSettings
 from nextgis_connect.ngw.core import NGWVectorLayer
-from nextgis_connect.ngw_connection import NgwConnection
+from nextgis_connect.ngw.resources.ngw_fields import NgwFields
 from nextgis_connect.platform.qgis.compat import FieldType
-from nextgis_connect.resources.ngw_fields import NgwFields
-from nextgis_connect.settings import NgConnectSettings
 from tests.ng_connect_testcase import (
     NgConnectTestCase,
     TestConnection,
@@ -334,7 +334,7 @@ class TestDetachedContainerFactory(NgConnectTestCase):
                 self.assertEqual(metadata.layer_name, display_name)
 
     @mock.patch(
-        "nextgis_connect.detached_editing.container.container_factory.datetime"
+        "nextgis_connect.legacy.detached_editing.container.container_factory.datetime"
     )
     def test_fill(self, datetime_mock) -> None:
         datetime_mock.now.return_value = FIXED_DATETIME
@@ -355,7 +355,7 @@ class TestDetachedContainerFactory(NgConnectTestCase):
             )
 
     @mock.patch(
-        "nextgis_connect.detached_editing.container.container_factory.datetime"
+        "nextgis_connect.legacy.detached_editing.container.container_factory.datetime"
     )
     def test_fill_with_fid_field(self, datetime_mock) -> None:
         datetime_mock.now.return_value = FIXED_DATETIME

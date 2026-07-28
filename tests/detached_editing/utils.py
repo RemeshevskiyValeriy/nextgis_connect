@@ -16,21 +16,21 @@ from qgis.core import (
     edit,
 )
 
-from nextgis_connect.detached_editing.container.container_factory import (
+from nextgis_connect.legacy.detached_editing.container.container_factory import (
     DetachedContainerFactory,
 )
-from nextgis_connect.detached_editing.container.editing.container_sessions import (
+from nextgis_connect.legacy.detached_editing.container.editing.container_sessions import (
     ContainerReadWriteSession,
 )
-from nextgis_connect.detached_editing.utils import (
+from nextgis_connect.legacy.detached_editing.utils import (
     AttachmentMetadata,
     DetachedContainerContext,
     container_metadata,
     detached_layer_uri,
 )
 from nextgis_connect.ngw.core.ngw_vector_layer import NGWVectorLayer
+from nextgis_connect.ngw.resources.ngw_data_type import NgwDataType
 from nextgis_connect.platform.qgis.compat import QgsFeatureId, WkbType
-from nextgis_connect.resources.ngw_data_type import NgwDataType
 from tests.magic_qobject_mock import MagicQObjectMock
 from tests.ng_connect_testcase import (
     NgConnectTestCase,

@@ -36,28 +36,33 @@ from qgis.PyQt.QtWidgets import (
 )
 
 from nextgis_connect.bootstrap.plugin_interface import NgConnectInterface
-from nextgis_connect.detached_editing.detached_layer import DetachedLayer
-from nextgis_connect.detached_editing.identification.attachments_model import (
+from nextgis_connect.legacy.detached_editing.detached_layer import (
+    DetachedLayer,
+)
+from nextgis_connect.legacy.detached_editing.identification.attachments_model import (
     AttachmentsModel,
 )
-from nextgis_connect.detached_editing.identification.attachments_sort_proxy_model import (
+from nextgis_connect.legacy.detached_editing.identification.attachments_sort_proxy_model import (
     AttachmentsSortMode,
     AttachmentsSortProxyModel,
 )
-from nextgis_connect.detached_editing.identification.settings import (
+from nextgis_connect.legacy.detached_editing.identification.settings import (
     IdentificationSettings,
 )
-from nextgis_connect.detached_editing.identification.ui.attachments_view_wrapper import (
+from nextgis_connect.legacy.detached_editing.identification.ui.attachments_view_wrapper import (
     AttachmentsViewWrapper,
 )
-from nextgis_connect.detached_editing.utils import (
+from nextgis_connect.legacy.detached_editing.utils import (
     AttachmentMetadata,
     make_connection,
+)
+from nextgis_connect.legacy.ngw_connection import (
+    NgwConnection,
+    NgwConnectionsManager,
 )
 from nextgis_connect.ngw.qgis.qgis_ngw_connection import (
     QgsNgwConnection,
 )
-from nextgis_connect.ngw_connection import NgwConnection, NgwConnectionsManager
 from nextgis_connect.platform.filesystem import reveal_in_file_manager
 from nextgis_connect.platform.logging import logger
 from nextgis_connect.platform.qgis.compat import QgsFeatureId

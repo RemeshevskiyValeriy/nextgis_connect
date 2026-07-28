@@ -24,8 +24,8 @@ from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 from qgis.core import QgsFeedback
 
+from nextgis_connect.ngw.resources.utils import generate_unique_name
 from nextgis_connect.platform.logging import logger
-from nextgis_connect.resources.utils import generate_unique_name
 
 if TYPE_CHECKING:
     from nextgis_connect.ngw.qgis.qgis_ngw_connection import (

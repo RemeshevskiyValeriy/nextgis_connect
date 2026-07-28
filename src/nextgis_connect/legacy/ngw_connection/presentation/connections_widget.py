@@ -14,11 +14,13 @@ from qgis.PyQt.QtWidgets import (
     QWidget,
 )
 
-from nextgis_connect.ngw_connection.application.connections_manager import (
+from nextgis_connect.legacy.ngw_connection.application.connections_manager import (
     NgwConnectionsManager,
 )
-from nextgis_connect.ngw_connection.domain.connection import NgwConnection
-from nextgis_connect.ngw_connection.presentation.connection_edit_dialog import (
+from nextgis_connect.legacy.ngw_connection.domain.connection import (
+    NgwConnection,
+)
+from nextgis_connect.legacy.ngw_connection.presentation.connection_edit_dialog import (
     NgwConnectionEditDialog,
 )
 from nextgis_connect.ui_kit.rendering.graphics.decorator import (

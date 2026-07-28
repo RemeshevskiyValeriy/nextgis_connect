@@ -1,6 +1,6 @@
 import unittest
 
-from nextgis_connect.detached_editing import utils
+from nextgis_connect.legacy.detached_editing import utils
 from tests.ng_connect_testcase import NgConnectTestCase, TestData
 
 

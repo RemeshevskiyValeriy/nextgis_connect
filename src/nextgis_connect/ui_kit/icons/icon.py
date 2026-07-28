@@ -52,7 +52,7 @@ def plugin_icon(
     :rtype: QIcon
     """
     plugin = NgConnectInterface.instance()
-    icons_path = plugin.path / "icons"
+    icons_path = plugin.path / "assets" / "icons"
     if icon_path is None:
         icon_path = f"{PACKAGE_NAME}_logo.svg"
 
@@ -89,7 +89,7 @@ def material_icon(
     :raises ValueError: If the SVG cannot be loaded.
     """
     plugin = NgConnectInterface.instance()
-    material_icons_path = plugin.path / "icons" / "material"
+    material_icons_path = plugin.path / "assets" / "icons" / "material"
 
     svg_path = None
     for path in material_icons_path.glob(f"{name}*"):

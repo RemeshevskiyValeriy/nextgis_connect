@@ -13,8 +13,12 @@ from qgis.PyQt.QtWidgets import QToolBar
 from nextgis_connect.bootstrap.plugin_container import PluginContainer
 from nextgis_connect.bootstrap.plugin_interface import NgConnectInterface
 from nextgis_connect.bootstrap.processing_bootstrap import init_processing
-from nextgis_connect.detached_editing.detached_editing import DetachedEditing
-from nextgis_connect.notifier.notifier_interface import NotifierInterface
+from nextgis_connect.legacy.detached_editing.detached_editing import (
+    DetachedEditing,
+)
+from nextgis_connect.legacy.notifier.notifier_interface import (
+    NotifierInterface,
+)
 
 
 class NgConnectPlugin(NgConnectInterface):

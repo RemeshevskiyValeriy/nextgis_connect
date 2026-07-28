@@ -5,12 +5,12 @@ from urllib.parse import urlparse
 from qgis.core import QgsApplication, QgsFeedback
 from qgis.PyQt.QtNetwork import QSslSocket
 
-from nextgis_connect.ngw.qgis.qgis_ngw_connection import QgsNgwConnection
-from nextgis_connect.ngw_connection.domain.diagnostics import (
+from nextgis_connect.legacy.ngw_connection.domain.diagnostics import (
     ConnectionCheckId,
     ConnectionCheckResult,
     ConnectionDiagnosticContext,
 )
+from nextgis_connect.ngw.qgis.qgis_ngw_connection import QgsNgwConnection
 from nextgis_connect.platform.logging import logger
 from nextgis_connect.platform.qgis.errors import NgConnectError, NgwError
 

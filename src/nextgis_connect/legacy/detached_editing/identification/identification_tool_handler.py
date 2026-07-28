@@ -5,7 +5,7 @@ from qgis.gui import QgsAbstractMapToolHandler, QgsMapTool
 from qgis.PyQt.QtWidgets import QAction
 from qgis.utils import iface
 
-from nextgis_connect.detached_editing.utils import is_ngw_container
+from nextgis_connect.legacy.detached_editing.utils import is_ngw_container
 
 
 class IdentificationToolHandler(QgsAbstractMapToolHandler):
@@ -36,7 +36,7 @@ class IdentificationToolHandler(QgsAbstractMapToolHandler):
 
         Treat a layer as compatible when it is not ``None`` and represents
         an NGW container according to
-        ``nextgis_connect.detached_editing.utils.is_ngw_container``.
+        ``nextgis_connect.legacy.detached_editing.utils.is_ngw_container``.
 
         :param layer: Layer to check compatibility for, may be ``None``.
         :param context: Context of the map tool handler.

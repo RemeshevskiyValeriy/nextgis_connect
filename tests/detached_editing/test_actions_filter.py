@@ -1,10 +1,10 @@
-from nextgis_connect.detached_editing.sync.versioned.actions import (
+from nextgis_connect.legacy.detached_editing.sync.versioned.actions import (
     AttachmentDeleteAction,
     ContinueAction,
     FeatureDeleteAction,
     FeatureUpdateAction,
 )
-from nextgis_connect.detached_editing.sync.versioned.actions_filter import (
+from nextgis_connect.legacy.detached_editing.sync.versioned.actions_filter import (
     ActionsFilter,
 )
 from tests.ng_connect_testcase import NgConnectTestCase

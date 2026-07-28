@@ -10,10 +10,10 @@ from qgis.PyQt.QtWidgets import (
     QWidget,
 )
 
-from nextgis_connect.detached_editing.conflicts.conflict_resolving_item import (
+from nextgis_connect.legacy.detached_editing.conflicts.conflict_resolving_item import (
     DescriptionConflictResolvingItem,
 )
-from nextgis_connect.detached_editing.conflicts.ui.base_feature_conflict_tab import (
+from nextgis_connect.legacy.detached_editing.conflicts.ui.base_feature_conflict_tab import (
     ConflictTabBase,
 )
 from nextgis_connect.shared.types import UnsetType

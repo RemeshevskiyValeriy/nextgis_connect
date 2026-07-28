@@ -20,7 +20,7 @@
 
 from typing import Any, Dict, Iterable
 
-from nextgis_connect.settings import NgConnectSettings
+from nextgis_connect.legacy.settings import NgConnectSettings
 
 from .ngw_group_resource import NGWGroupResource
 from .ngw_ogcf_service import NGWOgcfService

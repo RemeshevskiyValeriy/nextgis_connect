@@ -3,13 +3,13 @@ from typing import Any, Optional
 
 from qgis.PyQt.QtCore import QModelIndex, QObject, QSortFilterProxyModel, Qt
 
-from nextgis_connect.detached_editing.identification.attachments_model import (
+from nextgis_connect.legacy.detached_editing.identification.attachments_model import (
     AttachmentsModel,
 )
-from nextgis_connect.detached_editing.identification.types import (
+from nextgis_connect.legacy.detached_editing.identification.types import (
     AttachmentsSortMode,
 )
-from nextgis_connect.detached_editing.utils import AttachmentMetadata
+from nextgis_connect.legacy.detached_editing.utils import AttachmentMetadata
 
 
 class AttachmentsSortProxyModel(QSortFilterProxyModel):

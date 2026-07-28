@@ -7,7 +7,7 @@ from qgis.core import QgsApplication, QgsAuthMethodConfig
 from qgis.PyQt.QtCore import QUrl
 from qgis.PyQt.QtNetwork import QNetworkRequest
 
-from nextgis_connect.ngw_connection import NgwConnection
+from nextgis_connect.legacy.ngw_connection import NgwConnection
 from tests.ng_connect_testcase import NgConnectTestCase, TestConnection
 
 
@@ -112,8 +112,8 @@ class TestNgwConnection(NgConnectTestCase):
             True,
             mock_config,
         )
-        mock_config.config.side_effect = (
-            lambda key: username if key == "username" else password
+        mock_config.config.side_effect = lambda key: (
+            username if key == "username" else password
         )
         for key in ("path", "url"):
             config_original = {key: url}
@@ -144,8 +144,8 @@ class TestNgwConnection(NgConnectTestCase):
             True,
             mock_config,
         )
-        mock_config.config.side_effect = (
-            lambda key: username if key == "username" else password
+        mock_config.config.side_effect = lambda key: (
+            username if key == "username" else password
         )
 
         for key in ("path", "url"):
@@ -182,8 +182,8 @@ class TestNgwConnection(NgConnectTestCase):
             True,
             mock_config,
         )
-        mock_config.config.side_effect = (
-            lambda key: username if key == "username" else password
+        mock_config.config.side_effect = lambda key: (
+            username if key == "username" else password
         )
 
         for key in ("path", "url"):

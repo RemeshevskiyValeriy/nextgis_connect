@@ -5,11 +5,13 @@ from typing import Dict, List, Optional, Set, Tuple
 from qgis.core import QgsApplication
 from qgis.PyQt.QtCore import QObject, pyqtSignal
 
-from nextgis_connect.ngw_connection.domain.connection import NgwConnection
-from nextgis_connect.ngw_connection.infrastructure.settings_migrator import (
+from nextgis_connect.legacy.ngw_connection.domain.connection import (
+    NgwConnection,
+)
+from nextgis_connect.legacy.ngw_connection.infrastructure.settings_migrator import (
     NgwConnectionSettingsMigrator,
 )
-from nextgis_connect.ngw_connection.infrastructure.settings_repository import (
+from nextgis_connect.legacy.ngw_connection.infrastructure.settings_repository import (
     QgisConnectionSettingsRepository,
 )
 

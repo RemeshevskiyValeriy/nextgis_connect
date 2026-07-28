@@ -34,10 +34,10 @@ from qgis.PyQt.QtWidgets import (
     QWidget,
 )
 
-from nextgis_connect.detached_editing.identification.attachments_model import (
+from nextgis_connect.legacy.detached_editing.identification.attachments_model import (
     AttachmentsModel,
 )
-from nextgis_connect.detached_editing.identification.settings import (
+from nextgis_connect.legacy.detached_editing.identification.settings import (
     IdentificationSettings,
 )
 from nextgis_connect.ui_kit.delegates.widget_item_delegate import (

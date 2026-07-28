@@ -16,10 +16,12 @@ if TYPE_CHECKING:
     from qgis.PyQt.QtCore import QAbstractItemModel, QItemSelectionModel
     from qgis.PyQt.QtWidgets import QToolBar
 
-    from nextgis_connect.detached_editing.detached_editing import (
+    from nextgis_connect.legacy.detached_editing.detached_editing import (
         DetachedEditing,
     )
-    from nextgis_connect.notifier.notifier_interface import NotifierInterface
+    from nextgis_connect.legacy.notifier.notifier_interface import (
+        NotifierInterface,
+    )
 
 
 class NgConnectInterface(QObject, metaclass=QObjectMetaClass):
@@ -79,7 +81,7 @@ class NgConnectInterface(QObject, metaclass=QObjectMetaClass):
         :returns: Path to the plugin directory.
         :rtype: Path
         """
-        return Path(__file__).parent
+        return Path(__file__).resolve().parents[1]
 
     @property
     @abstractmethod

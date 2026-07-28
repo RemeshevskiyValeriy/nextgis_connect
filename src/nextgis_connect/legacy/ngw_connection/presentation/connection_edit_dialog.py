@@ -41,25 +41,27 @@ from qgis.PyQt.QtWidgets import (
 )
 
 from nextgis_connect.bootstrap.plugin_interface import NgConnectInterface
-from nextgis_connect.ngw_connection.application.connections_manager import (
+from nextgis_connect.legacy.ngw_connection.application.connections_manager import (
     NgwConnectionsManager,
 )
-from nextgis_connect.ngw_connection.application.diagnostics.runner import (
+from nextgis_connect.legacy.ngw_connection.application.diagnostics.runner import (
     NgwConnectionVerifier,
 )
-from nextgis_connect.ngw_connection.domain.connection import NgwConnection
-from nextgis_connect.ngw_connection.domain.diagnostics import (
+from nextgis_connect.legacy.ngw_connection.domain.connection import (
+    NgwConnection,
+)
+from nextgis_connect.legacy.ngw_connection.domain.diagnostics import (
     ConnectionIssue,
     ConnectionIssueSource,
     ConnectionVerificationResult,
 )
-from nextgis_connect.ngw_connection.domain.parsers import (
+from nextgis_connect.legacy.ngw_connection.domain.parsers import (
     suggested_connection_name,
 )
-from nextgis_connect.ngw_connection.presentation.auth_config_edit_dialog import (
+from nextgis_connect.legacy.ngw_connection.presentation.auth_config_edit_dialog import (
     AuthConfigEditorWidget,
 )
-from nextgis_connect.ngw_connection.presentation.dialog_header_widget import (
+from nextgis_connect.legacy.ngw_connection.presentation.dialog_header_widget import (
     NextgisDialogHeaderWidget,
 )
 from nextgis_connect.platform.qgis.utils import nextgis_domain
@@ -917,7 +919,7 @@ class NgwConnectionEditDialog(QDialog, WIDGET):
 
     @pyqtSlot()
     def __open_current_connection_diagnostics(self) -> None:
-        from nextgis_connect.ngw_connection.presentation.diagnostics.dialog import (
+        from nextgis_connect.legacy.ngw_connection.presentation.diagnostics.dialog import (
             NgwConnectionDiagnosticsDialog,
         )
 

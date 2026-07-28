@@ -2,10 +2,10 @@ import shutil
 from abc import ABC, abstractmethod
 from typing import Any, Dict, Sequence, Union, cast
 
-from nextgis_connect.detached_editing.container.editing.container_sessions import (
+from nextgis_connect.legacy.detached_editing.container.editing.container_sessions import (
     ContainerReadWriteSession,
 )
-from nextgis_connect.detached_editing.sync.common.changes import (
+from nextgis_connect.legacy.detached_editing.sync.common.changes import (
     AttachmentDeletion,
     DescriptionPut,
     FeatureChange,
@@ -13,12 +13,12 @@ from nextgis_connect.detached_editing.sync.common.changes import (
     FeatureRestoration,
     FeatureUpdate,
 )
-from nextgis_connect.detached_editing.utils import (
+from nextgis_connect.legacy.detached_editing.utils import (
     AttachmentMetadata,
     DetachedContainerContext,
     FeatureMetadata,
 )
-from nextgis_connect.settings.ng_connect_cache_manager import (
+from nextgis_connect.legacy.settings.ng_connect_cache_manager import (
     NgConnectCacheManager,
 )
 from nextgis_connect.shared.types import FeatureId, NgwFeatureId

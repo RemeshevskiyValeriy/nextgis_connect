@@ -33,20 +33,20 @@ from qgis.PyQt.QtWidgets import QAction
 from qgis.utils import iface
 
 from nextgis_connect.bootstrap.plugin_interface import NgConnectInterface
-from nextgis_connect.detached_editing.identification.identification_tool import (
+from nextgis_connect.legacy.detached_editing.identification.identification_tool import (
     IdentificationTool,
 )
-from nextgis_connect.detached_editing.identification.identification_tool_handler import (
+from nextgis_connect.legacy.detached_editing.identification.identification_tool_handler import (
     IdentificationToolHandler,
 )
-from nextgis_connect.detached_editing.identification.settings import (
+from nextgis_connect.legacy.detached_editing.identification.settings import (
     IdentificationSettings,
 )
-from nextgis_connect.detached_editing.identification.ui.identification_results_widget import (
+from nextgis_connect.legacy.detached_editing.identification.ui.identification_results_widget import (
     IdentificationResultsWidget,
 )
-from nextgis_connect.detached_editing.utils import is_ngw_container
-from nextgis_connect.ngw_connection import NgwConnectionsManager
+from nextgis_connect.legacy.detached_editing.utils import is_ngw_container
+from nextgis_connect.legacy.ngw_connection import NgwConnectionsManager
 from nextgis_connect.platform.logging import logger
 from nextgis_connect.platform.qgis.compat import (
     QT_VERSION_MAJOR,

@@ -2,10 +2,10 @@ import json
 
 from qgis.core import QgsGeometry
 
-from nextgis_connect.detached_editing.sync.common.serialization import (
+from nextgis_connect.legacy.detached_editing.sync.common.serialization import (
     geometry_to_wkb64,
 )
-from nextgis_connect.detached_editing.sync.versioned.actions import (
+from nextgis_connect.legacy.detached_editing.sync.versioned.actions import (
     ActionType,
     AttachmentCreateAction,
     AttachmentDeleteAction,
@@ -18,7 +18,7 @@ from nextgis_connect.detached_editing.sync.versioned.actions import (
     FeatureRestoreAction,
     FeatureUpdateAction,
 )
-from nextgis_connect.detached_editing.sync.versioned.actions_serializer import (
+from nextgis_connect.legacy.detached_editing.sync.versioned.actions_serializer import (
     ActionSerializer,
 )
 from nextgis_connect.platform.qgis.errors import SerializationError

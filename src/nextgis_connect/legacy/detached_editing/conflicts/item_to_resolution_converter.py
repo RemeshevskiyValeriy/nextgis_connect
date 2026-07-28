@@ -1,6 +1,6 @@
 from typing import List
 
-from nextgis_connect.detached_editing.conflicts.conflict_resolution import (
+from nextgis_connect.legacy.detached_editing.conflicts.conflict_resolution import (
     AttachmentConflictResolution,
     AttachmentResolutionData,
     ConflictResolution,
@@ -8,16 +8,16 @@ from nextgis_connect.detached_editing.conflicts.conflict_resolution import (
     FeatureConflictResolution,
     FeatureResolutionData,
 )
-from nextgis_connect.detached_editing.conflicts.conflict_resolving_item import (
+from nextgis_connect.legacy.detached_editing.conflicts.conflict_resolving_item import (
     AttachmentDataConflictResolvingItem,
     BaseConflictResolvingItem,
     DescriptionConflictResolvingItem,
     FeatureDataConflictResolvingItem,
 )
-from nextgis_connect.detached_editing.sync.common.serialization import (
+from nextgis_connect.legacy.detached_editing.sync.common.serialization import (
     serialize_geometry,
 )
-from nextgis_connect.detached_editing.utils import (
+from nextgis_connect.legacy.detached_editing.utils import (
     DetachedContainerContext,
 )
 from nextgis_connect.shared.types import UnsetType

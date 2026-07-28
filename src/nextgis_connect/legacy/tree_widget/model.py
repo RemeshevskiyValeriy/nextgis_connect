@@ -29,10 +29,13 @@ from qgis.PyQt.QtCore import (
 )
 from qgis.PyQt.QtGui import QFont
 
-from nextgis_connect import utils
 from nextgis_connect.bootstrap.plugin_interface import NgConnectInterface
-from nextgis_connect.detached_editing.container.container_factory import (
+from nextgis_connect.legacy.detached_editing.container.container_factory import (
     DetachedContainerFactory,
+)
+from nextgis_connect.legacy.ngw_connection import NgwConnectionsManager
+from nextgis_connect.legacy.settings.ng_connect_cache_manager import (
+    NgConnectCacheManager,
 )
 from nextgis_connect.ngw.core import (
     NGWGroupResource,
@@ -75,16 +78,13 @@ from nextgis_connect.ngw.qt.qt_ngw_resource_model_job import (
 from nextgis_connect.ngw.qt.qt_ngw_resource_model_job_error import (
     NGWResourceModelJobError,
 )
-from nextgis_connect.ngw_connection import NgwConnectionsManager
 from nextgis_connect.platform.logging import logger
+from nextgis_connect.platform.qgis import utils
 from nextgis_connect.platform.qgis.errors import (
     ErrorCode,
     NgConnectError,
     NgwConnectionError,
     NgwError,
-)
-from nextgis_connect.settings.ng_connect_cache_manager import (
-    NgConnectCacheManager,
 )
 
 from .item import QModelItem, QNGWResourceItem

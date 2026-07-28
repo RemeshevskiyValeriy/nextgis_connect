@@ -8,8 +8,8 @@ from qgis.core import Qgis, QgsApplication
 from qgis.PyQt.QtWidgets import QPlainTextEdit, QTabWidget
 from qgis.utils import iface
 
+from nextgis_connect.legacy.settings import NgConnectSettings
 from nextgis_connect.platform.qgis.compat import QGIS_3_42_2
-from nextgis_connect.settings import NgConnectSettings
 from nextgis_connect.shared.constants import PLUGIN_NAME
 
 if TYPE_CHECKING:

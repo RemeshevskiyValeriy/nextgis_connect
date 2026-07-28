@@ -30,7 +30,7 @@ from qgis.core import QgsSettings
 from qgis.gui import QgisInterface
 from qgis.PyQt.QtCore import QSettings, QStandardPaths
 
-from nextgis_connect.search.search_settings import SearchSettings
+from nextgis_connect.legacy.search.search_settings import SearchSettings
 from nextgis_connect.shared.constants import PLUGIN_SETTINGS_GROUP
 
 

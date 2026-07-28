@@ -1,6 +1,6 @@
 from typing import Iterable, List, Set
 
-from nextgis_connect.detached_editing.sync.versioned.actions import (
+from nextgis_connect.legacy.detached_editing.sync.versioned.actions import (
     AttachmentDeleteAction,
     ContinueAction,
     FeatureDeleteAction,

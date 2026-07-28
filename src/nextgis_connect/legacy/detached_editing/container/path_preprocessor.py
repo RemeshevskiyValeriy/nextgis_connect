@@ -5,23 +5,23 @@ from typing import List, Optional, Tuple
 from qgis.core import QgsProject
 from qgis.PyQt.QtCore import QDir, QObject, QTimer, pyqtSignal
 
-from nextgis_connect.detached_editing.container.container_factory import (
+from nextgis_connect.legacy.detached_editing.container.container_factory import (
     DetachedContainerFactory,
 )
-from nextgis_connect.detached_editing.utils import (
+from nextgis_connect.legacy.detached_editing.utils import (
     detached_layer_uri,
     is_ngw_container,
+)
+from nextgis_connect.legacy.ngw_connection import NgwConnectionsManager
+from nextgis_connect.legacy.settings.ng_connect_cache_manager import (
+    NgConnectCacheManager,
 )
 from nextgis_connect.ngw.core.ngw_resource_factory import (
     NGWResourceFactory,
 )
 from nextgis_connect.ngw.core.ngw_vector_layer import NGWVectorLayer
 from nextgis_connect.ngw.qgis.qgis_ngw_connection import QgsNgwConnection
-from nextgis_connect.ngw_connection import NgwConnectionsManager
 from nextgis_connect.platform.logging import logger
-from nextgis_connect.settings.ng_connect_cache_manager import (
-    NgConnectCacheManager,
-)
 
 
 class DetachedEditingPathPreprocessor(QObject):

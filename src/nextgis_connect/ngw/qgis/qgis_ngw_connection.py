@@ -26,24 +26,14 @@ from base64 import b64encode
 from http import HTTPStatus
 from typing import TYPE_CHECKING, Any, ClassVar, Dict, Optional, Tuple, Union
 
-from qgis.core import Enum, QgsFeedback, QgsNetworkAccessManager
-from qgis.PyQt.QtCore import (
-    QBuffer,
-    QByteArray,
-    QEventLoop,
-    QFile,
-    QIODevice,
-    QObject,
-    QTimer,
-    QUrl,
-)
-from qgis.PyQt.QtNetwork import QNetworkRequest
-
-from nextgis_connect.ngw.core.ngw_error import NGWError
-from nextgis_connect.ngw_connection.application.connections_manager import (
+from nextgis_connect.legacy.ngw_connection.application.connections_manager import (
     NgwConnectionsManager,
 )
-from nextgis_connect.ngw_connection.domain.connection import NgwConnection
+from nextgis_connect.legacy.ngw_connection.domain.connection import (
+    NgwConnection,
+)
+from nextgis_connect.legacy.settings import NgConnectSettings
+from nextgis_connect.ngw.core.ngw_error import NGWError
 from nextgis_connect.platform.logging import (
     escape_html,
     format_container_data,
@@ -57,7 +47,18 @@ from nextgis_connect.platform.qgis.errors import (
     NgwError,
 )
 from nextgis_connect.platform.qt.network_error import QtNetworkError
-from nextgis_connect.settings import NgConnectSettings
+from qgis.core import Enum, QgsFeedback, QgsNetworkAccessManager
+from qgis.PyQt.QtCore import (
+    QBuffer,
+    QByteArray,
+    QEventLoop,
+    QFile,
+    QIODevice,
+    QObject,
+    QTimer,
+    QUrl,
+)
+from qgis.PyQt.QtNetwork import QNetworkRequest
 
 from .compat_qgis import CompatQt
 

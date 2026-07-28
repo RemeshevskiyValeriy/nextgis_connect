@@ -3,12 +3,14 @@ from typing import List, Optional, Tuple
 
 import pytest
 
-from nextgis_connect.ngw_connection.application.connections_manager import (
+from nextgis_connect.legacy.ngw_connection.application.connections_manager import (
     ConnectionUpdateState,
     NgwConnectionsManager,
 )
-from nextgis_connect.ngw_connection.domain.connection import NgwConnection
-from nextgis_connect.ngw_connection.infrastructure.settings_repository import (
+from nextgis_connect.legacy.ngw_connection.domain.connection import (
+    NgwConnection,
+)
+from nextgis_connect.legacy.ngw_connection.infrastructure.settings_repository import (
     ConnectionSettingsSnapshot,
 )
 from tests.ng_connect_testcase import start_qgis

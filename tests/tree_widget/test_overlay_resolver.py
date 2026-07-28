@@ -1,6 +1,6 @@
 from qgis.PyQt.QtCore import QObject, pyqtSignal
 
-from nextgis_connect.tree_widget.overlay import (
+from nextgis_connect.legacy.tree_widget.overlay import (
     OverlayAction,
     OverlayButtonState,
     OverlayFacts,

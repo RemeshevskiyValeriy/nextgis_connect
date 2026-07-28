@@ -2,13 +2,15 @@ import re
 import uuid
 from typing import TYPE_CHECKING, List, Optional
 
+import qgis.utils
 from qgis.core import Qgis
 from qgis.PyQt.QtCore import QObject, QUrl
 from qgis.PyQt.QtGui import QDesktopServices
 from qgis.PyQt.QtWidgets import QMessageBox, QPushButton, QWidget
-from qgis.utils import iface
 
-from nextgis_connect.notifier.notifier_interface import NotifierInterface
+from nextgis_connect.legacy.notifier.notifier_interface import (
+    NotifierInterface,
+)
 from nextgis_connect.platform.logging import logger, open_plugin_logs
 from nextgis_connect.platform.qgis.errors import (
     ErrorCode,
@@ -22,7 +24,11 @@ from nextgis_connect.ui_kit.icons.icon import plugin_icon
 if TYPE_CHECKING:
     from qgis.gui import QgisInterface
 
-    assert isinstance(iface, QgisInterface)
+
+def _iface() -> "QgisInterface":
+    iface = qgis.utils.iface
+    assert iface is not None
+    return iface
 
 
 def let_us_know() -> None:
@@ -71,6 +77,7 @@ class MessageBarNotifier(NotifierInterface):
         """
         custom_widgets = widgets if widgets else []
 
+        iface = _iface()
         message_bar = iface.messageBar()
         widget = message_bar.createMessage(PLUGIN_NAME, message)
 
@@ -105,6 +112,7 @@ class MessageBarNotifier(NotifierInterface):
 
         message = error.user_message.rstrip(".") + "."
 
+        iface = _iface()
         message_bar = iface.messageBar()
         widget = message_bar.createMessage(PLUGIN_NAME, message)
 
@@ -133,6 +141,7 @@ class MessageBarNotifier(NotifierInterface):
 
         :param message_id: The identifier of the message to dismiss.
         """
+        iface = _iface()
         for notification in iface.messageBar().items():
             if (
                 notification.objectName() != "NgConnectMessageBarItem"
@@ -143,6 +152,7 @@ class MessageBarNotifier(NotifierInterface):
 
     def dismiss_all(self) -> None:
         """Dismiss all currently displayed messages."""
+        iface = _iface()
         for notification in iface.messageBar().items():
             if notification.objectName() != "NgConnectMessageBarItem":
                 continue
@@ -156,6 +166,7 @@ class MessageBarNotifier(NotifierInterface):
             user_message = re.sub(
                 r"</?(i|b)\b[^>]*?>", "", user_message, flags=re.IGNORECASE
             )
+            iface = _iface()
             QMessageBox.information(
                 iface.mainWindow(), user_message, error.detail or ""
             )
@@ -164,7 +175,7 @@ class MessageBarNotifier(NotifierInterface):
 
             def try_again() -> None:
                 error.try_again()
-                iface.messageBar().popWidget(widget)
+                _iface().messageBar().popWidget(widget)
 
             button = QPushButton(self.tr("Try again"))
             button.pressed.connect(try_again)
@@ -184,8 +195,8 @@ class MessageBarNotifier(NotifierInterface):
         elif error.code.is_connection_error:
             button = QPushButton(self.tr("Open settings"))
             button.pressed.connect(
-                lambda: iface.showOptionsDialog(
-                    iface.mainWindow(), "NextGIS Connect"
+                lambda: _iface().showOptionsDialog(
+                    _iface().mainWindow(), "NextGIS Connect"
                 )
             )
             widget.layout().addWidget(button)

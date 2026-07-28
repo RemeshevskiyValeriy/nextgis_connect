@@ -14,7 +14,7 @@ from typing import Optional, Type, Union
 
 from qgis.core import QgsMapLayer
 
-from nextgis_connect.detached_editing.utils import (
+from nextgis_connect.legacy.detached_editing.utils import (
     DetachedContainerContext,
     container_path,
 )

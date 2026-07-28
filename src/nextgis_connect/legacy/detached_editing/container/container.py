@@ -25,46 +25,48 @@ from qgis.PyQt.QtCore import QObject, Qt, pyqtSignal, pyqtSlot
 from qgis.utils import iface
 
 from nextgis_connect.bootstrap.plugin_interface import NgConnectInterface
-from nextgis_connect.detached_editing import utils
-from nextgis_connect.detached_editing.conflicts.auto_resolver import (
+from nextgis_connect.legacy.detached_editing import utils
+from nextgis_connect.legacy.detached_editing.conflicts.auto_resolver import (
     ConflictsAutoResolver,
 )
-from nextgis_connect.detached_editing.conflicts.detector import (
+from nextgis_connect.legacy.detached_editing.conflicts.detector import (
     ConflictsDetector,
 )
-from nextgis_connect.detached_editing.conflicts.resolutions_applier import (
+from nextgis_connect.legacy.detached_editing.conflicts.resolutions_applier import (
     ConflictsResolutionApplier,
 )
-from nextgis_connect.detached_editing.conflicts.ui.resolving_dialog import (
+from nextgis_connect.legacy.detached_editing.conflicts.ui.resolving_dialog import (
     ResolvingDialog,
 )
-from nextgis_connect.detached_editing.container.container_factory import (
+from nextgis_connect.legacy.detached_editing.container.container_factory import (
     DetachedContainerFactory,
 )
-from nextgis_connect.detached_editing.container.ui.layer_indicator import (
+from nextgis_connect.legacy.detached_editing.container.ui.layer_indicator import (
     DetachedLayerIndicator,
 )
-from nextgis_connect.detached_editing.detached_layer import DetachedLayer
-from nextgis_connect.detached_editing.sync.common import (
+from nextgis_connect.legacy.detached_editing.detached_layer import (
+    DetachedLayer,
+)
+from nextgis_connect.legacy.detached_editing.sync.common import (
     DetachedEditingTask,
     FetchAdditionalDataTask,
     UploadChangesTask,
 )
-from nextgis_connect.detached_editing.sync.common.changes_extractor import (
+from nextgis_connect.legacy.detached_editing.sync.common.changes_extractor import (
     ChangesExtractor,
 )
-from nextgis_connect.detached_editing.sync.non_versioned import (
+from nextgis_connect.legacy.detached_editing.sync.non_versioned import (
     FillLayerWithoutVersioningTask,
 )
-from nextgis_connect.detached_editing.sync.versioned import (
+from nextgis_connect.legacy.detached_editing.sync.versioned import (
     ApplyDeltaTask,
     FetchDeltaTask,
     FillLayerWithVersioningTask,
 )
-from nextgis_connect.detached_editing.sync.versioned.actions import (
+from nextgis_connect.legacy.detached_editing.sync.versioned.actions import (
     VersioningAction,
 )
-from nextgis_connect.detached_editing.utils import (
+from nextgis_connect.legacy.detached_editing.utils import (
     DetachedContainerChangesInfo,
     DetachedContainerContext,
     DetachedContainerMetaData,
@@ -72,15 +74,16 @@ from nextgis_connect.detached_editing.utils import (
     VersioningSynchronizationState,
     make_connection,
 )
+from nextgis_connect.legacy.ngw_connection.application.connections_manager import (
+    NgwConnectionsManager,
+)
+from nextgis_connect.legacy.settings import NgConnectSettings
 from nextgis_connect.ngw.core import NGWVectorLayer
 from nextgis_connect.ngw.core.ngw_error import NGWError
 from nextgis_connect.ngw.core.ngw_resource_factory import (
     NGWResourceFactory,
 )
 from nextgis_connect.ngw.qgis.qgis_ngw_connection import QgsNgwConnection
-from nextgis_connect.ngw_connection.application.connections_manager import (
-    NgwConnectionsManager,
-)
 from nextgis_connect.platform.logging import logger
 from nextgis_connect.platform.qgis.errors import (
     ContainerError,
@@ -91,7 +94,6 @@ from nextgis_connect.platform.qgis.errors import (
     SynchronizationError,
 )
 from nextgis_connect.platform.qgis.utils import wrap_sql_value
-from nextgis_connect.settings import NgConnectSettings
 
 if TYPE_CHECKING:
     assert isinstance(iface, QgisInterface)

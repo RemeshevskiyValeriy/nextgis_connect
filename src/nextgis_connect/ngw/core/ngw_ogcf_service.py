@@ -1,6 +1,6 @@
 from qgis.core import QgsDataSourceUri
 
-from nextgis_connect.ngw_connection.application.connections_manager import (
+from nextgis_connect.legacy.ngw_connection.application.connections_manager import (
     NgwConnectionsManager,
 )
 

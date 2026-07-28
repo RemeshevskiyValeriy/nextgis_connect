@@ -69,7 +69,9 @@ class TestQgsNgwConnection(NgConnectTestCase):
     def test_reset_model_invalidates_cached_versions(self) -> None:
         connection_id = self.connection_id(TestConnection.SandboxGuest)
 
-        from nextgis_connect.tree_widget.model import QNGWResourceTreeModel
+        from nextgis_connect.legacy.tree_widget.model import (
+            QNGWResourceTreeModel,
+        )
 
         with patch.object(
             self.qgs_ngw_connection_class,
@@ -87,11 +89,11 @@ class TestQgsNgwConnection(NgConnectTestCase):
         self.assertEqual(mock_invalidate.call_count, 1)
 
     def test_all_features_require_supported_ngw_version(self) -> None:
+        from nextgis_connect.legacy.settings import NgConnectSettings
         from nextgis_connect.platform.qgis.utils import (
             SupportStatus,
             is_version_supported,
         )
-        from nextgis_connect.settings import NgConnectSettings
 
         settings = NgConnectSettings()
         previous_developer_mode = settings.is_developer_mode

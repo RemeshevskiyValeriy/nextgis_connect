@@ -5,11 +5,13 @@ from unittest import mock
 
 from qgis.core import QgsFieldConstraints, QgsVectorLayer
 
-from nextgis_connect.detached_editing.detached_layer import DetachedLayer
-from nextgis_connect.detached_editing.sync.common.fetch_additional_data_task import (
+from nextgis_connect.legacy.detached_editing.detached_layer import (
+    DetachedLayer,
+)
+from nextgis_connect.legacy.detached_editing.sync.common.fetch_additional_data_task import (
     FetchAdditionalDataTask,
 )
-from nextgis_connect.detached_editing.utils import (
+from nextgis_connect.legacy.detached_editing.utils import (
     container_metadata,
     detached_layer_uri,
 )
@@ -21,7 +23,7 @@ from nextgis_connect.ngw.qgis.ngw_resource_model_4qgis import (
 from nextgis_connect.ngw.qgis.qgis_ngw_connection import (
     NgwServerFeature,
 )
-from nextgis_connect.resources.ngw_fields import NgwFields
+from nextgis_connect.ngw.resources.ngw_fields import NgwFields
 from tests.magic_qobject_mock import MagicQObjectMock
 from tests.ng_connect_testcase import NgConnectTestCase, TestData
 
@@ -73,7 +75,7 @@ class TestRequiredFields(NgConnectTestCase):
         ngw_layer = self._make_ngw_layer_with_required_field()
         container_path = self.create_temp_file(".gpkg")
 
-        from nextgis_connect.detached_editing.container.container_factory import (
+        from nextgis_connect.legacy.detached_editing.container.container_factory import (
             DetachedContainerFactory,
         )
 
@@ -89,7 +91,7 @@ class TestRequiredFields(NgConnectTestCase):
         ngw_layer = self._make_ngw_layer_with_required_field()
         container_path = self.create_temp_file(".gpkg")
 
-        from nextgis_connect.detached_editing.container.container_factory import (
+        from nextgis_connect.legacy.detached_editing.container.container_factory import (
             DetachedContainerFactory,
         )
 
@@ -127,7 +129,7 @@ class TestRequiredFields(NgConnectTestCase):
         layer_with_required = self._make_ngw_layer_with_required_field()
         container_path = self.create_temp_file(".gpkg")
 
-        from nextgis_connect.detached_editing.container.container_factory import (
+        from nextgis_connect.legacy.detached_editing.container.container_factory import (
             DetachedContainerFactory,
         )
 
@@ -172,7 +174,7 @@ class TestRequiredFields(NgConnectTestCase):
         layer_with_required = self._make_ngw_layer_with_required_field()
         container_path = self.create_temp_file(".gpkg")
 
-        from nextgis_connect.detached_editing.container.container_factory import (
+        from nextgis_connect.legacy.detached_editing.container.container_factory import (
             DetachedContainerFactory,
         )
 

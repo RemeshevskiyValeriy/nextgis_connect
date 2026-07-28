@@ -1,7 +1,8 @@
 from typing import List, Optional
 
-from nextgis_connect.search.utils import SearchType
 from qgis.core import QgsSettings
+
+from nextgis_connect.legacy.search.utils import SearchType
 
 
 class SearchSettings:

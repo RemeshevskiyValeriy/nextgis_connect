@@ -3,27 +3,27 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List
 
-from nextgis_connect.detached_editing.sync.common.detached_editing_task import (
+from nextgis_connect.legacy.detached_editing.sync.common.detached_editing_task import (
     DetachedEditingTask,
 )
-from nextgis_connect.detached_editing.sync.versioned.actions import (
+from nextgis_connect.legacy.detached_editing.sync.versioned.actions import (
     ContinueAction,
     VersioningAction,
 )
-from nextgis_connect.detached_editing.sync.versioned.actions_filter import (
+from nextgis_connect.legacy.detached_editing.sync.versioned.actions_filter import (
     ActionsFilter,
 )
-from nextgis_connect.detached_editing.sync.versioned.actions_serializer import (
+from nextgis_connect.legacy.detached_editing.sync.versioned.actions_serializer import (
     ActionSerializer,
 )
 from nextgis_connect.ngw.qgis.qgis_ngw_connection import QgsNgwConnection
+from nextgis_connect.ngw.resources.ngw_fields import NgwFields
 from nextgis_connect.platform.logging import logger
 from nextgis_connect.platform.qgis.errors import (
     ErrorCode,
     NgwError,
     SynchronizationError,
 )
-from nextgis_connect.resources.ngw_fields import NgwFields
 
 
 class FetchDeltaTask(DetachedEditingTask):

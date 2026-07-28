@@ -3,8 +3,12 @@ from typing import Optional
 
 from qgis.core import QgsTaskManager
 
-from nextgis_connect.detached_editing.detached_editing import DetachedEditing
-from nextgis_connect.notifier.notifier_interface import NotifierInterface
+from nextgis_connect.legacy.detached_editing.detached_editing import (
+    DetachedEditing,
+)
+from nextgis_connect.legacy.notifier.notifier_interface import (
+    NotifierInterface,
+)
 
 
 @dataclass

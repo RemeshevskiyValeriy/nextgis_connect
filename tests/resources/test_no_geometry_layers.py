@@ -5,10 +5,10 @@ from unittest import mock
 
 from qgis.core import QgsFeature, QgsField, QgsVectorLayer
 
-from nextgis_connect.detached_editing.container.container_factory import (
+from nextgis_connect.legacy.detached_editing.container.container_factory import (
     DetachedContainerFactory,
 )
-from nextgis_connect.detached_editing.utils import (
+from nextgis_connect.legacy.detached_editing.utils import (
     container_metadata,
     detached_layer_uri,
 )

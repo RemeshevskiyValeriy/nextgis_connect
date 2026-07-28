@@ -1,8 +1,9 @@
 from typing import Optional
 
-from nextgis_connect.search.search_settings import SearchSettings
 from qgis.PyQt.QtCore import pyqtSignal, pyqtSlot
 from qgis.PyQt.QtWidgets import QComboBox, QWidget
+
+from nextgis_connect.legacy.search.search_settings import SearchSettings
 
 
 class MetadataKeyComboBox(QComboBox):

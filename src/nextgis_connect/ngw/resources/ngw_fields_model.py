@@ -11,8 +11,8 @@ from qgis.PyQt.QtCore import (
     QVariant,
 )
 
-from nextgis_connect.resources.ngw_field import NgwDataType, NgwField
-from nextgis_connect.resources.ngw_fields import NgwFields
+from nextgis_connect.ngw.resources.ngw_field import NgwDataType, NgwField
+from nextgis_connect.ngw.resources.ngw_fields import NgwFields
 from nextgis_connect.ui_kit.icons.icon import material_icon
 
 

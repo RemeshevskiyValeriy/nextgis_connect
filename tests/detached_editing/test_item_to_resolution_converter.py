@@ -2,49 +2,49 @@ from pathlib import Path
 
 from qgis.core import QgsFeature, QgsGeometry
 
-from nextgis_connect.detached_editing.conflicts.conflict_resolution import (
+from nextgis_connect.legacy.detached_editing.conflicts.conflict_resolution import (
     AttachmentConflictResolution,
     ConflictResolution,
     DescriptionConflictResolution,
     FeatureConflictResolution,
     ResolutionType,
 )
-from nextgis_connect.detached_editing.conflicts.conflict_resolving_item import (
+from nextgis_connect.legacy.detached_editing.conflicts.conflict_resolving_item import (
     AttachmentDataConflictResolvingItem,
     DescriptionConflictResolvingItem,
     FeatureDataConflictResolvingItem,
     FeatureDeleteConflictResolvingItem,
 )
-from nextgis_connect.detached_editing.conflicts.conflicts import (
+from nextgis_connect.legacy.detached_editing.conflicts.conflicts import (
     AttachmentDataConflict,
     DescriptionConflict,
     FeatureDataConflict,
     LocalFeatureDeletionConflict,
 )
-from nextgis_connect.detached_editing.conflicts.item_to_resolution_converter import (
+from nextgis_connect.legacy.detached_editing.conflicts.item_to_resolution_converter import (
     ItemToResolutionConverter,
 )
-from nextgis_connect.detached_editing.sync.common.changes import (
+from nextgis_connect.legacy.detached_editing.sync.common.changes import (
     AttachmentUpdate,
     DescriptionPut,
     FeatureDeletion,
     FeatureUpdate,
 )
-from nextgis_connect.detached_editing.sync.common.serialization import (
+from nextgis_connect.legacy.detached_editing.sync.common.serialization import (
     serialize_geometry,
 )
-from nextgis_connect.detached_editing.sync.versioned.actions import (
+from nextgis_connect.legacy.detached_editing.sync.versioned.actions import (
     AttachmentUpdateAction,
     DescriptionPutAction,
     FeatureUpdateAction,
 )
-from nextgis_connect.detached_editing.utils import (
+from nextgis_connect.legacy.detached_editing.utils import (
     AttachmentMetadata,
     DetachedContainerContext,
     DetachedContainerMetaData,
 )
-from nextgis_connect.resources.ngw_field import NgwField
-from nextgis_connect.resources.ngw_fields import NgwFields
+from nextgis_connect.ngw.resources.ngw_field import NgwField
+from nextgis_connect.ngw.resources.ngw_fields import NgwFields
 from tests.ng_connect_testcase import NgConnectTestCase
 
 

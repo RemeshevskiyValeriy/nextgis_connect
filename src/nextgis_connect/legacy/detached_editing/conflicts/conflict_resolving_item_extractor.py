@@ -5,7 +5,7 @@ from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple, cast
 
 from qgis.core import QgsFeature, QgsFeatureRequest, QgsVectorLayer
 
-from nextgis_connect.detached_editing.conflicts.conflict_resolving_item import (
+from nextgis_connect.legacy.detached_editing.conflicts.conflict_resolving_item import (
     AttachmentConflictResolvingItem,
     AttachmentDataConflictResolvingItem,
     AttachmentDeleteConflictResolvingItem,
@@ -14,7 +14,7 @@ from nextgis_connect.detached_editing.conflicts.conflict_resolving_item import (
     FeatureDataConflictResolvingItem,
     FeatureDeleteConflictResolvingItem,
 )
-from nextgis_connect.detached_editing.conflicts.conflicts import (
+from nextgis_connect.legacy.detached_editing.conflicts.conflicts import (
     AttachmentConflict,
     AttachmentDataConflict,
     DescriptionConflict,
@@ -26,14 +26,14 @@ from nextgis_connect.detached_editing.conflicts.conflicts import (
     RemoteFeatureDeletionConflict,
     VersioningConflict,
 )
-from nextgis_connect.detached_editing.container.editing.container_sessions import (
+from nextgis_connect.legacy.detached_editing.container.editing.container_sessions import (
     ContainerReadOnlySession,
 )
-from nextgis_connect.detached_editing.sync.common.serialization import (
+from nextgis_connect.legacy.detached_editing.sync.common.serialization import (
     deserialize_geometry,
     deserialize_value,
 )
-from nextgis_connect.detached_editing.sync.versioned.actions import (
+from nextgis_connect.legacy.detached_editing.sync.versioned.actions import (
     AttachmentAction,
     AttachmentChangeMixin,
     AttachmentCreateAction,
@@ -44,13 +44,13 @@ from nextgis_connect.detached_editing.sync.versioned.actions import (
     FeatureDataChangeMixin,
     FeatureRestoreAction,
 )
-from nextgis_connect.detached_editing.utils import (
+from nextgis_connect.legacy.detached_editing.utils import (
     AttachmentMetadata,
     DetachedContainerContext,
     detached_layer_uri,
 )
+from nextgis_connect.ngw.resources.ngw_field import FieldId
 from nextgis_connect.platform.qgis.compat import QgsFeatureId
-from nextgis_connect.resources.ngw_field import FieldId
 from nextgis_connect.shared.types import (
     AttachmentId,
     FeatureId,

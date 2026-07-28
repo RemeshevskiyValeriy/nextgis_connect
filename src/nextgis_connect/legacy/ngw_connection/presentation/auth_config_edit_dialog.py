@@ -28,7 +28,7 @@ from qgis.PyQt.QtWidgets import (
     QWidget,
 )
 
-from nextgis_connect.ngw_connection.presentation.auth_config_id_edit import (
+from nextgis_connect.legacy.ngw_connection.presentation.auth_config_id_edit import (
     AuthConfigIdEdit,
 )
 from nextgis_connect.platform.logging import logger

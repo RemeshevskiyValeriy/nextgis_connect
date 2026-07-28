@@ -3,16 +3,16 @@ from datetime import datetime
 from pathlib import Path
 from typing import List
 
-from nextgis_connect.detached_editing.sync.common.detached_editing_task import (
+from nextgis_connect.legacy.detached_editing.sync.common.detached_editing_task import (
     DetachedEditingTask,
 )
-from nextgis_connect.detached_editing.sync.versioned.actions import (
+from nextgis_connect.legacy.detached_editing.sync.versioned.actions import (
     FeatureAction,
 )
-from nextgis_connect.detached_editing.sync.versioned.actions_applier import (
+from nextgis_connect.legacy.detached_editing.sync.versioned.actions_applier import (
     ActionApplier,
 )
-from nextgis_connect.detached_editing.utils import (
+from nextgis_connect.legacy.detached_editing.utils import (
     DetachedContainerMetaData,
     make_connection,
 )

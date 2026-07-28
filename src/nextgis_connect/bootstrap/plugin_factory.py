@@ -4,10 +4,12 @@ from qgis.core import QgsRuntimeProfiler
 from qgis.gui import QgisInterface
 
 from nextgis_connect.bootstrap.plugin_interface import NgConnectInterface
+from nextgis_connect.legacy.settings.ng_connect_settings import (
+    NgConnectSettings,
+)
 from nextgis_connect.platform.qgis.errors import (
     NgConnectReloadAfterUpdateWarning,
 )
-from nextgis_connect.settings.ng_connect_settings import NgConnectSettings
 
 
 def create_plugin(iface: QgisInterface) -> NgConnectInterface:

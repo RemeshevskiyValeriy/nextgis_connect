@@ -28,34 +28,6 @@ from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Set, Tuple, cast
 
 from osgeo import ogr
-from qgis.core import (
-    Qgis,
-    QgsApplication,
-    QgsCoordinateReferenceSystem,
-    QgsCoordinateTransform,
-    QgsFeature,
-    QgsFeatureRequest,
-    QgsFeedback,
-    QgsField,
-    QgsFields,
-    QgsGeometry,
-    QgsLayerTree,
-    QgsLayerTreeGroup,
-    QgsLayerTreeLayer,
-    QgsLayerTreeNode,
-    QgsMapLayer,
-    QgsPluginLayer,
-    QgsProject,
-    QgsProviderRegistry,
-    QgsRasterLayer,
-    QgsReferencedRectangle,
-    QgsValueRelationFieldFormatter,
-    QgsVectorFileWriter,
-    QgsVectorLayer,
-    QgsWkbTypes,
-)
-from qgis.gui import QgisInterface, QgsFileWidget
-from qgis.PyQt.QtCore import QCoreApplication, QVariant
 
 from nextgis_connect.ngw.core.ngw_base_map import (
     NGWBaseMap,
@@ -97,6 +69,8 @@ from nextgis_connect.ngw.qt.qt_ngw_resource_model_job_error import (
     JobError,
     JobWarning,
 )
+from nextgis_connect.ngw.resources.ngw_data_type import NgwDataType
+from nextgis_connect.ngw.resources.ngw_field import NgwField
 from nextgis_connect.platform.logging import logger
 from nextgis_connect.platform.qgis.compat import (
     QGIS_3_42,
@@ -110,8 +84,34 @@ from nextgis_connect.platform.qgis.errors import (
     NgConnectError,
     NgwError,
 )
-from nextgis_connect.resources.ngw_data_type import NgwDataType
-from nextgis_connect.resources.ngw_field import NgwField
+from qgis.core import (
+    Qgis,
+    QgsApplication,
+    QgsCoordinateReferenceSystem,
+    QgsCoordinateTransform,
+    QgsFeature,
+    QgsFeatureRequest,
+    QgsFeedback,
+    QgsField,
+    QgsFields,
+    QgsGeometry,
+    QgsLayerTree,
+    QgsLayerTreeGroup,
+    QgsLayerTreeLayer,
+    QgsLayerTreeNode,
+    QgsMapLayer,
+    QgsPluginLayer,
+    QgsProject,
+    QgsProviderRegistry,
+    QgsRasterLayer,
+    QgsReferencedRectangle,
+    QgsValueRelationFieldFormatter,
+    QgsVectorFileWriter,
+    QgsVectorLayer,
+    QgsWkbTypes,
+)
+from qgis.gui import QgisInterface, QgsFileWidget
+from qgis.PyQt.QtCore import QCoreApplication, QVariant
 
 from .compat_qgis import CompatQt
 

@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import List, Set, Union
 
-from nextgis_connect.detached_editing.sync.common.changes import (
+from nextgis_connect.legacy.detached_editing.sync.common.changes import (
     AttachmentDeletion,
     AttachmentRestoration,
     AttachmentUpdate,
@@ -13,7 +13,7 @@ from nextgis_connect.detached_editing.sync.common.changes import (
     FeatureRestoration,
     FeatureUpdate,
 )
-from nextgis_connect.detached_editing.sync.versioned.actions import (
+from nextgis_connect.legacy.detached_editing.sync.versioned.actions import (
     AttachmentAction,
     AttachmentDeleteAction,
     AttachmentRestoreAction,
@@ -24,7 +24,7 @@ from nextgis_connect.detached_editing.sync.versioned.actions import (
     FeatureRestoreAction,
     FeatureUpdateAction,
 )
-from nextgis_connect.resources.ngw_field import FieldId
+from nextgis_connect.ngw.resources.ngw_field import FieldId
 from nextgis_connect.shared.types import (
     AttachmentId,
     FeatureId,

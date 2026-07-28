@@ -1,6 +1,8 @@
 from typing import List
 
-from nextgis_connect.ngw_connection.domain.connection import NgwConnection
+from nextgis_connect.legacy.ngw_connection.domain.connection import (
+    NgwConnection,
+)
 
 from .base import BaseConnectionCheck
 

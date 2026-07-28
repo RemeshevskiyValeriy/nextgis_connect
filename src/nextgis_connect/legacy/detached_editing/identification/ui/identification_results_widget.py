@@ -49,26 +49,26 @@ from qgis.PyQt.QtWidgets import (
 from qgis.utils import iface
 
 from nextgis_connect.bootstrap.plugin_interface import NgConnectInterface
-from nextgis_connect.detached_editing.identification.highlight_handler import (
+from nextgis_connect.legacy.detached_editing.identification.highlight_handler import (
     HighlightHandler,
 )
-from nextgis_connect.detached_editing.identification.settings import (
+from nextgis_connect.legacy.detached_editing.identification.settings import (
     IdentificationSettings,
 )
-from nextgis_connect.detached_editing.identification.types import (
+from nextgis_connect.legacy.detached_editing.identification.types import (
     FeatureKey,
     IdentificationTab,
 )
-from nextgis_connect.detached_editing.identification.ui.attachments_tab import (
+from nextgis_connect.legacy.detached_editing.identification.ui.attachments_tab import (
     AttachmentsTab,
 )
-from nextgis_connect.detached_editing.identification.ui.description_tab import (
+from nextgis_connect.legacy.detached_editing.identification.ui.description_tab import (
     DescriptionTab,
 )
-from nextgis_connect.detached_editing.identification.ui.no_features_widget import (
+from nextgis_connect.legacy.detached_editing.identification.ui.no_features_widget import (
     NoFeaturesWidget,
 )
-from nextgis_connect.detached_editing.utils import DetachedLayerState
+from nextgis_connect.legacy.detached_editing.utils import DetachedLayerState
 from nextgis_connect.platform.qgis.compat import GeometryType, QgsFeatureId
 from nextgis_connect.shared.constants import PLUGIN_NAME
 from nextgis_connect.ui_kit.icons.icon import (

@@ -1,17 +1,17 @@
 from typing import TYPE_CHECKING, cast
 
-from nextgis_connect.detached_editing.container.ui.layer_status_dialog import (
-    DetachedLayerStatusDialog,
-)
-from nextgis_connect.detached_editing.utils import DetachedLayerState
 from qgis.gui import QgsLayerTreeViewIndicator
 from qgis.PyQt.QtCore import QTimer, pyqtSlot
 
+from nextgis_connect.legacy.detached_editing.container.ui.layer_status_dialog import (
+    DetachedLayerStatusDialog,
+)
+from nextgis_connect.legacy.detached_editing.utils import DetachedLayerState
 from nextgis_connect.platform.logging import logger
 from nextgis_connect.ui_kit.icons.icon import plugin_icon
 
 if TYPE_CHECKING:
-    from nextgis_connect.detached_editing.container.container import (
+    from nextgis_connect.legacy.detached_editing.container.container import (
         DetachedContainer,
     )
 

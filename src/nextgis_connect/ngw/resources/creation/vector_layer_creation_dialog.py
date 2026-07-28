@@ -24,16 +24,18 @@ from qgis.PyQt.QtWidgets import (
     QWidget,
 )
 
+from nextgis_connect.legacy.settings.ng_connect_settings import (
+    NgConnectSettings,
+)
+from nextgis_connect.legacy.tree_widget.item import QNGWResourceItem
 from nextgis_connect.ngw.core.ngw_vector_layer import NGWVectorLayer
-from nextgis_connect.platform.qgis.compat import WkbType
-from nextgis_connect.resources.ngw_data_type_delegate import (
+from nextgis_connect.ngw.resources.ngw_data_type_delegate import (
     NgwDataTypeDelegate,
 )
-from nextgis_connect.resources.ngw_field import NgwDataType
-from nextgis_connect.resources.ngw_fields_model import NgwFieldsModel
-from nextgis_connect.resources.utils import generate_unique_name
-from nextgis_connect.settings.ng_connect_settings import NgConnectSettings
-from nextgis_connect.tree_widget.item import QNGWResourceItem
+from nextgis_connect.ngw.resources.ngw_field import NgwDataType
+from nextgis_connect.ngw.resources.ngw_fields_model import NgwFieldsModel
+from nextgis_connect.ngw.resources.utils import generate_unique_name
+from nextgis_connect.platform.qgis.compat import WkbType
 from nextgis_connect.ui_kit.delegates.checkbox_delegate import (
     CheckBoxDelegate,
 )

@@ -9,12 +9,14 @@ from typing import List, Optional, Tuple, Union
 from qgis.core import QgsProject
 from qgis.PyQt.QtCore import QMimeDatabase
 
-from nextgis_connect.detached_editing.utils import (
+from nextgis_connect.legacy.detached_editing.utils import (
     container_metadata,
     container_path,
     is_ngw_container,
 )
-from nextgis_connect.settings.ng_connect_settings import NgConnectSettings
+from nextgis_connect.legacy.settings.ng_connect_settings import (
+    NgConnectSettings,
+)
 from nextgis_connect.shared.constants import PLUGIN_NAME
 from nextgis_connect.shared.types import FileObjectId, UnsetType
 

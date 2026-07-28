@@ -1,7 +1,7 @@
 import json
 from typing import Any, Dict, Iterable, Union
 
-from nextgis_connect.detached_editing.sync.common.changes import (
+from nextgis_connect.legacy.detached_editing.sync.common.changes import (
     AttachmentCreation,
     AttachmentDeletion,
     AttachmentRestoration,
@@ -14,11 +14,15 @@ from nextgis_connect.detached_editing.sync.common.changes import (
     FeatureRestoration,
     FeatureUpdate,
 )
-from nextgis_connect.detached_editing.sync.common.serialization import (
+from nextgis_connect.legacy.detached_editing.sync.common.serialization import (
     serialize_geometry,
 )
-from nextgis_connect.detached_editing.sync.versioned.actions import ActionType
-from nextgis_connect.detached_editing.utils import DetachedContainerMetaData
+from nextgis_connect.legacy.detached_editing.sync.versioned.actions import (
+    ActionType,
+)
+from nextgis_connect.legacy.detached_editing.utils import (
+    DetachedContainerMetaData,
+)
 from nextgis_connect.platform.qgis.errors import (
     SynchronizationError,
 )

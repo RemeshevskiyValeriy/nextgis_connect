@@ -5,7 +5,7 @@ from qgis.gui import QgsMapCanvas, QgsMapMouseEvent, QgsMapToolIdentify
 from qgis.PyQt.QtCore import Qt, pyqtSignal, pyqtSlot
 from qgis.PyQt.QtGui import QKeyEvent
 
-from nextgis_connect.detached_editing.identification.selection_handler import (
+from nextgis_connect.legacy.detached_editing.identification.selection_handler import (
     IdentificationSelectionHandler,
 )
 from nextgis_connect.ui_kit.icons.cursor import NgConnectCursor, create_cursor

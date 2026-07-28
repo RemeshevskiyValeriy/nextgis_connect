@@ -1,13 +1,15 @@
 import unittest
 
-from nextgis_connect.ngw_connection.application.diagnostics.checks.current_user import (
+from nextgis_connect.legacy.ngw_connection.application.diagnostics.checks.current_user import (
     CurrentUserExpectation,
 )
-from nextgis_connect.ngw_connection.application.diagnostics.parsers import (
+from nextgis_connect.legacy.ngw_connection.application.diagnostics.parsers import (
     QgisPluginRepositoryParser,
 )
-from nextgis_connect.ngw_connection.domain.connection import NgwConnection
-from nextgis_connect.ngw_connection.domain.parsers import (
+from nextgis_connect.legacy.ngw_connection.domain.connection import (
+    NgwConnection,
+)
+from nextgis_connect.legacy.ngw_connection.domain.parsers import (
     NgwServerTitleParser,
     suggested_connection_name,
 )
@@ -15,7 +17,7 @@ from nextgis_connect.ngw_connection.domain.parsers import (
 
 class TestConnectionDiagnosticsHelpers(unittest.TestCase):
     def test_proxy_settings_are_formatted_as_single_log_message(self) -> None:
-        from nextgis_connect.ngw_connection.domain.diagnostics import (
+        from nextgis_connect.legacy.ngw_connection.domain.diagnostics import (
             ProxySettings,
         )
 

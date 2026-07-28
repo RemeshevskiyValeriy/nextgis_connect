@@ -12,7 +12,7 @@ from qgis.PyQt.QtWidgets import (
     QWidget,
 )
 
-from nextgis_connect.ngw_connection.domain.diagnostics import (
+from nextgis_connect.legacy.ngw_connection.domain.diagnostics import (
     ConnectionCheckId,
     ConnectionCheckState,
     ConnectionCheckUpdate,

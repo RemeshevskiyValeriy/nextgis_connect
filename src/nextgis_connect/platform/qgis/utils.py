@@ -27,8 +27,10 @@ from qgis.PyQt.QtWidgets import (
 )
 from qgis.utils import iface
 
+from nextgis_connect.legacy.settings.ng_connect_settings import (
+    NgConnectSettings,
+)
 from nextgis_connect.platform.qgis.compat import QGIS_3_30
-from nextgis_connect.settings.ng_connect_settings import NgConnectSettings
 from nextgis_connect.shared.constants import PACKAGE_NAME
 from nextgis_connect.shell.presentation.about.about_dialog import AboutDialog
 

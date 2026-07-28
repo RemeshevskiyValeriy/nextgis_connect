@@ -2,10 +2,10 @@ from typing import Any, Dict, Tuple
 
 from qgis.core import QgsProviderRegistry
 
-from nextgis_connect.ngw.core.ngw_resource import NGWResource
-from nextgis_connect.ngw_connection.application.connections_manager import (
+from nextgis_connect.legacy.ngw_connection.application.connections_manager import (
     NgwConnectionsManager,
 )
+from nextgis_connect.ngw.core.ngw_resource import NGWResource
 from nextgis_connect.platform.qgis.errors import ErrorCode, NgwError
 
 

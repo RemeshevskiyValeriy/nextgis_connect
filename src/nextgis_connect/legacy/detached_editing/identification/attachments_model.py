@@ -24,10 +24,10 @@ from qgis.PyQt.QtCore import (
 )
 from qgis.PyQt.QtGui import QColor, QIcon, QPainter, QPixmap
 
-from nextgis_connect.detached_editing.identification.settings import (
+from nextgis_connect.legacy.detached_editing.identification.settings import (
     IdentificationSettings,
 )
-from nextgis_connect.detached_editing.utils import AttachmentMetadata
+from nextgis_connect.legacy.detached_editing.utils import AttachmentMetadata
 from nextgis_connect.platform.logging import logger
 from nextgis_connect.platform.qgis.utils import human_readable_size
 from nextgis_connect.shared.types import AttachmentId
