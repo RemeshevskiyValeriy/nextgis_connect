@@ -583,33 +583,49 @@ class NgwSearch(NGWResourceModelJob):
     ) -> List[int]:
         self.__fetch_users()
 
-        ids = set()
+        user_ids = set()
 
         if operator == "__eq":
-            ids.update(
-                map(
-                    lambda value: self.users_keyname.get(
-                        value, self.users_username.get(value, -1)
-                    ),
-                    values,
+            missing_values = []
+            for value in values:
+                user_id = self.users_keyname.get(
+                    value,
+                    self.users_username.get(value),
                 )
-            )
+                if user_id is None:
+                    missing_values.append(value)
+                    continue
+
+                user_ids.add(user_id)
+
+            if len(missing_values) > 0:
+                self.__raise_user_not_found(missing_values)
 
         elif operator == "__ilike":
             regex_pattern = values[0].replace("%", ".*").replace("_", ".")
             regex = re.compile(f"^{regex_pattern}$", re.IGNORECASE)
-            ids.update(
+            user_ids.update(
                 value
                 for key, value in self.users_keyname.items()
                 if regex.match(key)
             )
-            ids.update(
+            user_ids.update(
                 value
                 for key, value in self.users_username.items()
                 if regex.match(key)
             )
 
-        return list(ids)
+            if len(user_ids) == 0:
+                self.__raise_user_not_found(values)
+
+        return list(user_ids)
+
+    def __raise_user_not_found(self, values: List[str]) -> None:
+        raise NgConnectError(
+            self.tr("User not found: {user}").format(
+                user=", ".join(sorted(values)),
+            )
+        )
 
     def __fetch_parents(self, resources_factory: NGWResourceFactory) -> None:
         logger.debug("◴ Fetching intermediate resources")

@@ -40,6 +40,33 @@ def test_owner_query_keeps_quoted_display_name_support() -> None:
     assert queries == ["owner=1"]
 
 
+def test_owner_query_raises_when_user_is_missing() -> None:
+    search = NgwSearch("@owner = Missing User", set())
+    search.users_keyname = {"alice": 1}
+    search.users_username = {"Alice Smith": 1}
+
+    with pytest.raises(NgConnectError, match="User not found: Missing User"):
+        search._NgwSearch__queries()
+
+
+def test_owner_query_raises_when_quoted_user_is_missing() -> None:
+    search = NgwSearch('@owner = "Missing User"', set())
+    search.users_keyname = {"alice": 1}
+    search.users_username = {"Alice Smith": 1}
+
+    with pytest.raises(NgConnectError, match="User not found: Missing User"):
+        search._NgwSearch__queries()
+
+
+def test_owner_ilike_query_raises_when_user_is_missing() -> None:
+    search = NgwSearch('@owner ILIKE "Missing%"', set())
+    search.users_keyname = {"alice": 1}
+    search.users_username = {"Alice Smith": 1}
+
+    with pytest.raises(NgConnectError, match="User not found: Missing%"):
+        search._NgwSearch__queries()
+
+
 def test_search_job_can_be_canceled() -> None:
     search = NgwSearch("Roads", set())
 
