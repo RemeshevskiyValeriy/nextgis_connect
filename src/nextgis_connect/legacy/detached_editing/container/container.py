@@ -24,6 +24,10 @@ from qgis.gui import QgisInterface
 from qgis.PyQt.QtCore import QObject, Qt, pyqtSignal, pyqtSlot
 from qgis.utils import iface
 
+from nextgis_connect.features.synchronization.presentation import (
+    DetachedLayerIndicatorPresenter,
+    DetachedLayerTreeIndicator,
+)
 from nextgis_connect.legacy.detached_editing import utils
 from nextgis_connect.legacy.detached_editing.conflicts.auto_resolver import (
     ConflictsAutoResolver,
@@ -43,8 +47,8 @@ from nextgis_connect.legacy.detached_editing.container.container_factory import 
 from nextgis_connect.legacy.detached_editing.container.layer_update_polling_policy import (
     LayerUpdatePollingPolicy,
 )
-from nextgis_connect.legacy.detached_editing.container.ui.layer_indicator import (
-    DetachedLayerIndicator,
+from nextgis_connect.legacy.detached_editing.container.ui.layer_status_dialog import (
+    DetachedLayerStatusDialog,
 )
 from nextgis_connect.legacy.detached_editing.detached_layer import (
     DetachedLayer,
@@ -117,7 +121,8 @@ class DetachedContainer(QObject):
 
     __error: Union[NgConnectWarning, NgConnectError, None]
 
-    __indicator: Optional[DetachedLayerIndicator]
+    __indicator: Optional[DetachedLayerTreeIndicator]
+    __indicator_presenter: Optional[DetachedLayerIndicatorPresenter]
     __sync_task: Optional[DetachedEditingTask]
     __is_silent_sync: bool
 
@@ -151,6 +156,7 @@ class DetachedContainer(QObject):
         self.__error = None
 
         self.__indicator = None
+        self.__indicator_presenter = None
         self.__sync_task = None
         self.__is_silent_sync = False
 
@@ -160,6 +166,7 @@ class DetachedContainer(QObject):
         self.__additional_data_fetch_date = None
         self.__is_edit_allowed = True
         self.__is_project_container = parent is not None
+        self.state_changed.connect(self.__refresh_indicator_presenter)
 
         self.__update_state(is_full_update=True)
 
@@ -326,6 +333,7 @@ class DetachedContainer(QObject):
         if self.is_empty and self.__indicator is not None:
             self.__indicator.deleteLater()
             self.__indicator = None
+            self.__indicator_presenter = None
 
             if self.__error is not None:
                 NgConnectInterface.instance().notifier.dismiss_message(
@@ -357,7 +365,17 @@ class DetachedContainer(QObject):
         assert view is not None
 
         if self.__indicator is None:
-            self.__indicator = DetachedLayerIndicator(self)
+            self.__indicator_presenter = DetachedLayerIndicatorPresenter(
+                self,
+                self,
+            )
+            self.__indicator = DetachedLayerTreeIndicator(
+                self,
+                self.__indicator_presenter,
+            )
+            self.__indicator.details_requested.connect(
+                self.__open_layer_status_dialog
+            )
 
         if self.__indicator in view.indicators(node):
             return
@@ -372,6 +390,10 @@ class DetachedContainer(QObject):
             return
 
         view.removeIndicator(node, self.__indicator)
+
+    def __open_layer_status_dialog(self) -> None:
+        dialog = DetachedLayerStatusDialog(self)
+        dialog.exec()
 
     def synchronize(
         self,
@@ -968,6 +990,12 @@ class DetachedContainer(QObject):
             if node is None:
                 continue
             self.remove_indicator(node)
+
+    def __refresh_indicator_presenter(self, *_: object) -> None:
+        if self.__indicator_presenter is None:
+            return
+
+        self.__indicator_presenter.refresh()
 
     def __property(self, name: str) -> None:
         for detached_layer in self.__detached_layers.values():
