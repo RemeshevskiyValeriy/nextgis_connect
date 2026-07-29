@@ -36,6 +36,7 @@ from nextgis_connect.ui_kit.graphics import (
     NextgisDecorator,
     NextgisRadius,
 )
+from nextgis_connect.ui_kit.icons import material_icon_path
 
 
 @dataclass(frozen=True)
@@ -190,7 +191,6 @@ class MaterialIllustrationWidget(QWidget):
 
     def __init__(self, parent: Optional[QWidget] = None) -> None:
         super().__init__(parent)
-        self._plugin_path = NgConnectInterface.instance().path
         self._renderer: Optional[CustomSvgRenderer] = None
         self._size_hint = QSize(0, 0)
         self._preferred_size = 0
@@ -219,7 +219,7 @@ class MaterialIllustrationWidget(QWidget):
             self.update()
             return
 
-        icon_path = self._material_icon_path(icon_name)
+        icon_path = material_icon_path(icon_name)
         if icon_path is None:
             self._renderer = None
             self._size_hint = QSize(0, 0)
@@ -301,14 +301,6 @@ class MaterialIllustrationWidget(QWidget):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         self._renderer.render(painter, QRectF(self.rect()))
-
-    def _material_icon_path(self, icon_name: str) -> Optional[Path]:
-        icons_directory = self._plugin_path / "assets" / "icons" / "material"
-        matches = sorted(icons_directory.glob(f"{icon_name}*.svg"))
-        if not matches:
-            return None
-
-        return matches[0]
 
     def _apply_current_size(self) -> None:
         self._size_hint = QSize(self._current_size, self._current_size)

@@ -26,7 +26,7 @@ from nextgis_connect.legacy.detached_editing.conflicts.ui.base_feature_conflict_
 )
 from nextgis_connect.legacy.detached_editing.utils import AttachmentMetadata
 from nextgis_connect.shared.types import Unset, UnsetType
-from nextgis_connect.ui_kit.icons.icon import (
+from nextgis_connect.ui_kit.icons import (
     draw_icon,
     material_icon,
     plugin_icon,

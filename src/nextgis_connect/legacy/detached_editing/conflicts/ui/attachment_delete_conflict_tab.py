@@ -39,7 +39,7 @@ from nextgis_connect.legacy.detached_editing.sync.versioned.actions import (
 from nextgis_connect.legacy.detached_editing.utils import AttachmentMetadata
 from nextgis_connect.platform.logging import logger
 from nextgis_connect.shared.types import UnsetType
-from nextgis_connect.ui_kit.icons.icon import draw_icon, plugin_icon
+from nextgis_connect.ui_kit.icons import draw_icon, plugin_icon
 
 
 class _AttachmentField(str, Enum):

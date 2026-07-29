@@ -1,5 +1,4 @@
 from qgis.PyQt.QtCore import Qt
-from qgis.PyQt.QtGui import QPixmap
 from qgis.PyQt.QtWidgets import (
     QDialog,
     QFrame,
@@ -10,6 +9,8 @@ from qgis.PyQt.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
+
+from nextgis_connect.ui_kit.icons import draw_icon
 
 
 class ExceptionsListDialog(QDialog):
@@ -65,8 +66,7 @@ class ExceptionWidget(QFrame):
 
         self.iconLabel = QLabel()
         self.iconLabel.setObjectName("iconLabel")
-        pm = QPixmap(icon)
-        self.iconLabel.setPixmap(pm.scaledToWidth(8))
+        draw_icon(self.iconLabel, icon, size=8)
         self.iconLabel.resize(8, 8)
         self.iconLabel.setSizePolicy(
             QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed

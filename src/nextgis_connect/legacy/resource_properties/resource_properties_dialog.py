@@ -4,7 +4,6 @@ from pathlib import Path
 from qgis.gui import QgsCodeEditorJson
 from qgis.PyQt import uic
 from qgis.PyQt.QtCore import QSize, Qt
-from qgis.PyQt.QtGui import QIcon
 from qgis.PyQt.QtWidgets import (
     QDialog,
     QDialogButtonBox,
@@ -17,6 +16,7 @@ from nextgis_connect.legacy.ngw.core.ngw_resource import NGWResource
 from nextgis_connect.legacy.settings.ng_connect_settings import (
     NgConnectSettings,
 )
+from nextgis_connect.ui_kit.icons import ngw_resource_icon, qgis_icon
 
 
 class ResourcePropertiesDialog(QDialog):
@@ -42,7 +42,7 @@ class ResourcePropertiesDialog(QDialog):
             QDialogButtonBox.StandardButton.Save
         ).setDisabled(True)
 
-        icon = QIcon(resource.icon_path)
+        icon = ngw_resource_icon(resource)
         pixmap = icon.pixmap(icon.actualSize(QSize(32, 32)))
         self.resource_icon.setPixmap(pixmap)
 
@@ -59,8 +59,8 @@ class ResourcePropertiesDialog(QDialog):
 
         self.resource_name_label.setText(f"<h2>{resource.display_name}</h2>")
 
-        add_icon = QIcon(":images/themes/default/mActionEditPaste.svg")
-        copy_icon = QIcon(":images/themes/default/mActionEditCopy.svg")
+        add_icon = qgis_icon("mActionEditPaste.svg")
+        copy_icon = qgis_icon("mActionEditCopy.svg")
 
         self.add_toolbutton.setIcon(add_icon)
         self.add_toolbutton.setIconSize(QSize(23, 23))

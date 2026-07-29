@@ -19,7 +19,7 @@ from nextgis_connect.platform.qgis.errors import (
 )
 from nextgis_connect.platform.qgis.utils import nextgis_domain, utm_tags
 from nextgis_connect.shared.constants import PLUGIN_NAME
-from nextgis_connect.ui_kit.icons.icon import plugin_icon
+from nextgis_connect.ui_kit.icons import plugin_icon
 
 if TYPE_CHECKING:
     from qgis.gui import QgisInterface

@@ -10,13 +10,13 @@ from qgis.gui import (
 )
 from qgis.PyQt import uic
 from qgis.PyQt.QtCore import Qt
-from qgis.PyQt.QtGui import QIcon
 from qgis.PyQt.QtWidgets import QHBoxLayout, QLabel, QVBoxLayout, QWidget
 
 from nextgis_connect.legacy.detached_editing import utils
 from nextgis_connect.platform.logging import logger
 from nextgis_connect.platform.qgis.errors import NgConnectError
 from nextgis_connect.platform.qgis.utils import wrap_sql_value
+from nextgis_connect.ui_kit.icons import plugin_icon
 
 
 class DetachedLayerConfigPage(QgsMapLayerConfigWidget):
@@ -136,10 +136,7 @@ class DetachedLayerConfigErrorPage(QgsMapLayerConfigWidget):
 
 class DetachedLayerConfigWidgetFactory(QgsMapLayerConfigWidgetFactory):
     def __init__(self):
-        icons_path = Path(__file__).parents[4] / "assets" / "icons"
-        super().__init__(
-            "NextGIS", QIcon(str(icons_path / "branding/connect_logo.svg"))
-        )
+        super().__init__("NextGIS", plugin_icon("branding/connect_logo.svg"))
         self.setSupportLayerPropertiesDialog(True)
 
     def __del__(self) -> None:

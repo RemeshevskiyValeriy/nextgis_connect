@@ -23,7 +23,7 @@ from nextgis_connect.ui_kit.buttons import (
 from nextgis_connect.ui_kit.graphics.decorator import (
     NextgisDecorator,
 )
-from nextgis_connect.ui_kit.icons.icon import material_icon
+from nextgis_connect.ui_kit.icons import material_icon
 
 
 class ActionOverlayWidget(OverlaySurfaceWidget):

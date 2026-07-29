@@ -3,8 +3,6 @@ from pathlib import Path
 from typing import Any, Callable, ClassVar, Dict, List, Optional, cast
 
 from qgis.core import (
-    QgsApplication,
-    QgsIconUtils,
     QgsWkbTypes,
 )
 from qgis.gui import QgsGui
@@ -46,6 +44,7 @@ from nextgis_connect.ui_kit.delegates.checkbox_delegate import (
 from nextgis_connect.ui_kit.delegates.header_with_centered_icon_proxy_style import (
     HeaderWithCenteredIconProxyStyle,
 )
+from nextgis_connect.ui_kit.icons import qgis_icon, wkb_type_icon
 
 VectorLayerCreationDialogBase, _ = uic.loadUiType(
     str(Path(__file__).parent / "vector_layer_creation_dialog_base.ui")
@@ -206,7 +205,7 @@ class VectorLayerCreationDialog(QDialog, VectorLayerCreationDialogBase):
         )
 
         # Init warnings
-        warning_icon = QgsApplication.getThemeIcon("mIconWarning.svg")
+        warning_icon = qgis_icon("mIconWarning.svg")
         size = int(max(24.0, self.layer_name_lineedit.minimumSize().height()))
         pixmap = warning_icon.pixmap(
             warning_icon.actualSize(QSize(size, size))
@@ -217,7 +216,7 @@ class VectorLayerCreationDialog(QDialog, VectorLayerCreationDialogBase):
 
         for geometry_type in self.SUPPORTED_WKB_TYPES:
             self.geometry_combobox.addItem(
-                QgsIconUtils.iconForWkbType(geometry_type),
+                wkb_type_icon(geometry_type),
                 QgsWkbTypes.translatedDisplayString(geometry_type),
                 int(geometry_type),
             )
@@ -247,7 +246,7 @@ class VectorLayerCreationDialog(QDialog, VectorLayerCreationDialogBase):
 
     def __setup_new_field_ui(self) -> None:
         # Init warning
-        warning_icon = QgsApplication.getThemeIcon("mIconWarning.svg")
+        warning_icon = qgis_icon("mIconWarning.svg")
         size = int(
             max(24.0, self.field_keyname_lineedit.minimumSize().height())
         )
@@ -333,23 +332,17 @@ class VectorLayerCreationDialog(QDialog, VectorLayerCreationDialogBase):
         self.__update_field_type_tooltip()
 
         # Setup button
-        self.add_field_button.setIcon(
-            QgsApplication.getThemeIcon("mActionNewAttribute.svg")
-        )
+        self.add_field_button.setIcon(qgis_icon("mActionNewAttribute.svg"))
         self.add_field_button.setToolTip(self.tr("Add field to the list."))
         self.add_field_button.clicked.connect(self.__add_field)
 
     def __setup_fields_view(self):
         # Init icons
         self.remove_field_button.setIcon(
-            QgsApplication.getThemeIcon("mActionDeleteAttribute.svg")
+            qgis_icon("mActionDeleteAttribute.svg")
         )
-        self.move_up_button.setIcon(
-            QgsApplication.getThemeIcon("mActionArrowUp.svg")
-        )
-        self.move_down_button.setIcon(
-            QgsApplication.getThemeIcon("mActionArrowDown.svg")
-        )
+        self.move_up_button.setIcon(qgis_icon("mActionArrowUp.svg"))
+        self.move_down_button.setIcon(qgis_icon("mActionArrowDown.svg"))
         self.remove_field_button.setToolTip(
             self.tr("Remove selected field from the list.")
         )

@@ -65,7 +65,7 @@ from nextgis_connect.legacy.detached_editing.utils import (
 from nextgis_connect.legacy.ngw_connection import NgwConnectionsManager
 from nextgis_connect.platform.qgis.compat import GeometryType
 from nextgis_connect.shared.types import NgwFeatureId
-from nextgis_connect.ui_kit.icons.icon import material_icon
+from nextgis_connect.ui_kit.icons import material_icon
 
 WIDGET, _ = uic.loadUiType(
     str(Path(__file__).parent / "resolving_dialog_base.ui")

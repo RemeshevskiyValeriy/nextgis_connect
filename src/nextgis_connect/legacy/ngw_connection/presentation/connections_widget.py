@@ -1,7 +1,6 @@
 from html import escape
 from typing import Optional
 
-from qgis.core import QgsApplication
 from qgis.PyQt.QtCore import QSize, Qt, pyqtSignal
 from qgis.PyQt.QtGui import QPainter, QPen
 from qgis.PyQt.QtWidgets import (
@@ -31,6 +30,7 @@ from nextgis_connect.ui_kit.graphics.decorator import (
     NextgisBrandColor,
     NextgisDecorator,
 )
+from nextgis_connect.ui_kit.icons import qgis_icon
 
 
 class HighlightablePushButton(QPushButton):
@@ -79,7 +79,7 @@ class NgwConnectionsWidget(QWidget):
         self.__setup_ui()
         self.__rebuild_layout()
 
-        warning_icon = QgsApplication.getThemeIcon("mIconWarning.svg")
+        warning_icon = qgis_icon("mIconWarning.svg")
         size = int(max(24.0, self.connectionComboBox.minimumSize().height()))
         pixmap = warning_icon.pixmap(
             warning_icon.actualSize(QSize(size, size))

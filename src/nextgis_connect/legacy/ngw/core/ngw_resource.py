@@ -36,7 +36,7 @@ if TYPE_CHECKING:
         QgsNgwConnection,
     )
 
-ICONS_DIR = Path(__file__).parents[2] / "assets" / "icons" / "ngw_resources"
+ICONS_DIR = Path(__file__).parents[3] / "assets" / "icons" / "ngw_resources"
 
 
 def API_RESOURCE_URL(res_id: int) -> str:

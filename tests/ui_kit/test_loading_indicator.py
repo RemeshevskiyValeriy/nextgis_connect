@@ -1,6 +1,7 @@
 from qgis.PyQt.QtCore import QSize
 from qgis.PyQt.QtGui import QColor, QIcon, QPalette
 
+from nextgis_connect.ui_kit.buttons import CancelButton
 from nextgis_connect.ui_kit.graphics.loading_indicator import (
     LoadingIndicatorRenderer,
 )
@@ -105,3 +106,19 @@ def test_loading_indicator_widget_tracks_state(qgis_app) -> None:
     widget.stop()
     assert not widget.is_running()
     widget.deleteLater()
+
+
+def test_cancel_button_resolves_material_icons(qgis_app) -> None:
+    del qgis_app
+
+    button = CancelButton()
+
+    assert button._icon_renderer is not None
+    assert button._icon_renderer.is_valid()
+
+    button.set_waiting(True)
+
+    assert button._icon_renderer is not None
+    assert button._icon_renderer.is_valid()
+
+    button.deleteLater()

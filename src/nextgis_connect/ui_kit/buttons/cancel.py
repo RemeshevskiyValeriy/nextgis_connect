@@ -8,6 +8,7 @@ from qgis.PyQt.QtWidgets import QWidget
 from nextgis_connect.ui_kit.buttons.animated import ButtonVisualState
 from nextgis_connect.ui_kit.buttons.secondary import SecondaryButton
 from nextgis_connect.ui_kit.graphics import CustomSvgRenderer
+from nextgis_connect.ui_kit.icons import material_icon_path
 
 
 class CancelButton(SecondaryButton):
@@ -16,10 +17,6 @@ class CancelButton(SecondaryButton):
     Render a square secondary button that switches from a cancel icon
     to a waiting indicator icon when cancellation is already requested.
     """
-
-    _MATERIAL_ICONS_DIR = (
-        Path(__file__).resolve().parents[3] / "assets" / "icons" / "material"
-    )
 
     def __init__(
         self,
@@ -116,5 +113,4 @@ class CancelButton(SecondaryButton):
         self._icon_name = icon_name
 
     def _material_icon_path(self, icon_name: str) -> Optional[Path]:
-        paths = sorted(self._MATERIAL_ICONS_DIR.glob(f"{icon_name}*.svg"))
-        return paths[0] if paths else None
+        return material_icon_path(icon_name)

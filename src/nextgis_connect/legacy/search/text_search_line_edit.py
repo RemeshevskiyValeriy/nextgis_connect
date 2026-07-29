@@ -1,6 +1,5 @@
 from typing import Optional
 
-from qgis.core import QgsApplication
 from qgis.PyQt.QtCore import QSize, Qt, QUrl, pyqtSlot
 from qgis.PyQt.QtGui import QDesktopServices
 from qgis.PyQt.QtWidgets import QAction, QLineEdit, QWidget
@@ -17,6 +16,7 @@ from nextgis_connect.legacy.search.text_search_completer_model import (
     TextSearchCompleterModel,
 )
 from nextgis_connect.platform.qgis.utils import nextgis_domain, utm_tags
+from nextgis_connect.ui_kit.icons import qgis_icon
 from nextgis_connect.ui_kit.widgets.loading_indicator import (
     LoadingIndicatorIconAnimator,
 )
@@ -147,7 +147,7 @@ class TextSearchLineEdit(AbstractSearchLineEdit):
     def __change_state_help_action(self) -> None:
         if not len(self.text()) and self.__open_help_action is None:
             self.__open_help_action = self.addAction(
-                QgsApplication.getThemeIcon("mActionHelpContents.svg"),
+                qgis_icon("mActionHelpContents.svg"),
                 QLineEdit.ActionPosition.TrailingPosition,
             )
             self.__open_help_action.setToolTip(

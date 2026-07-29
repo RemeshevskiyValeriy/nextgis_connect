@@ -53,7 +53,7 @@ from nextgis_connect.platform.qgis.compat import (
     LayerType,
 )
 from nextgis_connect.plugin.plugin_interface import NgConnectInterface
-from nextgis_connect.ui_kit.icons.icon import plugin_icon, qgis_icon
+from nextgis_connect.ui_kit.icons import plugin_icon, qgis_icon
 
 if TYPE_CHECKING:
     from qgis.gui import QgisInterface

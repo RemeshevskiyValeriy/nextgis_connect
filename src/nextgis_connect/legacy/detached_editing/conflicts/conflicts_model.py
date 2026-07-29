@@ -24,7 +24,7 @@ from nextgis_connect.legacy.detached_editing.utils import (
     DetachedContainerContext,
 )
 from nextgis_connect.shared.types import UnsetType
-from nextgis_connect.ui_kit.icons.icon import material_icon
+from nextgis_connect.ui_kit.icons import material_icon
 
 
 class ConflictsResolvingModel(QAbstractListModel):

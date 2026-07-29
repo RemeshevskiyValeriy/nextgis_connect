@@ -71,7 +71,7 @@ from nextgis_connect.legacy.detached_editing.utils import DetachedLayerState
 from nextgis_connect.platform.qgis.compat import GeometryType, QgsFeatureId
 from nextgis_connect.plugin.plugin_interface import NgConnectInterface
 from nextgis_connect.shared.constants import PLUGIN_NAME
-from nextgis_connect.ui_kit.icons.icon import (
+from nextgis_connect.ui_kit.icons import (
     material_icon,
     plugin_icon,
     qgis_icon,

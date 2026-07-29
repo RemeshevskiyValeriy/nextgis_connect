@@ -9,7 +9,6 @@ from qgis.gui import (
 )
 from qgis.PyQt import uic
 from qgis.PyQt.QtCore import Qt, pyqtSlot
-from qgis.PyQt.QtGui import QIcon
 from qgis.PyQt.QtWidgets import (
     QComboBox,
     QFileDialog,
@@ -43,6 +42,7 @@ from nextgis_connect.legacy.shell.presentation.dock.ng_connect_dock import (
 from nextgis_connect.platform.logging import logger, update_logging_level
 from nextgis_connect.platform.qgis.utils import human_readable_size
 from nextgis_connect.plugin.plugin_interface import NgConnectInterface
+from nextgis_connect.ui_kit.icons import plugin_icon, qgis_icon
 from nextgis_connect.ui_kit.widgets.labeled_slider import LabeledSlider
 
 
@@ -195,7 +195,7 @@ class NgConnectOptionsPageWidget(QgsOptionsPageWidget):
 
         # Choose cache directory button
         self.__widget.cacheDirectoryButton.setIcon(
-            QgsApplication.getThemeIcon("mActionFileOpen.svg")
+            qgis_icon("mActionFileOpen.svg")
         )
         self.__widget.cacheDirectoryButton.clicked.connect(
             self.__choose_cache_directory
@@ -203,7 +203,7 @@ class NgConnectOptionsPageWidget(QgsOptionsPageWidget):
 
         # Cache directory reset button
         self.__widget.resetCacheDirectoryButton.setIcon(
-            QgsApplication.getThemeIcon("mActionUndo.svg")
+            qgis_icon("mActionUndo.svg")
         )
         self.__widget.resetCacheDirectoryButton.clicked.connect(
             self.__reset_cache_directory
@@ -231,7 +231,7 @@ class NgConnectOptionsPageWidget(QgsOptionsPageWidget):
 
         # Clear cache button
         self.__widget.clearCacheButton.setIcon(
-            QgsApplication.getThemeIcon("mActionDeleteSelected.svg")
+            qgis_icon("mActionDeleteSelected.svg")
         )
         self.__widget.clearCacheButton.clicked.connect(self.__clear_cache)
 
@@ -497,10 +497,9 @@ class NgConnectOptionsErrorPageWidget(QgsOptionsPageWidget):
 
 class NgConnectOptionsWidgetFactory(QgsOptionsWidgetFactory):
     def __init__(self):
-        icons_path = Path(__file__).parents[3] / "assets" / "icons"
         super().__init__(
             "NextGIS Connect",
-            QIcon(str(icons_path / "branding/connect_logo.svg")),
+            plugin_icon("branding/connect_logo.svg"),
         )
 
     def path(self) -> List[str]:

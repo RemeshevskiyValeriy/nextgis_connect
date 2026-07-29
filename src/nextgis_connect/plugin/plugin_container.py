@@ -3,7 +3,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from osgeo import gdal
-from qgis.core import Qgis, QgsApplication, QgsRuntimeProfiler, QgsTaskManager
+from qgis.core import Qgis, QgsRuntimeProfiler, QgsTaskManager
 from qgis.gui import QgisInterface, QgsMessageBarItem
 from qgis.PyQt.QtCore import (
     QT_VERSION_STR,
@@ -15,7 +15,6 @@ from qgis.PyQt.QtCore import (
     QSysInfo,
     Qt,
 )
-from qgis.PyQt.QtGui import QIcon
 from qgis.PyQt.QtWidgets import QAction, QToolBar
 
 from nextgis_connect.legacy.detached_editing.detached_editing import (
@@ -51,6 +50,7 @@ from nextgis_connect.plugin.services import (
 from nextgis_connect.plugin.translator import initialize_translator
 from nextgis_connect.shared.constants import PLUGIN_NAME
 from nextgis_connect.shell.presentation.about.about_dialog import AboutDialog
+from nextgis_connect.ui_kit.icons import plugin_icon, qgis_icon
 
 if TYPE_CHECKING:
     from nextgis_connect.plugin.plugin_interface import NgConnectInterface
@@ -345,9 +345,7 @@ class PluginContainer:
         )
 
         self.__show_ngw_resources_tree_action = QAction(
-            QIcon(
-                str(self.plugin_dir / "assets/icons/branding/connect_logo.svg")
-            ),
+            plugin_icon("branding/connect_logo.svg"),
             self._plugin.tr("Show/Hide NextGIS Connect panel"),
             self.iface.mainWindow(),
         )
@@ -369,7 +367,7 @@ class PluginContainer:
         )
 
         self.__action_about = QAction(
-            QgsApplication.getThemeIcon("mActionPropertiesWidget.svg"),
+            qgis_icon("mActionPropertiesWidget.svg"),
             self._plugin.tr("About plugin..."),
             self.iface.mainWindow(),
         )
@@ -389,21 +387,12 @@ class PluginContainer:
         for action in self.iface.webMenu().actions():
             if action.text() != PLUGIN_NAME:
                 continue
-            action.setIcon(
-                QIcon(
-                    str(
-                        self.plugin_dir
-                        / "assets/icons/branding/connect_logo.svg"
-                    )
-                )
-            )
+            action.setIcon(plugin_icon("branding/connect_logo.svg"))
             break
 
         # Add adction to Help > Plugins
         self.__show_help_action = QAction(
-            QIcon(
-                str(self.plugin_dir / "assets/icons/branding/connect_logo.svg")
-            ),
+            plugin_icon("branding/connect_logo.svg"),
             PLUGIN_NAME,
             self.iface.mainWindow(),
         )

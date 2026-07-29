@@ -17,7 +17,7 @@ from nextgis_connect.legacy.detached_editing.conflicts.ui.base_feature_conflict_
     ConflictTabBase,
 )
 from nextgis_connect.shared.types import UnsetType
-from nextgis_connect.ui_kit.icons.icon import draw_icon, material_icon
+from nextgis_connect.ui_kit.icons import draw_icon, material_icon
 from nextgis_connect.ui_kit.widgets.description_text_editor import (
     DescriptionTextEditor,
 )

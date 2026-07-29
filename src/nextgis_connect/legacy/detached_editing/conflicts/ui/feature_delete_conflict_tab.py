@@ -66,7 +66,7 @@ from nextgis_connect.shared.types import (
     NgwAttachmentId,
     UnsetType,
 )
-from nextgis_connect.ui_kit.icons.icon import draw_icon, plugin_icon
+from nextgis_connect.ui_kit.icons import draw_icon, plugin_icon
 
 
 class _Side(str, Enum):

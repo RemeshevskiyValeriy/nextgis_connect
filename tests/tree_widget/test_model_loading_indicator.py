@@ -1,7 +1,7 @@
 from types import SimpleNamespace
 
 from qgis.PyQt.QtCore import QModelIndex, Qt
-from qgis.PyQt.QtGui import QBrush, QColor, QPalette
+from qgis.PyQt.QtGui import QBrush, QColor, QIcon, QPalette
 
 from nextgis_connect.legacy.tree_widget.item import QNGWResourceItem
 from nextgis_connect.legacy.tree_widget.model import QNGWResourceTreeModelBase
@@ -19,8 +19,10 @@ class _Job:
 def _resource(resource_id: int = 1):
     return SimpleNamespace(
         display_name="Resource",
+        common=SimpleNamespace(cls="vector_layer"),
         icon_path="",
         resource_id=resource_id,
+        type_id="vector_layer",
         connection=SimpleNamespace(server_url=""),
     )
 
@@ -35,17 +37,39 @@ def test_locked_resource_item_uses_loading_indicator_icon(qgis_app) -> None:
     job = _Job()
 
     default_icon = model.data(index, Qt.ItemDataRole.DecorationRole)
-    assert default_icon.isNull()
+    assert not default_icon.isNull()
+    default_icon_cache_key = default_icon.cacheKey()
 
     model._lockIndexByJob([index], job)
 
     loading_icon = model.data(index, Qt.ItemDataRole.DecorationRole)
     assert not loading_icon.isNull()
+    assert loading_icon.cacheKey() != default_icon_cache_key
 
     model._unlockIndexesByJob(job)
 
     restored_icon = model.data(index, Qt.ItemDataRole.DecorationRole)
-    assert restored_icon.isNull()
+    assert restored_icon.cacheKey() == default_icon_cache_key
+
+
+def test_resource_item_uses_ui_kit_resource_icon(monkeypatch) -> None:
+    expected_icon = QIcon()
+    resource = _resource()
+    calls = []
+
+    def fake_resource_icon(ngw_resource):
+        calls.append(ngw_resource)
+        return expected_icon
+
+    monkeypatch.setattr(
+        "nextgis_connect.legacy.tree_widget.item.ngw_resource_icon",
+        fake_resource_icon,
+    )
+
+    item = QNGWResourceItem(resource)
+
+    assert calls == [resource]
+    assert item.data(Qt.ItemDataRole.DecorationRole) is expected_icon
 
 
 def test_locked_resource_item_stays_enabled_with_muted_text_color(

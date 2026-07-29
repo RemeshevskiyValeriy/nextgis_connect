@@ -43,7 +43,7 @@ from nextgis_connect.legacy.detached_editing.identification.settings import (
 from nextgis_connect.ui_kit.delegates.widget_item_delegate import (
     WidgetItemDelegate,
 )
-from nextgis_connect.ui_kit.icons.icon import material_icon, qgis_icon
+from nextgis_connect.ui_kit.icons import material_icon, qgis_icon
 
 
 class AttachmentDelegate(WidgetItemDelegate):

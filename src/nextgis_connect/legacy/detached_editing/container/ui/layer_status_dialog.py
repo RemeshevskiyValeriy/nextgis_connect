@@ -1,7 +1,6 @@
 from pathlib import Path
 from typing import TYPE_CHECKING, Optional
 
-from qgis.core import QgsApplication
 from qgis.PyQt import uic
 from qgis.PyQt.QtCore import QSize, pyqtSlot
 from qgis.PyQt.QtWidgets import (
@@ -16,7 +15,7 @@ from qgis.PyQt.QtWidgets import (
 
 from nextgis_connect.legacy.detached_editing.utils import DetachedLayerState
 from nextgis_connect.ui_kit.buttons.loading import LoadingToolButton
-from nextgis_connect.ui_kit.icons.icon import material_icon
+from nextgis_connect.ui_kit.icons import material_icon, qgis_icon
 
 if TYPE_CHECKING:
     from nextgis_connect.legacy.detached_editing.container.container import (
@@ -39,7 +38,7 @@ class DetachedLayerStatusDialog(QDialog, WIDGET):
         self.setupUi(self)
         self.__replace_sync_button()
 
-        warning_icon = QgsApplication.getThemeIcon("mIconWarning.svg")
+        warning_icon = qgis_icon("mIconWarning.svg")
         size = int(max(24.0, self.syncButton.minimumSize().height()))
         pixmap = warning_icon.pixmap(
             warning_icon.actualSize(QSize(size, size))

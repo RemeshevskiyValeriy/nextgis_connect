@@ -8,7 +8,7 @@ from nextgis_connect.legacy.detached_editing.container.ui.layer_status_dialog im
 )
 from nextgis_connect.legacy.detached_editing.utils import DetachedLayerState
 from nextgis_connect.platform.logging import logger
-from nextgis_connect.ui_kit.icons.icon import plugin_icon
+from nextgis_connect.ui_kit.icons import plugin_icon
 
 if TYPE_CHECKING:
     from nextgis_connect.legacy.detached_editing.container.container import (

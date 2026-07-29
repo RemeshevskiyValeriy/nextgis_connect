@@ -1,9 +1,19 @@
 from nextgis_connect.ui_kit.icons.cursor import NgConnectCursor, create_cursor
 from nextgis_connect.ui_kit.icons.icon import (
     draw_icon,
+    field_type_icon,
+    icon_from_pixmap,
     icon_to_base64,
+    icon_with_disabled_pixmap,
     material_icon,
+    material_icon_path,
+    ngw_resource_icon,
+    ngw_resource_type_icon,
     plugin_icon,
+    plugin_icon_file_path,
+    qgis_checkable_icon,
     qgis_icon,
+    render_svg_content_icon,
     render_svg_icon,
+    wkb_type_icon,
 )

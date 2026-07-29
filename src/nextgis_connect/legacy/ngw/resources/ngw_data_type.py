@@ -1,10 +1,10 @@
 from enum import IntEnum
 from typing import cast
 
-from qgis.core import QgsFields
 from qgis.PyQt.QtGui import QIcon
 
 from nextgis_connect.platform.qgis.compat import FieldType
+from nextgis_connect.ui_kit.icons import field_type_icon
 
 
 class NgwDataType(IntEnum):
@@ -20,7 +20,7 @@ class NgwDataType(IntEnum):
 
     @property
     def icon(self) -> QIcon:
-        return QgsFields.iconForFieldType(self.qt_value)
+        return field_type_icon(self.qt_value)
 
     @property
     def qt_value(self):

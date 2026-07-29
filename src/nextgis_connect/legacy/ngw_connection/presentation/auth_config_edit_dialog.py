@@ -33,6 +33,7 @@ from nextgis_connect.legacy.ngw_connection.presentation.auth_config_id_edit impo
 )
 from nextgis_connect.platform.logging import logger
 from nextgis_connect.platform.qgis.utils import utm_tags
+from nextgis_connect.ui_kit.icons import qgis_icon
 
 from .dialog_header_widget import NextgisDialogHeaderWidget
 
@@ -340,9 +341,7 @@ class AuthConfigEditorWidget(QWidget, WIDGET):
 
     def __setup_delete_button(self) -> None:
         self.__delete_button = QPushButton(self.tr("Delete"), self)
-        self.__delete_button.setIcon(
-            QgsApplication.getThemeIcon("mActionDeleteSelected.svg")
-        )
+        self.__delete_button.setIcon(qgis_icon("mActionDeleteSelected.svg"))
         self.__delete_button.setToolTip(
             self.tr("Delete these authentication settings")
         )

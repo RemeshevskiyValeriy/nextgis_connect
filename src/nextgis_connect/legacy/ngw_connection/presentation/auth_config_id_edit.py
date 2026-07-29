@@ -3,7 +3,7 @@ from typing import Optional
 
 from qgis.core import QgsApplication
 from qgis.PyQt.QtCore import Qt, pyqtSignal
-from qgis.PyQt.QtGui import QColor, QIcon
+from qgis.PyQt.QtGui import QColor
 from qgis.PyQt.QtWidgets import (
     QHBoxLayout,
     QLineEdit,
@@ -11,6 +11,8 @@ from qgis.PyQt.QtWidgets import (
     QToolButton,
     QWidget,
 )
+
+from nextgis_connect.ui_kit.icons import qgis_checkable_icon
 
 
 class AuthConfigIdEdit(QWidget):
@@ -38,15 +40,7 @@ class AuthConfigIdEdit(QWidget):
         self.auth_config_line_edit.setText(authcfg)
         self.__sync_lock_button_height()
 
-        lock_icon = QIcon(":/images/themes/default/locked.svg")
-        lock_icon.addFile(
-            ":/images/themes/default/locked.svg",
-            state=QIcon.State.Off,
-        )
-        lock_icon.addFile(
-            ":/images/themes/default/unlocked.svg",
-            state=QIcon.State.On,
-        )
+        lock_icon = qgis_checkable_icon("locked.svg", "unlocked.svg")
         self.lock_button.setIcon(lock_icon)
 
         self.lock_button.toggled.connect(self.__on_lock_toggled)

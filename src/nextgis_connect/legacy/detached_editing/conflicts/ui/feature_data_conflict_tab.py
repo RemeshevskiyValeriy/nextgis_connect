@@ -29,7 +29,7 @@ from nextgis_connect.legacy.detached_editing.sync.common.serialization import (
 from nextgis_connect.legacy.ngw.resources.ngw_data_type import NgwDataType
 from nextgis_connect.legacy.ngw.resources.ngw_field import NgwField
 from nextgis_connect.shared.types import UnsetType
-from nextgis_connect.ui_kit.icons.icon import draw_icon, material_icon
+from nextgis_connect.ui_kit.icons import draw_icon, material_icon
 
 
 class FeatureDataConflictTab(
@@ -377,16 +377,22 @@ class FeatureDataConflictTab(
         local_button = self._apply_local_buttons[field.keyname]
         local_button.setEnabled(
             is_conflicting_field
-            and not values_equal(
-                self._item.local_feature, self._item.result_feature
+            and (
+                not is_changed
+                or not values_equal(
+                    self._item.local_feature, self._item.result_feature
+                )
             )
         )
 
         remote_button = self._apply_remote_buttons[field.keyname]
         remote_button.setEnabled(
             is_conflicting_field
-            and not values_equal(
-                self._item.remote_feature, self._item.result_feature
+            and (
+                not is_changed
+                or not values_equal(
+                    self._item.remote_feature, self._item.result_feature
+                )
             )
         )
 

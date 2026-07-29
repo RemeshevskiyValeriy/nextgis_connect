@@ -1,6 +1,5 @@
 from typing import Optional
 
-from qgis.core import QgsApplication
 from qgis.PyQt.QtCore import Qt, pyqtSignal, pyqtSlot
 from qgis.PyQt.QtWidgets import (
     QHBoxLayout,
@@ -19,6 +18,7 @@ from nextgis_connect.legacy.search.text_search_line_edit import (
 )
 from nextgis_connect.legacy.search.utils import SearchType
 from nextgis_connect.platform.logging import logger
+from nextgis_connect.ui_kit.icons import qgis_icon
 
 
 class SearchPanel(QWidget):
@@ -50,7 +50,7 @@ class SearchPanel(QWidget):
         self.__search_button.setToolButtonStyle(
             Qt.ToolButtonStyle.ToolButtonIconOnly
         )
-        self.__search_button.setIcon(QgsApplication.getThemeIcon("search.svg"))
+        self.__search_button.setIcon(qgis_icon("search.svg"))
         self.__search_button.clicked.connect(self.__request_search)
         layout.addWidget(self.__search_button)
 

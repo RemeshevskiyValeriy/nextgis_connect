@@ -1,8 +1,6 @@
-from pathlib import Path
 from typing import Dict, List, Optional
 
 from qgis.PyQt.QtCore import QModelIndex, QSize, Qt, QTimer
-from qgis.PyQt.QtGui import QIcon
 from qgis.PyQt.QtWidgets import (
     QDialog,
     QDialogButtonBox,
@@ -26,19 +24,17 @@ from nextgis_connect.ui_kit.buttons.loading import LoadingPushButton
 from nextgis_connect.ui_kit.graphics import (
     NextgisDecorator,
 )
-from nextgis_connect.ui_kit.icons import material_icon
+from nextgis_connect.ui_kit.icons import (
+    icon_with_disabled_pixmap,
+    material_icon,
+    ngw_resource_type_icon,
+)
 
 
 class ResourceDeleteConfirmationDialog(QDialog):
     _COUNTDOWN_SECONDS = 5
     _ICON_SIZE = 16
     _SUMMARY_VERTICAL_MARGIN = 8
-    _RESOURCE_ICONS_DIR = (
-        Path(__file__).resolve().parents[4]
-        / "assets"
-        / "icons"
-        / "ngw_resources"
-    )
     _RESOURCE_TYPE_ORDER = (
         "resource_group",
         "webmap",
@@ -319,11 +315,12 @@ class ResourceDeleteConfirmationDialog(QDialog):
             color=self._delete_icon_color(),
             size=self._ICON_SIZE,
         )
-        pixmap = icon.pixmap(QSize(self._ICON_SIZE, self._ICON_SIZE))
-        button_icon = QIcon()
-        button_icon.addPixmap(pixmap, QIcon.Mode.Normal)
-        button_icon.addPixmap(pixmap, QIcon.Mode.Disabled)
-        self._delete_button.setIcon(button_icon)
+        self._delete_button.setIcon(
+            icon_with_disabled_pixmap(
+                icon,
+                QSize(self._ICON_SIZE, self._ICON_SIZE),
+            )
+        )
 
     def _delete_icon_color(self) -> str:
         color_key = (
@@ -333,12 +330,8 @@ class ResourceDeleteConfirmationDialog(QDialog):
         )
         return NextgisDecorator.theme().color(color_key, "#B8324A").name()
 
-    def _resource_icon(self, resource_class: str) -> QIcon:
-        icon_path = self._RESOURCE_ICONS_DIR / f"{resource_class}.svg"
-        if not icon_path.exists():
-            icon_path = self._RESOURCE_ICONS_DIR / "resource.svg"
-
-        return QIcon(str(icon_path))
+    def _resource_icon(self, resource_class: str):
+        return ngw_resource_type_icon(resource_class=resource_class)
 
     def _sorted_resource_classes(
         self,

@@ -22,7 +22,7 @@ from qgis.PyQt.QtCore import (
     QUrl,
     pyqtSlot,
 )
-from qgis.PyQt.QtGui import QDesktopServices, QIcon
+from qgis.PyQt.QtGui import QDesktopServices
 from qgis.PyQt.QtWidgets import (
     QAction,
     QCompleter,
@@ -69,7 +69,7 @@ from nextgis_connect.ui_kit.buttons.loading import (
     LoadingPushButton,
     LoadingToolButton,
 )
-from nextgis_connect.ui_kit.icons.icon import material_icon
+from nextgis_connect.ui_kit.icons import material_icon, plugin_icon, qgis_icon
 
 HAS_NGSTD = importlib.util.find_spec("ngstd") is not None
 NGAccess = None
@@ -195,7 +195,7 @@ class NgwConnectionEditDialog(QDialog, WIDGET):
         self.__result_connection = None
         self.__save_on_accept = save_on_accept
 
-        warning_icon = QgsApplication.getThemeIcon("mIconWarning.svg")
+        warning_icon = qgis_icon("mIconWarning.svg")
         size = int(max(24.0, self.userComboBox.minimumSize().height()))
         pixmap = warning_icon.pixmap(
             warning_icon.actualSize(QSize(size, size))
@@ -260,17 +260,7 @@ class NgwConnectionEditDialog(QDialog, WIDGET):
             QDialogButtonBox.StandardButton.Help
         )
         if help_button is not None:
-            help_button.setIcon(
-                QIcon(
-                    str(
-                        PLUGIN_PATH.parents[2]
-                        / "assets"
-                        / "icons"
-                        / "branding"
-                        / "nextgis_logo.svg"
-                    )
-                )
-            )
+            help_button.setIcon(plugin_icon("branding/nextgis_logo.svg"))
             help_button.clicked.connect(self.__open_help)
 
         # Url field settings

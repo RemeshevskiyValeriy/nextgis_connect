@@ -1,13 +1,13 @@
 from typing import cast
 
 from qgis.PyQt.QtCore import Qt, QVariant
-from qgis.PyQt.QtGui import QIcon
 from qgis.PyQt.QtWidgets import QTreeWidgetItem
 
 from nextgis_connect.legacy.ngw.core import (
     NGWGroupResource,
     NGWResource,
 )
+from nextgis_connect.ui_kit.icons import ngw_resource_icon
 
 
 # TODO: remove QTreeWidgetItem inheritance
@@ -60,7 +60,7 @@ class QNGWResourceItem(QModelItem):
 
         self._title = title
         self._ngw_resource = ngw_resource
-        self._icon = QIcon(self._ngw_resource.icon_path)
+        self._icon = ngw_resource_icon(self._ngw_resource)
 
     def data(self, role):
         if role == Qt.ItemDataRole.DisplayRole:

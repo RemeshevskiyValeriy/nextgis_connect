@@ -31,7 +31,8 @@ from nextgis_connect.legacy.detached_editing.utils import AttachmentMetadata
 from nextgis_connect.platform.logging import logger
 from nextgis_connect.platform.qgis.utils import human_readable_size
 from nextgis_connect.shared.types import AttachmentId
-from nextgis_connect.ui_kit.icons.icon import (
+from nextgis_connect.ui_kit.icons import (
+    icon_from_pixmap,
     material_icon,
     plugin_icon,
 )
@@ -442,7 +443,7 @@ class AttachmentsModel(QAbstractListModel):
         self._paint_download_overlay(painter, pixmap.rect())
         painter.end()
 
-        return QIcon(pixmap)
+        return icon_from_pixmap(pixmap)
 
     def _paint_download_overlay(self, painter: QPainter, rect: QRect) -> None:
         icon_size = max(18, min(rect.width(), rect.height()) // 2)

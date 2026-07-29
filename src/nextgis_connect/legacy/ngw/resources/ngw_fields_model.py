@@ -16,7 +16,7 @@ from nextgis_connect.legacy.ngw.resources.ngw_field import (
     NgwField,
 )
 from nextgis_connect.legacy.ngw.resources.ngw_fields import NgwFields
-from nextgis_connect.ui_kit.icons.icon import material_icon
+from nextgis_connect.ui_kit.icons import material_icon
 
 
 class NgwFieldsModel(QAbstractTableModel):

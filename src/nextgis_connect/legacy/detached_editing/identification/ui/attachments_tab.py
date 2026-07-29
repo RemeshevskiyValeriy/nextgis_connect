@@ -71,7 +71,7 @@ from nextgis_connect.platform.qgis.compat import QgsFeatureId
 from nextgis_connect.platform.tasks import NgConnectTask
 from nextgis_connect.plugin.plugin_interface import NgConnectInterface
 from nextgis_connect.shared.types import AttachmentId
-from nextgis_connect.ui_kit.icons.icon import material_icon, qgis_icon
+from nextgis_connect.ui_kit.icons import material_icon, qgis_icon
 
 AttachmentThumbnailKey = Tuple[
     str,

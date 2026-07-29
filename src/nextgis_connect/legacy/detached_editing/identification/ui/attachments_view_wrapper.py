@@ -32,7 +32,7 @@ from nextgis_connect.legacy.tree_widget.overlay import (
     OverlayState,
 )
 from nextgis_connect.platform.logging import logger
-from nextgis_connect.ui_kit.icons.icon import draw_icon, material_icon
+from nextgis_connect.ui_kit.icons import draw_icon, material_icon
 
 
 class AttachmentsViewWrapper(QWidget):
