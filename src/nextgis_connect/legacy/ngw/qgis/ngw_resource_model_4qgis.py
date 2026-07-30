@@ -231,6 +231,7 @@ class QGISResourceJob(NGWResourceModelJob):
         super().__init__()
 
         self.ngw_version = ngw_version
+        self._feedback = QgsFeedback()
 
         self._value_relations = set()
         self._lookup_tables_id = {}
@@ -238,6 +239,12 @@ class QGISResourceJob(NGWResourceModelJob):
 
     def _layer_status(self, layer_name, status):
         self.statusChanged.emit(f""""{layer_name}" - {status}""")
+
+    def _raise_if_canceled(self) -> None:
+        if self._feedback is None or not self._feedback.isCanceled():
+            return
+
+        raise NgConnectError("Request was canceled")
 
     def isSuitableLayer(self, qgs_map_layer: QgsVectorLayer):
         layer_type = qgs_map_layer.type()
@@ -270,7 +277,9 @@ class QGISResourceJob(NGWResourceModelJob):
         )
 
     def importQGISMapLayer(self, qgs_map_layer, ngw_parent_resource):
+        self._raise_if_canceled()
         ngw_parent_resource.update()
+        self._raise_if_canceled()
 
         layer_type = qgs_map_layer.type()
 
@@ -410,6 +419,7 @@ class QGISResourceJob(NGWResourceModelJob):
             return [wms_connection, wms_layer]
 
     def importQgsRasterLayer(self, qgs_raster_layer, ngw_parent_resource):
+        self._raise_if_canceled()
         new_layer_name = self.unique_resource_name(
             qgs_raster_layer.name(), ngw_parent_resource
         )
@@ -442,7 +452,9 @@ class QGISResourceJob(NGWResourceModelJob):
             True,
             uploadFileCallback,
             createLayerCallback,
+            feedback=self._feedback,
         )
+        self._raise_if_canceled()
 
         logger.debug(
             f'↑ Raster layer "{qgs_raster_layer.name()}" was uploaded with id {ngw_raster_layer.resource_id}'
@@ -458,6 +470,7 @@ class QGISResourceJob(NGWResourceModelJob):
         qgs_vector_layer: QgsVectorLayer,
         ngw_parent_resource: NGWGroupResource,
     ) -> Optional[NGWVectorLayer]:
+        self._raise_if_canceled()
         self._ensure_no_geometry_supported(
             qgs_vector_layer,
             ngw_parent_resource.connection,
@@ -519,7 +532,9 @@ class QGISResourceJob(NGWResourceModelJob):
             old_fid_name,
             uploadFileCallback,
             createLayerCallback,
+            feedback=self._feedback,
         )
+        self._raise_if_canceled()
 
         fields_aliases: Dict[str, Dict[str, str]] = {}
         fields_datatypes: Dict[str, Dict[str, str]] = {}
@@ -1030,6 +1045,7 @@ class QGISResourceJob(NGWResourceModelJob):
         matches "existing file" and then tries
         to import the attachment
         """
+        self._raise_if_canceled()
 
         def uploadFileCallback(total_size, readed_size, value=None):
             self._layer_status(
@@ -1084,6 +1100,8 @@ class QGISResourceJob(NGWResourceModelJob):
                 for finx, ftr in enumerate(
                     cast(Iterable[QgsFeature], qgs_vector_layer.getFeatures())
                 ):
+                    self._raise_if_canceled()
+
                     file_path = ftr.attributes()[attrInx]
                     if not isinstance(file_path, str):
                         continue
@@ -1100,8 +1118,11 @@ class QGISResourceJob(NGWResourceModelJob):
                     uploaded_file_info = ngw_ftrs[
                         finx
                     ].ngw_vector_layer.res_factory.connection.upload_file(
-                        str(full_path), uploadFileCallback
+                        str(full_path),
+                        uploadFileCallback,
+                        feedback=self._feedback,
                     )
+                    self._raise_if_canceled()
                     logger.debug(f"Uploaded file info: {uploaded_file_info}")
                     ngw_ftrs[finx].link_attachment(
                         full_path.name, uploaded_file_info
@@ -1215,11 +1236,16 @@ class QGISResourcesUploader(QGISResourceJob):
         self.iface = iface
 
     def _do(self):
+        self._raise_if_canceled()
         self._find_lookup_tables()
+        self._raise_if_canceled()
         self._check_quote()
+        self._raise_if_canceled()
 
         self._add_group_tree()
+        self._raise_if_canceled()
         self._add_lookup_tables()
+        self._raise_if_canceled()
 
         ngw_webmap_root_group = NGWWebMapRoot()
         ngw_webmap_basemaps = []
@@ -1229,9 +1255,11 @@ class QGISResourcesUploader(QGISResourceJob):
             ngw_webmap_root_group,
             ngw_webmap_basemaps,
         )
+        self._raise_if_canceled()
 
         # The group was attached resources,  therefore, it is necessary to upgrade for get children flag
         self.parent_group_resource.update()
+        self._raise_if_canceled()
 
     def _check_quote(self, add_map: bool = False) -> None:
         def resource_type_for_layer(node: QgsLayerTreeNode) -> Optional[str]:
@@ -1281,7 +1309,9 @@ class QGISResourcesUploader(QGISResourceJob):
 
         try:
             self.parent_group_resource.res_factory.connection.post(
-                "/api/component/resource/check_quota", counter
+                "/api/component/resource/check_quota",
+                counter,
+                feedback=self._feedback,
             )
         except NgwError as error:
             if error.code == ErrorCode.NotFound:
@@ -1324,6 +1354,8 @@ class QGISResourcesUploader(QGISResourceJob):
                 self._value_relations.add(ValueRelation.from_config(config))
 
         for node in self.qgs_layer_tree_nodes:
+            self._raise_if_canceled()
+
             if isinstance(node, QgsLayerTreeGroup):
                 for layer_node in node.findLayers():
                     collect_value_relations(layer_node)
@@ -1337,7 +1369,10 @@ class QGISResourcesUploader(QGISResourceJob):
         ngw_webmap_item,
         ngw_webmap_basemaps,
     ):
+        self._raise_if_canceled()
         for node in qgs_layer_tree_nodes:
+            self._raise_if_canceled()
+
             if isinstance(node, QgsLayerTreeLayer):
                 if self.isSuitableLayer(node.layer()) != self.SUITABLE_LAYER:
                     continue
@@ -1364,6 +1399,8 @@ class QGISResourcesUploader(QGISResourceJob):
             )
         )
         for node in self.qgs_layer_tree_nodes:
+            self._raise_if_canceled()
+
             if not QgsLayerTree.isGroup(node):
                 continue
             self.__add_group_level(
@@ -1380,12 +1417,17 @@ class QGISResourcesUploader(QGISResourceJob):
         )
 
         child_group_resource = ResourceCreator.create_group(
-            parent_group_resource, group_name
+            parent_group_resource,
+            group_name,
+            feedback=self._feedback,
         )
+        self._raise_if_canceled()
         self.putAddedResourceToResult(child_group_resource)
         self._groups[group_node] = child_group_resource
 
         for node in group_node.children():
+            self._raise_if_canceled()
+
             if not QgsLayerTree.isGroup(node):
                 continue
             self.__add_group_level(
@@ -1417,6 +1459,8 @@ class QGISResourcesUploader(QGISResourceJob):
         root = project.layerTreeRoot()
         assert root is not None
         for value_relation in self._value_relations:
+            self._raise_if_canceled()
+
             layer_node = root.findLayer(value_relation.layer_id)
             assert layer_node is not None
 
@@ -1446,11 +1490,15 @@ class QGISResourcesUploader(QGISResourceJob):
         ngw_webmap_item,
         ngw_webmap_basemaps,
     ):
+        self._raise_if_canceled()
         try:
             ngw_resources = self.importQGISMapLayer(
                 layer_tree_item.layer(), ngw_resource_group
             )
         except Exception as e:
+            if self._feedback is not None and self._feedback.isCanceled():
+                raise
+
             logger.exception("Exception during adding layer")
 
             has_several_elements = len(self.qgs_layer_tree_nodes) > 1
@@ -1472,6 +1520,7 @@ class QGISResourcesUploader(QGISResourceJob):
                 raise e
 
         for ngw_resource in ngw_resources:
+            self._raise_if_canceled()
             self.putAddedResourceToResult(ngw_resource)
 
             if ngw_resource.type_id in [
@@ -1485,6 +1534,8 @@ class QGISResourcesUploader(QGISResourceJob):
                 current_style = style_manager.currentStyle()
 
                 for style_name in style_manager.styles():
+                    self._raise_if_canceled()
+
                     ngw_style = self.addStyle(
                         ngw_resource, qgs_map_layer, style_name
                     )
@@ -1512,6 +1563,7 @@ class QGISResourcesUploader(QGISResourceJob):
                     self.importAttachments(
                         layer_tree_item.layer(), ngw_resource
                     )
+                    self._raise_if_canceled()
 
                 self.putUploadedLayerResourceToResult(
                     qgs_map_layer, ngw_resource
@@ -1553,6 +1605,7 @@ class QGISResourcesUploader(QGISResourceJob):
         ngw_webmap_item,
         ngw_webmap_basemaps,
     ) -> None:
+        self._raise_if_canceled()
         ngw_resource_child_group = self._groups[qgsLayerTreeGroup]
 
         ngw_webmap_child_group = NGWWebMapGroup(
@@ -1601,20 +1654,28 @@ class QGISProjectUploader(QGISResourcesUploader):
         self.new_group_name = new_group_name
 
     def _do(self):
+        self._raise_if_canceled()
         self._find_lookup_tables()
+        self._raise_if_canceled()
         self._check_quote(add_map=True)
+        self._raise_if_canceled()
 
         new_group_name = self.unique_resource_name(
             self.new_group_name, self.parent_group_resource
         )
         ngw_group_resource = ResourceCreator.create_group(
-            self.parent_group_resource, new_group_name
+            self.parent_group_resource,
+            new_group_name,
+            feedback=self._feedback,
         )
+        self._raise_if_canceled()
         self.putAddedResourceToResult(ngw_group_resource)
         self.parent_group_resource = ngw_group_resource
 
         self._add_group_tree()
+        self._raise_if_canceled()
         self._add_lookup_tables()
+        self._raise_if_canceled()
 
         ngw_webmap_root_group = NGWWebMapRoot()
         ngw_webmap_basemaps = []
@@ -1624,6 +1685,7 @@ class QGISProjectUploader(QGISResourcesUploader):
             ngw_webmap_root_group,
             ngw_webmap_basemaps,
         )
+        self._raise_if_canceled()
 
         ngw_webmap = self.create_webmap(
             ngw_group_resource,
@@ -1631,11 +1693,14 @@ class QGISProjectUploader(QGISResourcesUploader):
             ngw_webmap_root_group.children,
             ngw_webmap_basemaps,
         )
+        self._raise_if_canceled()
         self.putAddedResourceToResult(ngw_webmap, is_main=True)
 
         # The group was attached resources,  therefore, it is necessary to upgrade for get children flag
         ngw_group_resource.update()
+        self._raise_if_canceled()
         self.parent_group_resource.update()
+        self._raise_if_canceled()
 
     def create_webmap(
         self,
@@ -1827,6 +1892,7 @@ class NGWUpdateVectorLayer(QGISResourceJob):
         self.qgis_layer = qgs_map_layer
 
     def _do(self):
+        self._raise_if_canceled()
         logger.debug(
             f'<b>Replace "{self.ngw_layer.display_name}" layer features</b> from layer "{self.qgis_layer.name()}")'
         )
@@ -1861,13 +1927,17 @@ class NGWUpdateVectorLayer(QGISResourceJob):
         filepath, old_fid_name, _ = self.prepareImportVectorFile(
             self.qgis_layer
         )
+        self._raise_if_canceled()
         if filepath is None:
             raise JobError(f'Can\'t prepare layer "{self.qgis_layer.name()}"')
 
         connection = self.ngw_layer.res_factory.connection
         vector_file_desc = connection.tus_upload_file(
-            filepath, uploadFileCallback
+            filepath,
+            uploadFileCallback,
+            feedback=self._feedback,
         )
+        self._raise_if_canceled()
 
         fid_fields = ["ngw_id", "id"]
         if old_fid_name is not None:
@@ -1898,7 +1968,13 @@ class NGWUpdateVectorLayer(QGISResourceJob):
 
         replace_error: Optional[BaseException] = None
         try:
-            connection.put(url, params=params, is_lunkwill=True)
+            connection.put(
+                url,
+                params=params,
+                is_lunkwill=True,
+                feedback=self._feedback,
+            )
+            self._raise_if_canceled()
         except Exception as error:
             replace_error = error
             raise
@@ -2006,6 +2082,7 @@ class NGWUpdateRasterLayer(QGISResourceJob):
         """
         Prepare raster file, upload it and instruct NGW to replace the layer.
         """
+        self._raise_if_canceled()
         logger.debug(
             f'<b>Replace "{self.ngw_layer.display_name}" layer</b> '
             f'from layer "{self.qgis_layer.name()}")'
@@ -2031,13 +2108,17 @@ class NGWUpdateRasterLayer(QGISResourceJob):
             )
 
         is_ok, file_path = self.prepareImportRasterFile(self.qgis_layer)
+        self._raise_if_canceled()
         if not is_ok:
             raise JobError(f'Can\'t prepare layer "{self.qgis_layer.name()}"')
 
         connection = self.ngw_layer.res_factory.connection
         raster_file_desc = connection.tus_upload_file(
-            file_path, upload_file_callback
+            file_path,
+            upload_file_callback,
+            feedback=self._feedback,
         )
+        self._raise_if_canceled()
 
         url = self.ngw_layer.get_absolute_api_url()
         params = dict(
@@ -2049,7 +2130,13 @@ class NGWUpdateRasterLayer(QGISResourceJob):
             ),
         )
 
-        connection.put(url, params=params, is_lunkwill=True)
+        connection.put(
+            url,
+            params=params,
+            is_lunkwill=True,
+            feedback=self._feedback,
+        )
+        self._raise_if_canceled()
 
         self.ngw_layer = self.ngw_layer.res_factory.get_resource(
             self.ngw_layer.resource_id

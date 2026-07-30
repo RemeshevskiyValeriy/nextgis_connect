@@ -18,7 +18,9 @@
  ***************************************************************************/
 """
 
-from typing import Any, Dict, Iterable
+from typing import Any, Dict, Iterable, Optional
+
+from qgis.core import QgsFeedback
 
 from .ngw_group_resource import NGWGroupResource
 from .ngw_ogcf_service import NGWOgcfService
@@ -30,7 +32,11 @@ from .ngw_wfs_service import NGWWfsService
 
 class ResourceCreator:
     @staticmethod
-    def create_group(parent_ngw_resource, new_group_name):
+    def create_group(
+        parent_ngw_resource,
+        new_group_name,
+        feedback: Optional[QgsFeedback] = None,
+    ):
         connection = parent_ngw_resource.res_factory.connection
         url = parent_ngw_resource.get_api_collection_url()
 
@@ -42,7 +48,7 @@ class ResourceCreator:
             )
         )
 
-        result = connection.post(url, params=params)
+        result = connection.post(url, params=params, feedback=feedback)
 
         ngw_resource = NGWGroupResource(
             parent_ngw_resource.res_factory,
@@ -77,13 +83,14 @@ class ResourceCreator:
         old_fid_name,
         upload_callback,
         create_callback,
+        feedback: Optional[QgsFeedback] = None,
     ) -> NGWVectorLayer:
         connection = parent_ngw_resource.res_factory.connection
 
         # Use tus uploading for files by default.
         # vector_file_desc = connection.upload_file(filename, upload_callback)
         vector_file_desc = connection.tus_upload_file(
-            filename, upload_callback
+            filename, upload_callback, feedback=feedback
         )
         fid_fields = ["ngw_id", "id"]
         if old_fid_name is not None:
@@ -109,7 +116,9 @@ class ResourceCreator:
 
         # Use "lunkwill" layer creation request (specific type of long request) by default.
         # result = connection.post(url, params=params)
-        result = connection.post(url, params=params, is_lunkwill=True)
+        result = connection.post(
+            url, params=params, is_lunkwill=True, feedback=feedback
+        )
 
         ngw_resource = NGWResource.receive_resource_obj(
             connection, result["id"]
@@ -127,13 +136,14 @@ class ResourceCreator:
         upload_as_cog,
         upload_callback,
         create_callback,
+        feedback: Optional[QgsFeedback] = None,
     ):
         connection = parent_ngw_resource.res_factory.connection
 
         # Use tus uploading for files by default.
         # raster_file_desc = connection.upload_file(filename, upload_callback)
         raster_file_desc = connection.tus_upload_file(
-            filename, upload_callback
+            filename, upload_callback, feedback=feedback
         )
 
         url = parent_ngw_resource.get_api_collection_url()
@@ -152,7 +162,9 @@ class ResourceCreator:
 
         # Use "lunkwill" layer creation request (specific type of long request) by default.
         # result = connection.post(url, params=params)
-        result = connection.post(url, params=params, is_lunkwill=True)
+        result = connection.post(
+            url, params=params, is_lunkwill=True, feedback=feedback
+        )
 
         ngw_resource = NGWResource.receive_resource_obj(
             connection, result["id"]

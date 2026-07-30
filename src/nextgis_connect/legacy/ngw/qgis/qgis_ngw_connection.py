@@ -776,7 +776,7 @@ class QgsNgwConnection(QObject):
         callback(1, 1, 100)  # show in the progress bar that 100% is loaded
 
         # Finally GET and return NGW result of uploaded file.
-        return self.get(file_upload_url)
+        return self.get(file_upload_url, feedback=feedback)
 
     def __update_feedback_progress(
         self,

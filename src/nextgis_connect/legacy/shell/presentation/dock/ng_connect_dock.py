@@ -566,6 +566,7 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
             "QGISStyleAdder": self.tr("Creating style for a layer..."),
             "NGWRenameResource": self.tr("Renaming resource..."),
             "NGWUpdateVectorLayer": self.tr("Updating resource..."),
+            "NGWUpdateRasterLayer": self.tr("Updating resource..."),
             "NGWMissingResourceUpdater": self.tr("Downloading resources..."),
             "NgwCreateVectorLayersStubs": self.tr(
                 "Processing vector layers..."
@@ -576,6 +577,10 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
             "NgwSearch": self.tr("Searching resources..."),
         }
         self._cancelable_blocked_jobs = {
+            "QGISResourcesUploader",
+            "QGISProjectUploader",
+            "NGWUpdateVectorLayer",
+            "NGWUpdateRasterLayer",
             "NGWMissingResourceUpdater",
             "ResourcesDownloader",
             "NgwCreateVectorLayersStubs",
