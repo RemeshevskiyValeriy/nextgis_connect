@@ -42,9 +42,12 @@ from qgis.PyQt.QtWidgets import (
     QAction,
     QActionGroup,
     QComboBox,
+    QFrame,
     QMenu,
+    QScrollArea,
     QTabWidget,
     QToolButton,
+    QVBoxLayout,
     QWidget,
 )
 from qgis.utils import iface
@@ -233,7 +236,7 @@ class IdentificationResultsWidget(QgsDockWidget, ResultsDialogBase):
         self._highlight_handler.clear()
 
         if self._form is not None:
-            self.attributes_tab.layout().removeWidget(self._form)
+            self._attributes_form_layout.removeWidget(self._form)
             self._form.deleteLater()
             self._form = None
 
@@ -467,6 +470,17 @@ class IdentificationResultsWidget(QgsDockWidget, ResultsDialogBase):
         self.extra_button: QToolButton = self.extra_button
         self.tab_widget: QTabWidget = self.tab_widget
         self.attributes_tab: QWidget = self.attributes_tab
+        self.attributes_scroll_area = QScrollArea(self.attributes_tab)
+        self.attributes_scroll_area.setWidgetResizable(True)
+        self.attributes_scroll_area.setFrameShape(QFrame.Shape.NoFrame)
+        self._attributes_form_container = QWidget(self.attributes_scroll_area)
+        self._attributes_form_layout = QVBoxLayout(
+            self._attributes_form_container
+        )
+        self._attributes_form_layout.setContentsMargins(0, 0, 0, 0)
+        self._attributes_form_layout.setSpacing(0)
+        self.attributes_scroll_area.setWidget(self._attributes_form_container)
+        self.attributes_tab.layout().addWidget(self.attributes_scroll_area)
 
         self.features_combobox.currentIndexChanged.connect(
             self.__on_feature_changed
@@ -670,7 +684,7 @@ class IdentificationResultsWidget(QgsDockWidget, ResultsDialogBase):
         self._update_overlay_geometry()
 
     def _update_overlay_geometry(self) -> None:
-        widget = self.attributes_tab
+        widget = self.attributes_scroll_area
 
         if self.tab_widget.currentIndex() == IdentificationTab.ATTACHMENTS:
             widget = self._attachments_tab.view
@@ -839,7 +853,7 @@ class IdentificationResultsWidget(QgsDockWidget, ResultsDialogBase):
         self, layer: QgsVectorLayer, feature_id: QgsFeatureId
     ) -> None:
         if self._form is not None:
-            self.attributes_tab.layout().removeWidget(self._form)
+            self._attributes_form_layout.removeWidget(self._form)
             self._form.deleteLater()
             self._form = None
 
@@ -856,11 +870,11 @@ class IdentificationResultsWidget(QgsDockWidget, ResultsDialogBase):
         feature = layer.getFeature(feature_id)
         editor_context = QgsAttributeEditorContext()
         self._form = QgsAttributeForm(
-            layer, feature, editor_context, self.attributes_tab
+            layer, feature, editor_context, self._attributes_form_container
         )
         self._form.widgetValueChanged.connect(self.__on_value_changed)
 
-        self.attributes_tab.layout().addWidget(self._form)
+        self._attributes_form_layout.addWidget(self._form)
         self._form.show()
 
     def __on_value_changed(self) -> None:

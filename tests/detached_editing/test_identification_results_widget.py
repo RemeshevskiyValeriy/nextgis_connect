@@ -5,7 +5,7 @@ from unittest.mock import Mock
 import qgis.utils
 from qgis.core import QgsApplication
 from qgis.gui import QgisInterface
-from qgis.PyQt.QtWidgets import QTabWidget, QWidget
+from qgis.PyQt.QtWidgets import QScrollArea, QTabWidget, QWidget
 
 from nextgis_connect.legacy.detached_editing.identification.settings import (
     IdentificationSettings,
@@ -70,6 +70,15 @@ class TestIdentificationResultsWidget:
 
         widget = IdentificationResultsWidget(qgis_iface.mapCanvas())
         try:
+            assert isinstance(widget.attributes_scroll_area, QScrollArea)
+            assert widget.attributes_scroll_area.widgetResizable()
+            assert (
+                widget.attributes_tab.layout().indexOf(
+                    widget.attributes_scroll_area
+                )
+                >= 0
+            )
+
             widget.unload()
             widget.unload()
         finally:
