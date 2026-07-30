@@ -1,6 +1,10 @@
+from pathlib import Path
 from typing import Callable, cast
+from unittest.mock import Mock
 
+import qgis.utils
 from qgis.core import QgsApplication
+from qgis.gui import QgisInterface
 from qgis.PyQt.QtWidgets import QTabWidget, QWidget
 
 from nextgis_connect.legacy.detached_editing.identification.settings import (
@@ -12,6 +16,7 @@ from nextgis_connect.legacy.detached_editing.identification.types import (
 from nextgis_connect.legacy.detached_editing.identification.ui.identification_results_widget import (
     IdentificationResultsWidget,
 )
+from nextgis_connect.shared.constants import PACKAGE_NAME
 
 
 class _IdentificationWidgetHarness:
@@ -53,6 +58,28 @@ class _IdentificationWidgetHarness:
 
 
 class TestIdentificationResultsWidget:
+    def test_unload_is_idempotent_for_open_dock(
+        self, qgis_iface: QgisInterface
+    ) -> None:
+        plugin = Mock()
+        plugin.path = Path(__file__).resolve().parents[2] / (
+            "src/nextgis_connect"
+        )
+        previous_plugin = qgis.utils.plugins.get(PACKAGE_NAME)
+        qgis.utils.plugins[PACKAGE_NAME] = plugin
+
+        widget = IdentificationResultsWidget(qgis_iface.mapCanvas())
+        try:
+            widget.unload()
+            widget.unload()
+        finally:
+            widget.close()
+            widget.deleteLater()
+            if previous_plugin is None:
+                qgis.utils.plugins.pop(PACKAGE_NAME, None)
+            else:
+                qgis.utils.plugins[PACKAGE_NAME] = previous_plugin
+
     def test_feature_data_tabs_can_be_disabled_temporarily(
         self, qgis_app: QgsApplication
     ) -> None:

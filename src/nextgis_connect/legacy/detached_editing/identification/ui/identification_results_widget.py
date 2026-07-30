@@ -1,3 +1,4 @@
+from contextlib import suppress
 from pathlib import Path
 from typing import (
     TYPE_CHECKING,
@@ -114,6 +115,7 @@ class IdentificationResultsWidget(QgsDockWidget, ResultsDialogBase):
         self._editing_started_connection = None
         self._layer_state_changed_connection = None
         self._is_changing_tab_availability = False
+        self._is_unloaded = False
 
         self._tracked_layers: Dict[str, QgsVectorLayer] = {}
         self._feature_deleted_connections: Dict[str, object] = {}
@@ -128,7 +130,29 @@ class IdentificationResultsWidget(QgsDockWidget, ResultsDialogBase):
         self.__load_ui()
 
     def __del__(self) -> None:
+        with suppress(AttributeError, RuntimeError, TypeError):
+            self.unload()
+
+    def unload(self) -> None:
+        """Detach project and layer signal handlers before deleting dock."""
+        if self._is_unloaded:
+            return
+
+        self._is_unloaded = True
+
+        with suppress(RuntimeError, TypeError):
+            QgsProject.instance().layersWillBeRemoved.disconnect(
+                self.__on_layers_will_be_removed
+            )
+
+        if not hasattr(self, "_attachments_tab"):
+            return
+
         self.clear()
+        with suppress(RuntimeError, TypeError):
+            self.open_feature_in_nextgis_web.disconnect()
+        with suppress(RuntimeError, TypeError):
+            self.open_features_in_attributes_table.disconnect()
 
     def set_expression_context_scope(
         self, scope: QgsExpressionContextScope
