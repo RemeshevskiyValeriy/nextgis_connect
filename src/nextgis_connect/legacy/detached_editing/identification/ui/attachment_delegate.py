@@ -248,15 +248,15 @@ class AttachmentDelegate(WidgetItemDelegate):
 
         open_action = attachment_menu.addAction(
             material_icon("file_open"),
-            self.tr("Cache and Open"),
+            self.tr("Download and Open"),
             lambda index=index: self.open_attachment.emit(index),
         )
         open_action.setObjectName("openAttachmentAction")
 
-        # Cache action
+        # Download action
         cache_action = attachment_menu.addAction(
             material_icon("download_for_offline"),
-            self.tr("Cache"),
+            self.tr("Download"),
             lambda index=index: self.cache_attachment.emit(index),
         )
         cache_action.setObjectName("cacheAttachmentAction")
@@ -311,7 +311,7 @@ class AttachmentDelegate(WidgetItemDelegate):
         delete_action = menu.findChild(QAction, "deleteAttachmentAction")
 
         open_action.setText(
-            self.tr("Open") if is_cached else self.tr("Cache and Open")
+            self.tr("Open") if is_cached else self.tr("Download and Open")
         )
         cache_action.setVisible(not is_cached)
         edit_action.setEnabled(is_editable)

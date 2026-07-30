@@ -79,8 +79,8 @@ class AttachmentAddCommand(DetachedLayerBaseCommand):
 
         logger.debug(
             "Reverted attachment %s add command for feature %s",
-            self._attachment.fid,
             self._attachment.aid,
+            self._attachment.fid,
         )
 
     def redo(self) -> None:
@@ -100,8 +100,8 @@ class AttachmentAddCommand(DetachedLayerBaseCommand):
 
         logger.debug(
             "Added attachment %s command for feature %s",
-            self._attachment.fid,
             self._attachment.aid,
+            self._attachment.fid,
         )
 
     def id(self) -> int:

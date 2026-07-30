@@ -129,8 +129,8 @@
     </message>
     <message>
         <location filename="../legacy/detached_editing/identification/ui/attachments_tab.py" line="436"/>
-        <source>Cache all attachments</source>
-        <translation>Кэшировать все вложения</translation>
+        <source>Download all attachments</source>
+        <translation>Скачать все вложения</translation>
     </message>
     <message>
         <location filename="../legacy/detached_editing/identification/ui/attachments_tab.py" line="441"/>
@@ -4131,13 +4131,13 @@ NextGIS Web: {ngw_version}</translation>
     <name>_Layout</name>
     <message>
         <location filename="../legacy/detached_editing/identification/ui/attachment_delegate.py" line="313"/>
-        <source>Cache and Open</source>
-        <translation>Кэшировать и открыть</translation>
+        <source>Download and Open</source>
+        <translation>Скачать и открыть</translation>
     </message>
     <message>
         <location filename="../legacy/detached_editing/identification/ui/attachment_delegate.py" line="257"/>
-        <source>Cache</source>
-        <translation>Кэшировать</translation>
+        <source>Download</source>
+        <translation>Скачать</translation>
     </message>
     <message>
         <location filename="../legacy/detached_editing/identification/ui/attachment_delegate.py" line="265"/>
