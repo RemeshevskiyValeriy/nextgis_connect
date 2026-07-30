@@ -2001,13 +2001,19 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
 
         proxy_selected_indexes = self.resources_tree_view.selectedIndexes()
         selected_indexes = [
-            self.proxy_model.mapToSource(index)
-            for index in proxy_selected_indexes
+            self.proxy_model.mapToSource(selected_index)
+            for selected_index in proxy_selected_indexes
         ]
+        if index not in selected_indexes:
+            selected_indexes = [index]
+
         ngw_resources: List[NGWResource] = [
-            index.data(QNGWResourceItem.NGWResourceRole)
+            ngw_resource
             for index in selected_indexes
+            if (ngw_resource := index.data(QNGWResourceItem.NGWResourceRole))
         ]
+        if len(ngw_resources) == 0:
+            return
 
         getting_actions: List[QAction] = []
         setting_actions: List[QAction] = []
