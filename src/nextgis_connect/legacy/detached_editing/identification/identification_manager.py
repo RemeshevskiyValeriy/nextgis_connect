@@ -143,6 +143,8 @@ class IdentificationManager(QObject):
     def unload(self) -> None:
         """Unload identification manager and reset the map tool."""
         if self._results_dialog is not None:
+            self._results_dialog.unload()
+            self._iface.removeDockWidget(self._results_dialog)
             self._results_dialog.deleteLater()
             self._results_dialog = None  # type: ignore
 
@@ -191,9 +193,15 @@ class IdentificationManager(QObject):
                 Qt.DockWidgetArea.RightDockWidgetArea, self._results_dialog
             )
 
-        QTimer.singleShot(0, lambda: self._results_dialog.setUserVisible(True))
+        QTimer.singleShot(0, self._show_results_dialog)
 
         return self._results_dialog
+
+    def _show_results_dialog(self) -> None:
+        if self._results_dialog is None:
+            return
+
+        self._results_dialog.setUserVisible(True)
 
     def clear_results(self) -> None:
         self.results_dialog().clear()
