@@ -1,14 +1,16 @@
 import shutil
-from contextlib import closing, contextmanager, suppress
+from contextlib import closing, suppress
 from pathlib import Path
-from typing import Any, Iterator, List, Optional, Set, Tuple, Union, cast
+from typing import Any, Dict, List, Optional, Set, Tuple, Union, cast
 from zipfile import ZIP_DEFLATED, ZipFile
 
 from qgis.core import (
+    Qgis,
     QgsApplication,
     QgsExpression,
     QgsExpressionContext,
     QgsExpressionContextUtils,
+    QgsFeedback,
     QgsTask,
     QgsVectorLayer,
 )
@@ -16,15 +18,16 @@ from qgis.PyQt.QtCore import (
     QByteArray,
     QMimeDatabase,
     QModelIndex,
+    QSortFilterProxyModel,
     Qt,
     QUrl,
+    pyqtSignal,
     pyqtSlot,
 )
 from qgis.PyQt.QtGui import QDesktopServices, QImageReader, QPixmap
 from qgis.PyQt.QtWidgets import (
     QAction,
     QActionGroup,
-    QApplication,
     QFileDialog,
     QHBoxLayout,
     QListView,
@@ -38,7 +41,13 @@ from qgis.PyQt.QtWidgets import (
 from nextgis_connect.legacy.detached_editing.detached_layer import (
     DetachedLayer,
 )
+from nextgis_connect.legacy.detached_editing.identification.attachment_download import (
+    AttachmentBatchDownloadTask,
+    AttachmentDownloadContext,
+    AttachmentDownloadTask,
+)
 from nextgis_connect.legacy.detached_editing.identification.attachments_model import (
+    AttachmentLoadingKind,
     AttachmentsModel,
 )
 from nextgis_connect.legacy.detached_editing.identification.attachments_sort_proxy_model import (
@@ -206,6 +215,9 @@ class IdentificationAttachmentsTask(NgConnectTask):
 
 
 class AttachmentThumbnailsTask(NgConnectTask):
+    attachment_progress_changed = pyqtSignal(int, float)
+    attachment_finished = pyqtSignal(int)
+
     def __init__(
         self,
         attachments: List[AttachmentMetadata],
@@ -245,9 +257,14 @@ class AttachmentThumbnailsTask(NgConnectTask):
             if self.isCanceled():
                 return False
 
-            self._download_thumbnail(attachment)
-            if total:
-                self.setProgress(index / total * 100)
+            try:
+                self.attachment_progress_changed.emit(attachment.aid, 0.0)
+                self._download_thumbnail(attachment)
+                self.attachment_progress_changed.emit(attachment.aid, 100.0)
+                if total:
+                    self.setProgress(index / total * 100)
+            finally:
+                self.attachment_finished.emit(attachment.aid)
 
         return True
 
@@ -310,6 +327,13 @@ class AttachmentsTab(QWidget):
         self._loading_generation = 0
         self._attachments_task: Optional[IdentificationAttachmentsTask] = None
         self._thumbnails_task: Optional[AttachmentThumbnailsTask] = None
+        self._attachment_batch_download_task: Optional[
+            AttachmentBatchDownloadTask
+        ] = None
+        self._attachment_download_tasks: Dict[
+            AttachmentId, AttachmentDownloadTask
+        ] = {}
+        self._pending_open_attachment_ids: Set[AttachmentId] = set()
         self._failed_thumbnail_keys: Set[AttachmentThumbnailKey] = set()
         self._is_read_only = True
         self._clipboard = Clipboard()
@@ -327,6 +351,8 @@ class AttachmentsTab(QWidget):
     def set_feature(
         self, layer: QgsVectorLayer, feature_id: QgsFeatureId
     ) -> None:
+        self.close_editor()
+
         detached_layer = NgConnectInterface.instance().detached_editing.layer(
             layer
         )
@@ -335,6 +361,9 @@ class AttachmentsTab(QWidget):
             and self._feature_id == feature_id
             and self._attachments_model.is_initialized
         )
+        if not keep_existing:
+            self._attachment_download_tasks.clear()
+            self._pending_open_attachment_ids.clear()
 
         self._disconnect_attachment_signals()
         self._loading_generation += 1
@@ -383,10 +412,14 @@ class AttachmentsTab(QWidget):
         )
 
     def clear_feature(self) -> None:
+        self.close_editor()
         self._disconnect_attachment_signals()
         self._loading_generation += 1
         self._attachments_task = None
         self._thumbnails_task = None
+        self._attachment_batch_download_task = None
+        self._attachment_download_tasks.clear()
+        self._pending_open_attachment_ids.clear()
         self._view_wrapper.end_loading()
 
         self._detached_layer = None
@@ -406,6 +439,9 @@ class AttachmentsTab(QWidget):
         )
         self._view_wrapper.set_read_only(read_only)
 
+    def close_editor(self) -> None:
+        self._view_wrapper.view.close_current_editor()
+
     def _load_ui(self) -> None:
         layout = QVBoxLayout(self)
 
@@ -413,11 +449,14 @@ class AttachmentsTab(QWidget):
         self._view_wrapper = AttachmentsViewWrapper(self)
         self._view_wrapper.view.open_attachment.connect(self._open_attachment)
         self._view_wrapper.view.cache_attachment.connect(
-            self._cache_attachment
+            self._start_attachment_download
         )
         self._view_wrapper.view.save_as.connect(self._save_attachment_as)
         self._view_wrapper.view.show_in_folder.connect(self._show_in_folder)
         self._view_wrapper.view.copy_attachment.connect(self._copy_attachment)
+        self._view_wrapper.view.delete_attachment.connect(
+            self._remove_attachment
+        )
         self._view_wrapper.files_dropped.connect(self._add_files)
         layout.addWidget(self._view_wrapper)
 
@@ -459,7 +498,7 @@ class AttachmentsTab(QWidget):
             material_icon("download_for_offline"),
             self.tr("Cache all attachments"),
         )
-        cache_all_action.triggered.connect(self._cache_all_attachments)
+        cache_all_action.triggered.connect(self._start_cache_all_attachments)
         extra_menu.addAction(
             qgis_icon("mActionFileSaveAs.svg"),
             self.tr("Save all attachments as..."),
@@ -567,6 +606,7 @@ class AttachmentsTab(QWidget):
         self._connect_attachment_signals(task.detached_layer)
         self._add_button.setEnabled(not self._is_read_only)
         self._extra_button.setEnabled(True)
+        self._view_wrapper.end_loading()
         self._start_thumbnail_loading(task.attachments)
 
     def _start_thumbnail_loading(
@@ -574,7 +614,6 @@ class AttachmentsTab(QWidget):
     ) -> None:
         detached_layer = self._detached_layer
         if detached_layer is None:
-            self._view_wrapper.end_loading()
             return
 
         connection_id = detached_layer.container.metadata.connection_id
@@ -590,13 +629,14 @@ class AttachmentsTab(QWidget):
             )
         ]
         if not attachments_to_load:
-            self._view_wrapper.end_loading()
             return
 
-        self._view_wrapper.begin_loading(
-            self.tr("Loading previews"),
-            self.tr("Fetching image previews."),
-        )
+        for attachment in attachments_to_load:
+            self._attachments_model.set_attachment_loading_progress(
+                attachment.aid,
+                0.0,
+                AttachmentLoadingKind.PREVIEW,
+            )
 
         task = AttachmentThumbnailsTask(
             attachments_to_load,
@@ -604,6 +644,12 @@ class AttachmentsTab(QWidget):
             connection_id,
             resource_id,
             self._loading_generation,
+        )
+        task.attachment_progress_changed.connect(
+            self._on_attachment_thumbnail_progress_changed
+        )
+        task.attachment_finished.connect(
+            self._on_attachment_thumbnail_finished
         )
         task.taskCompleted.connect(self._on_thumbnails_task_finished)
         task.taskTerminated.connect(self._on_thumbnails_task_finished)
@@ -641,14 +687,59 @@ class AttachmentsTab(QWidget):
 
         self._thumbnails_task = None
         self._failed_thumbnail_keys.update(task.failed_thumbnail_keys)
+        self._clear_loading_progress_for_attachments(task.attachments)
 
         if (
             task.status() == QgsTask.TaskStatus.Complete
             and task.changed_attachment_ids
         ):
             self._attachments_model.update_cached_states()
+            self._view_wrapper.view.viewport().update()
 
-        self._view_wrapper.end_loading()
+    @pyqtSlot(int, float)
+    def _on_attachment_loading_progress_changed(
+        self,
+        attachment_id: AttachmentId,
+        progress: float,
+    ) -> None:
+        self._attachments_model.set_attachment_loading_progress(
+            attachment_id,
+            progress,
+        )
+
+    @pyqtSlot(int, float)
+    def _on_attachment_thumbnail_progress_changed(
+        self,
+        attachment_id: AttachmentId,
+        progress: float,
+    ) -> None:
+        self._attachments_model.set_attachment_loading_progress(
+            attachment_id,
+            progress,
+            AttachmentLoadingKind.PREVIEW,
+        )
+
+    @pyqtSlot(int)
+    def _on_attachment_thumbnail_finished(
+        self,
+        attachment_id: AttachmentId,
+    ) -> None:
+        self._attachments_model.set_attachment_loading_progress(
+            attachment_id,
+            None,
+        )
+        self._attachments_model.update_cached_states()
+        self._view_wrapper.view.viewport().update()
+
+    def _clear_loading_progress_for_attachments(
+        self,
+        attachments: List[AttachmentMetadata],
+    ) -> None:
+        for attachment in attachments:
+            self._attachments_model.set_attachment_loading_progress(
+                attachment.aid,
+                None,
+            )
 
     @pyqtSlot(QgsFeatureId, AttachmentId)
     def _on_attachment_added(
@@ -713,6 +804,10 @@ class AttachmentsTab(QWidget):
         if attachment is None:
             return
 
+        if not self._ensure_edit_mode_for_attachment_changes():
+            self._restore_attachment_from_layer(attachment_id)
+            return
+
         detached_layer.update_attachment(attachment)
 
     @pyqtSlot(AttachmentId)
@@ -737,13 +832,85 @@ class AttachmentsTab(QWidget):
 
     def _add_files(self, paths: List[str]) -> None:
         detached_layer = self._detached_layer
-        if detached_layer is None or self._feature_id is None:
+        if (
+            detached_layer is None
+            or self._feature_id is None
+            or not paths
+            or not self._ensure_edit_mode_for_attachment_changes()
+        ):
             return
 
         for file_path in paths:
             path = Path(file_path)
             logger.info(f"Added file: {path}")
             detached_layer.add_attachment(self._feature_id, path)
+
+    def _remove_attachment(self, index: QModelIndex) -> None:
+        if not index.isValid():
+            return
+
+        if not self._ensure_edit_mode_for_attachment_changes():
+            return
+
+        model = index.model()
+        source_index = index
+        source_model = model
+
+        if isinstance(model, QSortFilterProxyModel):
+            source_index = model.mapToSource(index)
+            source_model = model.sourceModel()
+
+        if source_model is None or not source_index.isValid():
+            return
+
+        source_model.removeRow(source_index.row(), source_index.parent())
+
+    def _ensure_edit_mode_for_attachment_changes(self) -> bool:
+        detached_layer = self._detached_layer
+        if detached_layer is None:
+            return False
+
+        layer = detached_layer.qgs_layer
+        if layer.isEditable():
+            return True
+
+        if layer.readOnly():
+            return False
+
+        if not layer.startEditing():
+            return False
+
+        NgConnectInterface.instance().notifier.display_message(
+            self.tr('Edit mode enabled automatically for layer "{}".').format(
+                layer.name()
+            ),
+            level=Qgis.MessageLevel.Info,
+            duration=5,
+        )
+        return True
+
+    def _restore_attachment_from_layer(
+        self, attachment_id: AttachmentId
+    ) -> None:
+        detached_layer = self._detached_layer
+        if detached_layer is None or self._feature_id is None:
+            return
+
+        try:
+            attachment = detached_layer.feature_attachment(
+                self._feature_id, attachment_id
+            )
+        except Exception:
+            logger.exception("Failed to restore attachment from layer")
+            return
+
+        self._attachments_model.attachment_updated.disconnect(
+            self._on_attachment_updated_in_model
+        )
+        self._attachments_model.update_attachment(attachment)
+        self._attachments_model.attachment_updated.connect(
+            self._on_attachment_updated_in_model
+        )
 
     @pyqtSlot(QAction)
     def _on_sort_by_changed(self, action: QAction) -> None:  # type: ignore[reportInvalidTypeForm]
@@ -812,11 +979,12 @@ class AttachmentsTab(QWidget):
         if not attachments_to_download:
             return
 
-        with self._attachment_download_overlay(
-            self.tr("Downloading attachments"),
-            self.tr("Fetching attachment files."),
-        ):
-            for attachment, attachment_path in attachments_to_download:
+        for attachment, attachment_path in attachments_to_download:
+            self._attachments_model.set_attachment_loading_progress(
+                attachment.aid,
+                0.0,
+            )
+            try:
                 self._download_attachment(
                     connection,
                     resource_id,
@@ -824,10 +992,55 @@ class AttachmentsTab(QWidget):
                     attachment,
                     attachment_path,
                 )
+            finally:
+                self._attachments_model.set_attachment_loading_progress(
+                    attachment.aid,
+                    None,
+                )
 
         self._attachments_model.update_cached_states()
 
         logger.debug("Downloaded")
+
+    def _start_cache_all_attachments(self) -> None:
+        if self._attachment_batch_download_task is not None:
+            return
+
+        contexts = []
+        for row in range(self._attachments_proxy.rowCount()):
+            index = self._attachments_proxy.index(row, 0)
+            context = self._attachment_download_context(index)
+            if context is None:
+                continue
+
+            attachment_id = context.attachment.aid
+            if self._is_attachment_download_in_progress(attachment_id):
+                continue
+
+            contexts.append(context)
+
+        if not contexts:
+            return
+
+        for context in contexts:
+            self._attachments_model.set_attachment_loading_progress(
+                context.attachment.aid,
+                0.0,
+            )
+
+        task = AttachmentBatchDownloadTask(contexts)
+        task.attachment_progress_changed.connect(
+            self._on_attachment_loading_progress_changed
+        )
+        task.attachment_finished.connect(
+            self._on_attachment_batch_item_finished
+        )
+        task.taskCompleted.connect(self._on_attachment_batch_task_finished)
+        task.taskTerminated.connect(self._on_attachment_batch_task_finished)
+        self._attachment_batch_download_task = task
+
+        NgConnectInterface.instance().task_manager.addTask(task)
+        logger.debug("Downloading attachments")
 
     def _open_attachment(self, index: QModelIndex) -> None:
         attachment: Optional[AttachmentMetadata] = index.data(
@@ -841,9 +1054,15 @@ class AttachmentsTab(QWidget):
             self._open_image_preview(index)
             return
 
-        self._cache_attachment(index)
+        if attachment.file_path is None:
+            return
 
-        QDesktopServices.openUrl(QUrl.fromLocalFile(str(attachment.file_path)))
+        if not attachment.file_path.exists():
+            if self._start_attachment_download(index):
+                self._pending_open_attachment_ids.add(attachment.aid)
+            return
+
+        self._open_attachment_path(attachment.file_path)
 
     def _open_image_preview(self, index: QModelIndex) -> None:
         items = self._image_preview_items()
@@ -897,7 +1116,7 @@ class AttachmentsTab(QWidget):
 
         return None
 
-    def _cache_image_preview_item(self, image_row: int) -> None:
+    def _cache_image_preview_item(self, image_row: int) -> bool:
         current_image_row = 0
         for row in range(self._attachments_proxy.rowCount()):
             index = self._attachments_proxy.index(row, 0)
@@ -908,11 +1127,182 @@ class AttachmentsTab(QWidget):
                 continue
 
             if current_image_row == image_row:
-                self._cache_attachment(index)
+                if (
+                    attachment.file_path is not None
+                    and attachment.file_path.exists()
+                ):
+                    return True
+
+                is_started = self._start_attachment_download(index)
                 self._view_wrapper.view.viewport().update()
-                return
+                return is_started
 
             current_image_row += 1
+
+        return False
+
+    def _start_attachment_download(self, index: QModelIndex) -> bool:
+        context = self._attachment_download_context(index)
+        if context is None:
+            return False
+
+        attachment_id = context.attachment.aid
+        if self._is_attachment_download_in_progress(attachment_id):
+            return True
+
+        task = AttachmentDownloadTask(context)
+        task.progressChanged.connect(
+            lambda progress, aid=attachment_id: (
+                self._on_attachment_loading_progress_changed(aid, progress)
+            )
+        )
+        task.taskCompleted.connect(self._on_attachment_download_task_finished)
+        task.taskTerminated.connect(self._on_attachment_download_task_finished)
+        self._attachment_download_tasks[attachment_id] = task
+        self._attachments_model.set_attachment_loading_progress(
+            attachment_id,
+            0.0,
+        )
+
+        NgConnectInterface.instance().task_manager.addTask(task)
+        return True
+
+    def _is_attachment_download_in_progress(
+        self,
+        attachment_id: AttachmentId,
+    ) -> bool:
+        if attachment_id in self._attachment_download_tasks:
+            return True
+
+        batch_task = self._attachment_batch_download_task
+        return (
+            batch_task is not None
+            and attachment_id in batch_task.attachment_ids
+        )
+
+    def _attachment_download_context(
+        self, index: QModelIndex
+    ) -> Optional[AttachmentDownloadContext]:
+        attachment: Optional[AttachmentMetadata] = index.data(
+            AttachmentsModel.Roles.ATTACHMENT
+        )
+        detached_layer = self._detached_layer
+        if detached_layer is None or self._feature_id is None:
+            return None
+
+        if (
+            attachment is None
+            or attachment.file_path is None
+            or attachment.file_path.exists()
+            or attachment.ngw_aid is None
+        ):
+            return None
+
+        connection_id = detached_layer.container.metadata.connection_id
+        ngw_connection = NgwConnectionsManager().connection(connection_id)
+        assert ngw_connection is not None
+
+        with closing(
+            make_connection(detached_layer.container.path)
+        ) as connection, closing(connection.cursor()) as cursor:
+            cursor.execute(
+                """
+                SELECT features.ngw_fid
+                FROM ngw_features_attachments AS attachments
+                JOIN ngw_features_metadata AS features
+                ON attachments.fid = features.fid
+                WHERE attachments.fid = ? AND attachments.aid = ?;
+                """,
+                (self._feature_id, attachment.aid),
+            )
+            row = cursor.fetchone()
+            if row is None:
+                return None
+
+            feature_ngw_fid = row[0]
+            if feature_ngw_fid is None:
+                return None
+
+        return AttachmentDownloadContext(
+            connection_id=ngw_connection.id,
+            connection_url=ngw_connection.url,
+            connection_domain_uuid=ngw_connection.domain_uuid,
+            resource_id=detached_layer.container.metadata.resource_id,
+            feature_ngw_fid=feature_ngw_fid,
+            attachment=attachment,
+            attachment_path=attachment.file_path,
+        )
+
+    @pyqtSlot()
+    def _on_attachment_download_task_finished(self) -> None:
+        task = self.sender()
+        if not isinstance(task, AttachmentDownloadTask):
+            return
+
+        if self._attachment_download_tasks.get(task.attachment_id) is not task:
+            return
+
+        self._attachment_download_tasks.pop(task.attachment_id, None)
+        self._attachments_model.set_attachment_loading_progress(
+            task.attachment_id,
+            None,
+        )
+
+        if task.status() != QgsTask.TaskStatus.Complete:
+            self._pending_open_attachment_ids.discard(task.attachment_id)
+            return
+
+        self._attachments_model.update_cached_states()
+        self._view_wrapper.view.viewport().update()
+        self._open_pending_attachment(task.attachment_id)
+
+    def _open_pending_attachment(self, attachment_id: AttachmentId) -> None:
+        if attachment_id not in self._pending_open_attachment_ids:
+            return
+
+        self._pending_open_attachment_ids.remove(attachment_id)
+        attachment = self._attachments_model.attachment_by_id(attachment_id)
+        if attachment is None or attachment.file_path is None:
+            return
+
+        if not attachment.file_path.exists():
+            return
+
+        self._open_attachment_path(attachment.file_path)
+
+    def _open_attachment_path(self, path: Path) -> None:
+        QDesktopServices.openUrl(QUrl.fromLocalFile(str(path)))
+
+    @pyqtSlot(int)
+    def _on_attachment_batch_item_finished(
+        self,
+        attachment_id: AttachmentId,
+    ) -> None:
+        self._attachments_model.set_attachment_loading_progress(
+            attachment_id,
+            None,
+        )
+        self._attachments_model.update_cached_states()
+        self._view_wrapper.view.viewport().update()
+
+    @pyqtSlot()
+    def _on_attachment_batch_task_finished(self) -> None:
+        task = self.sender()
+        if not isinstance(task, AttachmentBatchDownloadTask):
+            return
+
+        if task is not self._attachment_batch_download_task:
+            return
+
+        self._attachment_batch_download_task = None
+        for attachment_id in task.attachment_ids:
+            self._attachments_model.set_attachment_loading_progress(
+                attachment_id,
+                None,
+            )
+
+        self._attachments_model.update_cached_states()
+        self._view_wrapper.view.viewport().update()
 
     def _show_in_folder(self, index: QModelIndex) -> None:
         attachment: Optional[AttachmentMetadata] = index.data(
@@ -1008,7 +1398,11 @@ class AttachmentsTab(QWidget):
         if detached_layer is None or self._feature_id is None:
             return
 
-        if not attachment or attachment.file_path.exists():
+        if (
+            not attachment
+            or attachment.file_path is None
+            or attachment.file_path.exists()
+        ):
             return
 
         connection_id = detached_layer.container.metadata.connection_id
@@ -1032,10 +1426,11 @@ class AttachmentsTab(QWidget):
             ngw_fid, _ngw_aid = rows[0]
 
         assert attachment.file_path is not None
-        with self._attachment_download_overlay(
-            self.tr("Downloading attachment"),
-            self.tr("Fetching attachment file."),
-        ):
+        self._attachments_model.set_attachment_loading_progress(
+            attachment.aid,
+            0.0,
+        )
+        try:
             self._download_attachment(
                 ngw_connection,
                 detached_layer.container.metadata.resource_id,
@@ -1043,46 +1438,36 @@ class AttachmentsTab(QWidget):
                 attachment,
                 attachment.file_path,
             )
-        self._attachments_model.update_cached_states()
-
-    @contextmanager
-    def _attachment_download_overlay(
-        self, title: str, message: str
-    ) -> Iterator[None]:
-        self._view_wrapper.begin_loading(title, message, delay_ms=0)
-        QApplication.processEvents()
-        try:
-            yield
         finally:
-            self._view_wrapper.end_loading()
+            self._attachments_model.set_attachment_loading_progress(
+                attachment.aid,
+                None,
+            )
+        self._attachments_model.update_cached_states()
 
     def _download_attachment(
         self,
         connection: NgwConnection,
         resource_id: int,
-        feature_ngw_fid: str,
+        feature_ngw_fid: Union[str, int],
         attachment: AttachmentMetadata,
         attachment_path: Path,
     ) -> None:
-        assert attachment.ngw_aid is not None
-        url = (
-            connection.url + f"/api/resource/{resource_id}"
-            f"/feature/{feature_ngw_fid}"
-            f"/attachment/{attachment.ngw_aid}/download"
+        feedback = QgsFeedback()
+        feedback.progressChanged.connect(
+            lambda progress, aid=attachment.aid: (
+                self._on_attachment_loading_progress_changed(aid, progress)
+            )
         )
-
-        attachment_path.parent.mkdir(parents=True, exist_ok=True)
-
-        ngw_connection = QgsNgwConnection(connection.id)
-        ngw_connection.download(url, str(attachment_path))
-        DetachedStorageServiceFactory.create().register_attachment_file(
-            connection.domain_uuid,
-            resource_id,
-            attachment.aid,
-            file_name=attachment.name,
-            mime_type=attachment.mime_type,
-            fileobj=attachment.fileobj,
-            feature_local_id=int(attachment.fid),
-            feature_ngw_fid=attachment.ngw_fid,
-            ngw_aid=attachment.ngw_aid,
+        AttachmentDownloadTask.download(
+            AttachmentDownloadContext(
+                connection_id=connection.id,
+                connection_url=connection.url,
+                connection_domain_uuid=connection.domain_uuid,
+                resource_id=resource_id,
+                feature_ngw_fid=feature_ngw_fid,
+                attachment=attachment,
+                attachment_path=attachment_path,
+            ),
+            feedback=feedback,
         )

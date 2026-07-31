@@ -1,5 +1,6 @@
+import json
 from abc import ABC, abstractmethod
-from typing import Any, Dict, Sequence, Union, cast
+from typing import Any, Dict, List, Optional, Sequence, Set, Tuple, Union, cast
 
 from nextgis_connect.legacy.detached_editing.container.editing.container_sessions import (
     ContainerReadWriteSession,
@@ -15,12 +16,21 @@ from nextgis_connect.legacy.detached_editing.sync.common.changes import (
     FeatureRestoration,
     FeatureUpdate,
 )
+from nextgis_connect.legacy.detached_editing.sync.common.serialization import (
+    deserialize_value,
+)
 from nextgis_connect.legacy.detached_editing.utils import (
     AttachmentMetadata,
     DetachedContainerContext,
     FeatureMetadata,
 )
-from nextgis_connect.shared.types import FeatureId, NgwFeatureId
+from nextgis_connect.shared.types import (
+    AttachmentId,
+    FeatureId,
+    FileObjectId,
+    NgwFeatureId,
+    UnsetType,
+)
 
 
 class ChangesApplier(ABC):
@@ -142,7 +152,16 @@ class ChangesApplier(ABC):
         removed_fids = ",".join(
             str(deletion.fid) for deletion in deletion_changes
         )
+        attachment_cache_refs: List[
+            Tuple[AttachmentId, Optional[FileObjectId]]
+        ] = []
         with ContainerReadWriteSession(self._context) as cursor:
+            attachment_cache_refs = (
+                self._deleted_feature_attachment_cache_refs(
+                    cursor,
+                    deletion_changes,
+                )
+            )
             cursor.executescript(
                 f"""
                 DELETE FROM ngw_removed_features
@@ -150,6 +169,100 @@ class ChangesApplier(ABC):
                 DELETE FROM ngw_features_metadata
                     WHERE fid IN ({removed_fids});
                 """
+            )
+
+        self._remove_attachment_cache_refs(attachment_cache_refs)
+
+    def _deleted_feature_attachment_cache_refs(
+        self,
+        cursor: Any,
+        deletion_changes: Sequence[FeatureDeletion],
+    ) -> List[Tuple[AttachmentId, Optional[FileObjectId]]]:
+        """Return attachment cache refs from deleted feature backups."""
+        placeholders = ", ".join("?" for _ in deletion_changes)
+        removed_fids = tuple(deletion.fid for deletion in deletion_changes)
+        rows = cursor.execute(
+            f"""
+            SELECT backup
+            FROM ngw_removed_features
+            WHERE fid IN ({placeholders});
+            """,  # nosec B608
+            removed_fids,
+        )
+
+        refs: Set[Tuple[AttachmentId, Optional[FileObjectId]]] = set()
+        for (backup_data,) in rows:
+            refs.update(
+                self._attachment_cache_refs_from_feature_backup(backup_data)
+            )
+
+        return sorted(
+            refs,
+            key=lambda ref: (ref[0], -1 if ref[1] is None else ref[1]),
+        )
+
+    def _attachment_cache_refs_from_feature_backup(
+        self,
+        backup_data: str,
+    ) -> Set[Tuple[AttachmentId, Optional[FileObjectId]]]:
+        """Extract attachment cache refs from one feature deletion backup."""
+        backup = cast(Dict[str, Any], json.loads(backup_data))
+        refs: Set[Tuple[AttachmentId, Optional[FileObjectId]]] = set()
+        for state_key in ("before_deletion", "after_sync"):
+            state = backup.get(state_key)
+            if not isinstance(state, dict):
+                continue
+
+            attachments = state.get("attachments")
+            if not isinstance(attachments, list):
+                continue
+
+            for attachment in attachments:
+                if not isinstance(attachment, dict):
+                    continue
+
+                attachment_id = attachment.get("aid")
+                if attachment_id is None:
+                    continue
+
+                refs.add(
+                    (
+                        int(attachment_id),
+                        self._attachment_fileobj_from_backup(attachment),
+                    )
+                )
+
+        return refs
+
+    def _attachment_fileobj_from_backup(
+        self,
+        attachment: Dict[str, Any],
+    ) -> Optional[FileObjectId]:
+        """Return attachment fileobj from a serialized backup record."""
+        value = attachment.get("fileobj")
+        if value is None:
+            return None
+
+        fileobj = deserialize_value(value)
+        if fileobj is None or isinstance(fileobj, UnsetType):
+            return None
+
+        return int(fileobj)
+
+    def _remove_attachment_cache_refs(
+        self,
+        attachment_cache_refs: Sequence[
+            Tuple[AttachmentId, Optional[FileObjectId]]
+        ],
+    ) -> None:
+        """Remove cached files for attachments that no longer exist."""
+        storage_service = DetachedStorageServiceFactory.create()
+        for attachment_id, fileobj in attachment_cache_refs:
+            storage_service.remove_attachment_cache(
+                self._context.metadata.instance_id,
+                self._context.metadata.resource_id,
+                attachment_id,
+                fileobj=fileobj,
             )
 
     def _process_restored_features(

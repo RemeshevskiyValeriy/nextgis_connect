@@ -25,11 +25,14 @@ from qgis.PyQt.QtCore import (
     QVariant,
     pyqtSignal,
 )
-from qgis.PyQt.QtGui import QBrush, QFont
+from qgis.PyQt.QtGui import QBrush, QColor, QFont, QPalette
 
 from nextgis_connect.features.search.domain.query import (
     NgwSearchQueryBuilder,
     SearchQueryParser,
+)
+from nextgis_connect.features.synchronization.infrastructure.storage.cache_maintenance_service import (
+    CacheMaintenanceService,
 )
 from nextgis_connect.legacy.detached_editing.container.container_factory import (
     DetachedContainerFactory,
@@ -93,6 +96,7 @@ from nextgis_connect.platform.qgis.errors import (
 )
 from nextgis_connect.plugin.plugin_interface import NgConnectInterface
 from nextgis_connect.ui_kit.graphics import (
+    LoadingIndicatorRenderer,
     NextgisDecorator,
     mix_colors,
 )
@@ -103,6 +107,46 @@ from nextgis_connect.ui_kit.widgets.loading_indicator import (
 from .item import QModelItem, QNGWResourceItem
 
 __all__ = ["QNGWResourceTreeModel"]
+
+
+class ResourceTreeLoadingIndicatorRenderer(LoadingIndicatorRenderer):
+    PEN_WIDTH = 2.4
+    TRACK_ALPHA = 210
+    TRACK_FADE = 0.50
+
+    def __init__(self) -> None:
+        super().__init__(pen_width=self.PEN_WIDTH)
+
+    def _resolved_arc_color(
+        self,
+        palette: QPalette,
+        *,
+        selected: bool,
+    ) -> QColor:
+        if selected:
+            return palette.color(QPalette.ColorRole.HighlightedText)
+
+        return NextgisDecorator.system_text_color(palette)
+
+    def _resolved_track_color(
+        self,
+        palette: QPalette,
+        *,
+        selected: bool,
+    ) -> QColor:
+        background_color = (
+            palette.color(QPalette.ColorRole.Highlight)
+            if selected
+            else NextgisDecorator.system_base_color(palette)
+        )
+        color = mix_colors(
+            self._resolved_arc_color(palette, selected=selected),
+            background_color,
+            self.TRACK_FADE,
+        )
+        color.setAlpha(self.TRACK_ALPHA)
+
+        return color
 
 
 class NGWResourceModelResponse(QObject):
@@ -628,6 +672,7 @@ class QNGWResourceTreeModelBase(QAbstractItemModel):
         self.__indexes_locked_by_job_errors = {}
         self.__loading_icon = LoadingIndicatorIconAnimator(
             QSize(16, 16),
+            renderer=ResourceTreeLoadingIndicatorRenderer(),
             parent=self,
         )
         self.__loading_icon.frame_changed.connect(
@@ -1193,6 +1238,8 @@ class QNGWResourceTreeModelBase(QAbstractItemModel):
             for ngw_resource in job_result.deleted_resources
         }
         for ngw_resource in job_result.deleted_resources:
+            self._clear_deleted_resource_cache(ngw_resource)
+
             if ngw_resource.parent_id in deleted_resource_ids:
                 continue
 
@@ -1226,6 +1273,25 @@ class QNGWResourceTreeModelBase(QAbstractItemModel):
 
         self.__not_permitted_resources.update(
             job_result.not_permitted_resources
+        )
+
+    def _clear_deleted_resource_cache(self, ngw_resource: NGWResource) -> None:
+        connection = NgwConnectionsManager().connection(
+            ngw_resource.connection_id
+        )
+        if connection is None:
+            return
+
+        is_cleared = CacheMaintenanceService().clear_resource_cache(
+            connection,
+            ngw_resource.resource_id,
+        )
+        if is_cleared:
+            return
+
+        logger.warning(
+            "Could not clear cache for deleted resource id=%s",
+            ngw_resource.resource_id,
         )
 
     @property

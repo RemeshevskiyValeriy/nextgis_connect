@@ -1,5 +1,5 @@
-from qgis.PyQt.QtCore import QSize
-from qgis.PyQt.QtGui import QColor, QIcon, QPalette
+from qgis.PyQt.QtCore import QRectF, QSize, Qt
+from qgis.PyQt.QtGui import QColor, QPalette
 
 from nextgis_connect.ui_kit.buttons import CancelButton
 from nextgis_connect.ui_kit.graphics.loading_indicator import (
@@ -23,6 +23,34 @@ def _visible_pixel_count(pixmap) -> int:
     return count
 
 
+class _PainterProbe:
+    def __init__(self) -> None:
+        self.arc_calls = []
+        self.ellipse_calls = []
+        self.pen_cap_styles = []
+
+    def save(self) -> None:
+        pass
+
+    def restore(self) -> None:
+        pass
+
+    def setRenderHint(self, _hint, _enabled) -> None:
+        pass
+
+    def setPen(self, pen) -> None:
+        self.pen_cap_styles.append(pen.capStyle())
+
+    def setBrush(self, _brush) -> None:
+        pass
+
+    def drawArc(self, rect, start_angle, span_angle) -> None:
+        self.arc_calls.append((rect, start_angle, span_angle))
+
+    def drawEllipse(self, rect) -> None:
+        self.ellipse_calls.append(rect)
+
+
 def test_loading_indicator_renderer_draws_visible_frame(qgis_app) -> None:
     del qgis_app
 
@@ -35,6 +63,129 @@ def test_loading_indicator_renderer_draws_visible_frame(qgis_app) -> None:
     assert _visible_pixel_count(pixmap) > 0
 
 
+def test_loading_indicator_renderer_draws_track_as_arc() -> None:
+    painter = _PainterProbe()
+
+    LoadingIndicatorRenderer().paint(
+        painter,
+        QRectF(0.0, 0.0, 18.0, 18.0),
+        palette=QPalette(),
+        angle=0.0,
+    )
+
+    assert len(painter.arc_calls) == 2
+    assert painter.ellipse_calls == []
+    assert painter.pen_cap_styles == [
+        Qt.PenCapStyle.FlatCap,
+        Qt.PenCapStyle.RoundCap,
+    ]
+    arc_start_angle = round(
+        LoadingIndicatorRenderer._ARC_START_DEGREES
+        * LoadingIndicatorRenderer._QT_ANGLE_UNIT
+    )
+    arc_span_angle = round(
+        LoadingIndicatorRenderer.ARC_DEGREES
+        * LoadingIndicatorRenderer._QT_ANGLE_UNIT
+    )
+    track_start_angle = arc_start_angle + arc_span_angle
+    track_span_angle = (
+        round(
+            LoadingIndicatorRenderer.TRACK_DEGREES
+            * LoadingIndicatorRenderer._QT_ANGLE_UNIT
+        )
+        - arc_span_angle
+    )
+    overlap_span_angle = round(
+        LoadingIndicatorRenderer.ARC_OVERLAP_DEGREES
+        * LoadingIndicatorRenderer._QT_ANGLE_UNIT
+    )
+    visible_arc_start_angle = arc_start_angle
+    visible_arc_span_angle = arc_span_angle + overlap_span_angle
+
+    assert painter.arc_calls[0][1] == track_start_angle
+    assert painter.arc_calls[0][2] == track_span_angle
+    assert painter.arc_calls[1][1] == visible_arc_start_angle
+    assert painter.arc_calls[1][2] == visible_arc_span_angle
+
+
+def test_loading_indicator_renderer_omits_track_at_full_progress() -> None:
+    painter = _PainterProbe()
+
+    LoadingIndicatorRenderer().paint(
+        painter,
+        QRectF(0.0, 0.0, 18.0, 18.0),
+        palette=QPalette(),
+        angle=0.0,
+        arc_degrees=360.0,
+    )
+
+    assert len(painter.arc_calls) == 1
+    assert painter.ellipse_calls == []
+    assert painter.arc_calls[0][2] == (
+        -LoadingIndicatorRenderer.TRACK_DEGREES
+        * LoadingIndicatorRenderer._QT_ANGLE_UNIT
+    )
+
+
+def test_loading_indicator_renderer_grows_progress_clockwise() -> None:
+    painter = _PainterProbe()
+
+    LoadingIndicatorRenderer().paint(
+        painter,
+        QRectF(0.0, 0.0, 18.0, 18.0),
+        palette=QPalette(),
+        angle=0.0,
+        arc_degrees=180.0,
+    )
+
+    arc_start_angle = round(
+        LoadingIndicatorRenderer._ARC_START_DEGREES
+        * LoadingIndicatorRenderer._QT_ANGLE_UNIT
+    )
+    arc_span_angle = round(180.0 * LoadingIndicatorRenderer._QT_ANGLE_UNIT)
+    track_span_angle = (
+        round(
+            LoadingIndicatorRenderer.TRACK_DEGREES
+            * LoadingIndicatorRenderer._QT_ANGLE_UNIT
+        )
+        - arc_span_angle
+    )
+    overlap_span_angle = round(
+        LoadingIndicatorRenderer.ARC_OVERLAP_DEGREES
+        * LoadingIndicatorRenderer._QT_ANGLE_UNIT
+    )
+
+    assert len(painter.arc_calls) == 2
+    assert painter.arc_calls[0][1] == arc_start_angle - arc_span_angle
+    assert painter.arc_calls[0][2] == -track_span_angle
+    assert painter.arc_calls[1][1] == arc_start_angle
+    assert painter.arc_calls[1][2] == -(arc_span_angle + overlap_span_angle)
+
+
+def test_loading_indicator_renderer_limits_overlap_to_track_size() -> None:
+    painter = _PainterProbe()
+
+    LoadingIndicatorRenderer().paint(
+        painter,
+        QRectF(0.0, 0.0, 18.0, 18.0),
+        palette=QPalette(),
+        angle=0.0,
+        arc_degrees=358.0,
+    )
+
+    full_span_angle = round(
+        LoadingIndicatorRenderer.TRACK_DEGREES
+        * LoadingIndicatorRenderer._QT_ANGLE_UNIT
+    )
+    arc_span_angle = round(358.0 * LoadingIndicatorRenderer._QT_ANGLE_UNIT)
+    track_span_angle = full_span_angle - arc_span_angle
+    overlap_span_angle = track_span_angle // 2
+
+    assert len(painter.arc_calls) == 2
+    assert painter.arc_calls[0][2] == -track_span_angle
+    assert painter.arc_calls[1][2] == (-(arc_span_angle + overlap_span_angle))
+
+
 def test_loading_indicator_renderer_rotates_arc(qgis_app) -> None:
     del qgis_app
 
@@ -45,7 +196,7 @@ def test_loading_indicator_renderer_rotates_arc(qgis_app) -> None:
     assert first_frame != second_frame
 
 
-def test_loading_indicator_renderer_uses_selected_icon_colors(
+def test_loading_indicator_renderer_uses_theme_accent_without_selection_colors(
     qgis_app,
 ) -> None:
     del qgis_app
@@ -53,26 +204,31 @@ def test_loading_indicator_renderer_uses_selected_icon_colors(
     palette = QPalette()
     palette.setColor(QPalette.ColorRole.Window, QColor("#ffffff"))
     palette.setColor(QPalette.ColorRole.WindowText, QColor("#111111"))
-    palette.setColor(QPalette.ColorRole.Highlight, QColor("#0c65af"))
-    palette.setColor(QPalette.ColorRole.HighlightedText, QColor("#ffffff"))
+    palette.setColor(QPalette.ColorRole.Highlight, QColor("#ff5500"))
+    palette.setColor(QPalette.ColorRole.HighlightedText, QColor("#00ff55"))
 
     renderer = LoadingIndicatorRenderer()
-    icon = renderer.icon(QSize(18, 18), palette=palette)
-    normal_frame = icon.pixmap(
+    normal_frame = renderer.pixmap(
         QSize(18, 18),
-        QIcon.Mode.Normal,
-        QIcon.State.Off,
+        palette=palette,
+        selected=False,
     ).toImage()
-    selected_frame = icon.pixmap(
+    selected_frame = renderer.pixmap(
         QSize(18, 18),
-        QIcon.Mode.Selected,
-        QIcon.State.Off,
+        palette=palette,
+        selected=True,
     ).toImage()
 
     assert renderer._resolved_arc_color(
+        palette, selected=False
+    ) == palette.color(QPalette.ColorRole.Highlight)
+    assert renderer._resolved_arc_color(
         palette, selected=True
-    ) == palette.color(QPalette.ColorRole.HighlightedText)
-    assert normal_frame != selected_frame
+    ) == palette.color(QPalette.ColorRole.Highlight)
+    assert renderer._resolved_track_color(
+        palette, selected=False
+    ) == renderer._resolved_track_color(palette, selected=True)
+    assert normal_frame == selected_frame
 
 
 def test_loading_indicator_icon_animator_tracks_state(qgis_app) -> None:

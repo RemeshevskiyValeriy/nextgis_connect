@@ -1,4 +1,6 @@
+import os
 import shutil
+import time
 from contextlib import closing
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -332,6 +334,97 @@ class TestCacheMaintenanceService(NgConnectTestCase):
         self.assertEqual(blob_entry.state, StorageEntryState.COMMITTED)
         self.assertEqual(blob_entry.protection, StorageEntryProtection.NONE)
 
+    def test_cached_attachment_path_uses_indexed_blob_path(self) -> None:
+        resource = self.resource(TestData.Points)
+        connection = self.connection(TestConnection.SandboxGuest)
+        attachment_id = 12
+        fileobj = 345
+        blob_path = self.storage_service.attachment_path(
+            connection.domain_uuid,
+            resource.resource_id,
+            attachment_id,
+            file_name="photo.jpg",
+            mime_type="image/jpeg",
+            fileobj=fileobj,
+        )
+        changed_canonical_path = self.storage_service.attachment_path(
+            connection.domain_uuid,
+            resource.resource_id,
+            attachment_id,
+            file_name="photo.png",
+            mime_type="image/png",
+            fileobj=fileobj,
+        )
+        blob_path.parent.mkdir(parents=True, exist_ok=True)
+        blob_path.write_bytes(b"blob")
+        self.storage_service.register_attachment_file(
+            connection.domain_uuid,
+            resource.resource_id,
+            attachment_id,
+            file_name="photo.jpg",
+            mime_type="image/jpeg",
+            fileobj=fileobj,
+            feature_local_id=1,
+            feature_ngw_fid=101,
+            ngw_aid=attachment_id,
+        )
+
+        fresh_storage_service = DetachedStorageService(self.cache_directory)
+        cached_path = fresh_storage_service.cached_attachment_path(
+            connection.domain_uuid,
+            resource.resource_id,
+            attachment_id,
+            file_name="photo.png",
+            mime_type="image/png",
+            fileobj=fileobj,
+            feature_local_id=1,
+            feature_ngw_fid=101,
+            ngw_aid=attachment_id,
+        )
+
+        self.assertNotEqual(changed_canonical_path, blob_path)
+        self.assertEqual(cached_path, blob_path)
+        self.assertTrue(cached_path.exists())
+
+    def test_cached_attachment_thumbnail_path_uses_indexed_preview(
+        self,
+    ) -> None:
+        resource = self.resource(TestData.Points)
+        connection = self.connection(TestConnection.SandboxGuest)
+        attachment_id = 12
+        fileobj = 345
+        thumbnail_path = self.storage_service.attachment_thumbnail_path(
+            connection.domain_uuid,
+            resource.resource_id,
+            attachment_id,
+            fileobj=fileobj,
+        )
+        thumbnail_path.parent.mkdir(parents=True, exist_ok=True)
+        thumbnail_path.write_bytes(b"preview")
+        self.storage_service.register_attachment_thumbnail(
+            connection.domain_uuid,
+            resource.resource_id,
+            attachment_id,
+            fileobj=fileobj,
+            feature_local_id=1,
+            feature_ngw_fid=101,
+            ngw_aid=attachment_id,
+        )
+
+        fresh_storage_service = DetachedStorageService(self.cache_directory)
+        cached_path = fresh_storage_service.cached_attachment_thumbnail_path(
+            connection.domain_uuid,
+            resource.resource_id,
+            attachment_id,
+            fileobj=fileobj,
+            feature_local_id=1,
+            feature_ngw_fid=101,
+            ngw_aid=attachment_id,
+        )
+
+        self.assertEqual(cached_path, thumbnail_path)
+        self.assertTrue(cached_path.exists())
+
     def test_move_attachment_cache_to_fileobj_reindexes_file(self) -> None:
         resource = self.resource(TestData.Points)
         connection = self.connection(TestConnection.SandboxGuest)
@@ -427,6 +520,22 @@ class TestCacheMaintenanceService(NgConnectTestCase):
         self.assertEqual(self.cache_service.cache_size, 1)
         cache_file_path.unlink()
         self.assertEqual(self.cache_service.cache_size, 0)
+
+    def test_purge_cache_removes_stale_download_temporary_file(self) -> None:
+        self.cache_service.cache_duration = -1
+        self.cache_service.cache_max_size = -1
+        temporary_path = self.cache_directory / "attachment.download"
+        temporary_path.write_bytes(b"partial")
+        old_time = (
+            time.time()
+            - CacheMaintenanceService.TEMPORARY_CACHE_MAX_AGE_SECONDS
+            - 1
+        )
+        os.utime(temporary_path, (old_time, old_time))
+
+        self.assertTrue(self.cache_service.purge_cache())
+
+        self.assertFalse(temporary_path.exists())
 
     def test_clear_cache_task_returns_cache_service_result(self) -> None:
         with patch(

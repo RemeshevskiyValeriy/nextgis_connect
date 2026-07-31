@@ -1,5 +1,6 @@
+import time
 from dataclasses import dataclass
-from typing import List, Optional, Tuple, cast
+from typing import Dict, List, Optional, Set, Tuple, cast
 
 from qgis.core import QgsApplication
 from qgis.PyQt.QtCore import (
@@ -15,6 +16,7 @@ from qgis.PyQt.QtCore import (
     pyqtSignal,
 )
 from qgis.PyQt.QtGui import (
+    QColor,
     QFont,
     QFontMetrics,
     QIcon,
@@ -34,6 +36,12 @@ from qgis.PyQt.QtWidgets import (
     QWidget,
 )
 
+from nextgis_connect.features.synchronization.presentation.attachments.attachment_display_state import (
+    AttachmentDisplayState,
+)
+from nextgis_connect.features.synchronization.presentation.attachments.attachment_icon_painter import (
+    AttachmentIconPainter,
+)
 from nextgis_connect.legacy.detached_editing.identification.attachments_model import (
     AttachmentsModel,
 )
@@ -46,17 +54,45 @@ from nextgis_connect.ui_kit.delegates.widget_item_delegate import (
 from nextgis_connect.ui_kit.icons import material_icon, qgis_icon
 
 
+@dataclass(frozen=True)
+class _AttachmentMenuActionNames:
+    open_attachment: str = "openAttachmentAction"
+    cache_attachment: str = "cacheAttachmentAction"
+    edit_attachment: str = "editAttachmentAction"
+    show_in_folder: str = "showInFolderAttachmentAction"
+    copy_attachment: str = "copyAttachmentAction"
+    save_as: str = "saveAsAttachmentAction"
+    delete_attachment: str = "deleteAttachmentAction"
+
+
+@dataclass
+class _AttachmentMenuActions:
+    open_attachment: QAction
+    cache_attachment: QAction
+    edit_attachment: QAction
+    show_in_folder: QAction
+    copy_attachment: QAction
+    save_as: QAction
+    delete_attachment: QAction
+
+
 class AttachmentDelegate(WidgetItemDelegate):
     SPACING: int = 12
     OUTER_MARGIN_H: int = 8
     OUTER_MARGIN_V: int = 6
     TOOL_TEXT: str = "..."
+    LOADING_INDICATOR_DELAY_MS = 250.0
+    LOADING_TIMER_INTERVAL_MS = 50
+    LOADING_ROTATION_DEGREES_PER_SECOND = 240.0
+    LOADING_MAX_FRAME_SECONDS = 0.25
+    MENU_ACTION_NAMES = _AttachmentMenuActionNames()
 
     open_attachment = pyqtSignal(QModelIndex)
     cache_attachment = pyqtSignal(QModelIndex)
     show_in_folder = pyqtSignal(QModelIndex)
     save_as = pyqtSignal(QModelIndex)
     copy_attachment = pyqtSignal(QModelIndex)
+    delete_attachment = pyqtSignal(QModelIndex)
 
     @dataclass
     class _Layout:
@@ -92,6 +128,16 @@ class AttachmentDelegate(WidgetItemDelegate):
             settings.attachment_thumbnail_size,
             settings.attachment_thumbnail_size,
         )
+        self._icon_painter = AttachmentIconPainter(self._thumbnail_size)
+        self._loading_angle = 0.0
+        self._loading_last_frame_time: Optional[float] = None
+        self._loading_timer = QTimer(self)
+        self._loading_timer.setInterval(self.LOADING_TIMER_INTERVAL_MS)
+        self._loading_timer.setTimerType(Qt.TimerType.PreciseTimer)
+        self._loading_timer.timeout.connect(self._advance_loading_animation)
+        self._loading_started_at_by_attachment_identity: Dict[
+            Tuple[int, int], float
+        ] = {}
 
     def paint(
         self,
@@ -104,12 +150,15 @@ class AttachmentDelegate(WidgetItemDelegate):
             return
         painter.save()
         self._draw_background(painter, option)
-        palette, text_color, secondary_text_color = self._resolve_colors(
-            option
+        _, text_color, secondary_text_color = self._resolve_colors(option)
+        state = AttachmentDisplayState.from_index(index)
+        layout = self._compute_layout(
+            option,
+            state.icon_value,
+            state.title,
+            state.description,
         )
-        icon_value, title, description = self._fetch_values(index)
-        layout = self._compute_layout(option, icon_value, title, description)
-        self._draw_icon(painter, palette, icon_value, layout, text_color)
+        self._draw_icon(painter, option, state, layout)
         self._draw_text_blocks(
             painter, layout, text_color, secondary_text_color
         )
@@ -148,9 +197,7 @@ class AttachmentDelegate(WidgetItemDelegate):
         attachment_menu = self._build_attachment_menu(
             attachment_actions_button, index
         )
-        edit_action = attachment_menu.findChild(
-            QAction, "editAttachmentAction"
-        )
+        edit_action = self._menu_actions(attachment_menu).edit_attachment
         # Use current model index stored on the button, not the stale one
         edit_action.triggered.connect(
             lambda _=False, btn=attachment_actions_button: (
@@ -168,11 +215,12 @@ class AttachmentDelegate(WidgetItemDelegate):
         index: QPersistentModelIndex,
     ) -> None:
         button = widgets[0]
+        state = AttachmentDisplayState.from_index(QModelIndex(index))
         layout = self._compute_layout(
             option,
-            index.data(Qt.ItemDataRole.DecorationRole),
-            index.data(Qt.ItemDataRole.DisplayRole),
-            index.data(AttachmentsModel.Roles.DESCRIPTION),
+            state.icon_value,
+            state.title,
+            state.description,
             tool_size=button.sizeHint(),
         )
 
@@ -207,35 +255,20 @@ class AttachmentDelegate(WidgetItemDelegate):
             self.edit(model_index)
 
     def _delete_attachment(self, index: QModelIndex) -> None:
-        # Map through proxy if needed and remove row from source model
         if not index.isValid():
             return
 
-        model = index.model()
-        source_index = index
-        source_model = model
-
-        if isinstance(model, QSortFilterProxyModel):
-            source_index = model.mapToSource(index)
-            source_model = model.sourceModel()
-
-        if source_model is None or not source_index.isValid():
-            return
-
-        source_model.removeRow(source_index.row(), source_index.parent())
+        self.delete_attachment.emit(index)
 
     def build_context_menu(self, parent: QWidget, index: QModelIndex) -> QMenu:
         """Build a context menu for the current attachment item."""
         attachment_menu = self._build_attachment_menu(parent, index)
         self._update_attachment_menu_state(attachment_menu, index)
 
-        edit_action = attachment_menu.findChild(
-            QAction, "editAttachmentAction"
+        edit_action = self._menu_actions(attachment_menu).edit_attachment
+        edit_action.triggered.connect(
+            lambda _=False, current_index=index: self.edit(current_index)
         )
-        if edit_action is not None:
-            edit_action.triggered.connect(
-                lambda _=False, current_index=index: self.edit(current_index)
-            )
 
         return attachment_menu
 
@@ -247,57 +280,67 @@ class AttachmentDelegate(WidgetItemDelegate):
         """
         attachment_menu = QMenu(parent)
 
-        open_action = attachment_menu.addAction(
+        open_action = self._add_menu_action(
+            attachment_menu,
+            self.MENU_ACTION_NAMES.open_attachment,
             material_icon("file_open"),
             self.tr("Download and Open"),
             lambda index=index: self.open_attachment.emit(index),
         )
-        open_action.setObjectName("openAttachmentAction")
-
-        # Download action
-        cache_action = attachment_menu.addAction(
+        cache_action = self._add_menu_action(
+            attachment_menu,
+            self.MENU_ACTION_NAMES.cache_attachment,
             material_icon("download_for_offline"),
             self.tr("Download"),
             lambda index=index: self.cache_attachment.emit(index),
         )
-        cache_action.setObjectName("cacheAttachmentAction")
-
-        # Edit action
-        edit_menu_action = attachment_menu.addAction(
+        edit_action = self._add_menu_action(
+            attachment_menu,
+            self.MENU_ACTION_NAMES.edit_attachment,
             qgis_icon("mActionEditTable.svg"),
             self.tr("Edit"),
         )
-        edit_menu_action.setObjectName("editAttachmentAction")
-
-        # Show in Folder action
-        show_in_folder_action = attachment_menu.addAction(
+        show_in_folder_action = self._add_menu_action(
+            attachment_menu,
+            self.MENU_ACTION_NAMES.show_in_folder,
             qgis_icon("mIconFolderLink.svg"),
             self.tr("Show in Folder"),
             lambda index=index: self.show_in_folder.emit(index),
         )
-        show_in_folder_action.setObjectName("showInFolderAttachmentAction")
-
-        copy_action = attachment_menu.addAction(
+        copy_action = self._add_menu_action(
+            attachment_menu,
+            self.MENU_ACTION_NAMES.copy_attachment,
             qgis_icon("mActionEditCopy.svg"),
             self.tr("Copy"),
             lambda index=index: self.copy_attachment.emit(index),
         )
-        copy_action.setObjectName("copyAttachmentAction")
-
-        # Save As action
-        attachment_menu.addAction(
+        save_as_action = self._add_menu_action(
+            attachment_menu,
+            self.MENU_ACTION_NAMES.save_as,
             qgis_icon("mActionFileSaveAs.svg"),
             self.tr("Save As…"),
             lambda index=index: self.save_as.emit(index),
         )
-
-        # Delete action
-        delete_action = attachment_menu.addAction(
+        delete_action = self._add_menu_action(
+            attachment_menu,
+            self.MENU_ACTION_NAMES.delete_attachment,
             qgis_icon("mActionDeleteSelected.svg"),
             self.tr("Delete"),
             lambda index=index: self._delete_attachment(index),
         )
-        delete_action.setObjectName("deleteAttachmentAction")
+
+        attachment_menu.setProperty(
+            "attachmentActions",
+            _AttachmentMenuActions(
+                open_attachment=open_action,
+                cache_attachment=cache_action,
+                edit_attachment=edit_action,
+                show_in_folder=show_in_folder_action,
+                copy_attachment=copy_action,
+                save_as=save_as_action,
+                delete_attachment=delete_action,
+            ),
+        )
 
         persistent_index = QPersistentModelIndex(index)
         attachment_menu.aboutToShow.connect(
@@ -308,6 +351,69 @@ class AttachmentDelegate(WidgetItemDelegate):
 
         return attachment_menu
 
+    def _add_menu_action(
+        self,
+        menu: QMenu,
+        object_name: str,
+        icon: QIcon,
+        text: str,
+        slot=None,
+    ) -> QAction:
+        action = (
+            menu.addAction(icon, text, slot)
+            if slot
+            else menu.addAction(
+                icon,
+                text,
+            )
+        )
+        action.setObjectName(object_name)
+        return action
+
+    def _menu_actions(self, menu: QMenu) -> _AttachmentMenuActions:
+        actions = menu.property("attachmentActions")
+        if isinstance(actions, _AttachmentMenuActions):
+            return actions
+
+        return _AttachmentMenuActions(
+            open_attachment=self._required_menu_action(
+                menu,
+                self.MENU_ACTION_NAMES.open_attachment,
+            ),
+            cache_attachment=self._required_menu_action(
+                menu,
+                self.MENU_ACTION_NAMES.cache_attachment,
+            ),
+            edit_attachment=self._required_menu_action(
+                menu,
+                self.MENU_ACTION_NAMES.edit_attachment,
+            ),
+            show_in_folder=self._required_menu_action(
+                menu,
+                self.MENU_ACTION_NAMES.show_in_folder,
+            ),
+            copy_attachment=self._required_menu_action(
+                menu,
+                self.MENU_ACTION_NAMES.copy_attachment,
+            ),
+            save_as=self._required_menu_action(
+                menu,
+                self.MENU_ACTION_NAMES.save_as,
+            ),
+            delete_attachment=self._required_menu_action(
+                menu,
+                self.MENU_ACTION_NAMES.delete_attachment,
+            ),
+        )
+
+    def _required_menu_action(self, menu: QMenu, object_name: str) -> QAction:
+        action = menu.findChild(QAction, object_name)
+        if action is None:
+            message = f"Attachment menu action is missing: {object_name}"
+            raise RuntimeError(message)
+
+        return action
+
     def _update_attachment_menu_state(
         self, menu: QMenu, index: QModelIndex
     ) -> None:
@@ -317,40 +423,28 @@ class AttachmentDelegate(WidgetItemDelegate):
         is_cached = bool(index.data(AttachmentsModel.Roles.IS_CACHED))
         is_editable = bool(index.flags() & Qt.ItemFlag.ItemIsEditable)
         mime_type = str(index.data(AttachmentsModel.Roles.MIME_TYPE) or "")
+        actions = self._menu_actions(menu)
 
-        open_action = menu.findChild(QAction, "openAttachmentAction")
-        cache_action = menu.findChild(QAction, "cacheAttachmentAction")
-        edit_action = menu.findChild(QAction, "editAttachmentAction")
-        show_in_folder_action = menu.findChild(
-            QAction, "showInFolderAttachmentAction"
-        )
-        copy_action = menu.findChild(QAction, "copyAttachmentAction")
-        delete_action = menu.findChild(QAction, "deleteAttachmentAction")
-
-        open_action.setText(
+        actions.open_attachment.setText(
             self.tr("Open") if is_cached else self.tr("Download and Open")
         )
-        cache_action.setVisible(not is_cached)
-        edit_action.setEnabled(is_editable)
-        show_in_folder_action.setVisible(is_cached)
-        copy_action.setEnabled(is_cached and mime_type.startswith("image/"))
-        delete_action.setEnabled(is_editable)
+        actions.cache_attachment.setVisible(not is_cached)
+        actions.edit_attachment.setEnabled(is_editable)
+        actions.show_in_folder.setVisible(is_cached)
+        actions.copy_attachment.setEnabled(
+            is_cached and mime_type.startswith("image/")
+        )
+        actions.delete_attachment.setEnabled(is_editable)
 
     def _fetch_values(
         self, index: QModelIndex, is_edit: bool = False
     ) -> Tuple[object, str, str]:
-        icon_value = index.data(Qt.ItemDataRole.DecorationRole)
-        title_value = index.data(AttachmentsModel.Roles.NAME)
-        description_value = index.data(AttachmentsModel.Roles.DESCRIPTION)
-        title = title_value if isinstance(title_value, str) else ""
-        description = (
-            description_value if isinstance(description_value, str) else ""
-        )
-        return icon_value, title, description
+        state = AttachmentDisplayState.from_index(index, for_editor=is_edit)
+        return state.icon_value, state.title, state.description
 
     def _resolve_colors(
         self, option: QStyleOptionViewItem
-    ) -> Tuple[QPalette, Qt.GlobalColor, Qt.GlobalColor]:
+    ) -> Tuple[QPalette, QColor, QColor]:
         palette: QPalette = option.palette
         text_color = (
             palette.color(
@@ -474,35 +568,30 @@ class AttachmentDelegate(WidgetItemDelegate):
     def _draw_icon(
         self,
         painter: QPainter,
-        palette: QPalette,
-        icon_value: object,
+        option: QStyleOptionViewItem,
+        state: AttachmentDisplayState,
         layout: "AttachmentDelegate._Layout",
-        text_color: Qt.GlobalColor,
     ) -> None:
-        if isinstance(icon_value, QIcon):
-            icon_value.paint(
-                painter, layout.icon_rect, Qt.AlignmentFlag.AlignCenter
-            )
+        if state.is_loading:
+            self._ensure_loading_animation_running()
+
+        selected = bool(option.state & QStyle.StateFlag.State_Selected)
+        self._icon_painter.paint(
+            painter,
+            layout.icon_rect,
+            state,
+            palette=option.palette,
+            selected=selected,
+            loading_angle=self._loading_angle,
+            show_loading_progress=self._is_loading_progress_visible(state),
+        )
+        if state.is_loading or isinstance(state.icon_value, (QIcon, QPixmap)):
             return
-        if isinstance(icon_value, QPixmap):
-            scaled = icon_value.scaled(
-                self._thumbnail_size,
-                Qt.AspectRatioMode.KeepAspectRatio,
-                Qt.TransformationMode.SmoothTransformation,
-            )
-            x = (
-                layout.icon_rect.x()
-                + (layout.icon_rect.width() - scaled.width()) // 2
-            )
-            y = (
-                layout.icon_rect.y()
-                + (layout.icon_rect.height() - scaled.height()) // 2
-            )
-            painter.drawPixmap(x, y, scaled)
-            return
+
+        palette = option.palette
         painter.setPen(palette.color(QPalette.ColorRole.Mid))
         painter.drawRect(layout.icon_rect)
-        painter.setPen(text_color)
+        painter.setPen(palette.color(QPalette.ColorRole.Text))
         placeholder_font = QFont(layout.title_font)
         placeholder_font.setItalic(True)
         painter.setFont(placeholder_font)
@@ -510,12 +599,108 @@ class AttachmentDelegate(WidgetItemDelegate):
             layout.icon_rect, Qt.AlignmentFlag.AlignCenter, "{icon}"
         )
 
+    def _ensure_loading_animation_running(self) -> None:
+        if self._loading_timer.isActive():
+            return
+
+        self._loading_last_frame_time = time.monotonic()
+        self._loading_timer.start()
+
+    def _is_loading_progress_visible(
+        self,
+        state: AttachmentDisplayState,
+    ) -> bool:
+        if not state.is_loading:
+            if state.attachment_identity is not None:
+                self._loading_started_at_by_attachment_identity.pop(
+                    state.attachment_identity,
+                    None,
+                )
+            return False
+
+        if state.attachment_identity is None:
+            return True
+
+        current_time = time.monotonic()
+        started_at = self._loading_started_at_by_attachment_identity.get(
+            state.attachment_identity
+        )
+        if started_at is None:
+            self._loading_started_at_by_attachment_identity[
+                state.attachment_identity
+            ] = current_time
+            return False
+
+        elapsed_ms = (current_time - started_at) * 1000.0
+        return elapsed_ms >= self.LOADING_INDICATOR_DELAY_MS
+
+    def _advance_loading_animation(self) -> None:
+        if not self._has_loading_items():
+            self._loading_timer.stop()
+            self._loading_angle = 0.0
+            self._loading_last_frame_time = None
+            return
+
+        current_time = time.monotonic()
+        previous_time = self._loading_last_frame_time or current_time
+        elapsed_seconds = max(
+            0.0,
+            min(
+                self.LOADING_MAX_FRAME_SECONDS,
+                current_time - previous_time,
+            ),
+        )
+        self._loading_last_frame_time = current_time
+        self._loading_angle = (
+            self._loading_angle
+            + elapsed_seconds * self.LOADING_ROTATION_DEGREES_PER_SECOND
+        ) % 360.0
+        self._item_view.viewport().update()
+
+    def _has_loading_items(self) -> bool:
+        model = self._item_view.model()
+        if model is None:
+            self._loading_started_at_by_attachment_identity.clear()
+            return False
+
+        has_loading_items = False
+        loading_attachment_identities: Set[Tuple[int, int]] = set()
+        for row in range(model.rowCount()):
+            index = model.index(row, 0)
+            state = AttachmentDisplayState.from_index(index)
+            if state.is_loading:
+                has_loading_items = True
+                if state.attachment_identity is not None:
+                    loading_attachment_identities.add(
+                        state.attachment_identity
+                    )
+
+        if not has_loading_items:
+            self._loading_started_at_by_attachment_identity.clear()
+            return False
+
+        self._remove_finished_loading_items(loading_attachment_identities)
+        return True
+
+    def _remove_finished_loading_items(
+        self,
+        loading_attachment_identities: Set[Tuple[int, int]],
+    ) -> None:
+        for attachment_identity in list(
+            self._loading_started_at_by_attachment_identity
+        ):
+            if attachment_identity not in loading_attachment_identities:
+                self._loading_started_at_by_attachment_identity.pop(
+                    attachment_identity,
+                    None,
+                )
+
     def _draw_text_blocks(
         self,
         painter: QPainter,
         layout: "AttachmentDelegate._Layout",
-        text_color: Qt.GlobalColor,
-        secondary_text_color: Qt.GlobalColor,
+        text_color: QColor,
+        secondary_text_color: QColor,
     ) -> None:
         painter.setFont(layout.title_font)
         painter.setPen(text_color)
@@ -545,7 +730,10 @@ class AttachmentDelegate(WidgetItemDelegate):
         self.close_current_editor()
 
         # Compute initial layout using current option and model data
-        icon_value, title, description = self._fetch_values(index)
+        state = AttachmentDisplayState.from_index(index, for_editor=True)
+        icon_value = state.icon_value
+        title = state.title
+        description = state.description
         layout = self._compute_layout(
             option,
             icon_value,
@@ -560,17 +748,9 @@ class AttachmentDelegate(WidgetItemDelegate):
         icon_label = QLabel(container)
         icon_label.setObjectName("editorIconLabel")
         icon_label.setAutoFillBackground(False)
-        # Render icon/pixmap similar to paint()
-        if isinstance(icon_value, QIcon):
-            pix = icon_value.pixmap(self._thumbnail_size)
-            icon_label.setPixmap(pix)
-        elif isinstance(icon_value, QPixmap):
-            pix = icon_value.scaled(
-                self._thumbnail_size,
-                Qt.AspectRatioMode.KeepAspectRatio,
-                Qt.TransformationMode.SmoothTransformation,
-            )
-            icon_label.setPixmap(pix)
+        pixmap = self._editor_icon_pixmap(state, option.palette)
+        if not pixmap.isNull():
+            icon_label.setPixmap(pixmap)
         else:
             # Fallback: empty label with border via style sheet
             icon_label.setStyleSheet("border: 1px solid palette(mid);")
@@ -699,6 +879,34 @@ class AttachmentDelegate(WidgetItemDelegate):
 
         super().destroyEditor(editor, index)
 
+    def _editor_icon_pixmap(
+        self,
+        state: AttachmentDisplayState,
+        palette: QPalette,
+    ) -> QPixmap:
+        if not isinstance(state.icon_value, (QIcon, QPixmap)):
+            return QPixmap()
+
+        pixmap = QPixmap(self._thumbnail_size)
+        pixmap.fill(Qt.GlobalColor.transparent)
+
+        painter = QPainter(pixmap)
+        self._icon_painter.paint(
+            painter,
+            QRect(
+                0,
+                0,
+                self._thumbnail_size.width(),
+                self._thumbnail_size.height(),
+            ),
+            state,
+            palette=palette,
+            selected=False,
+            loading_angle=self._loading_angle,
+        )
+        painter.end()
+        return pixmap
+
     def setEditorData(self, editor: QWidget, index: QModelIndex) -> None:
         """Populate editor widgets from the model index."""
         title_value = index.data(AttachmentsModel.Roles.NAME)
@@ -727,14 +935,9 @@ class AttachmentDelegate(WidgetItemDelegate):
         # Map through proxy if needed
         source_index = index
         source_model = model
-        try:
-            from qgis.PyQt.QtCore import QSortFilterProxyModel
-
-            if isinstance(model, QSortFilterProxyModel):
-                source_index = model.mapToSource(index)
-                source_model = model.sourceModel()
-        except Exception:
-            pass
+        if isinstance(model, QSortFilterProxyModel):
+            source_index = model.mapToSource(index)
+            source_model = model.sourceModel()
 
         if source_model is None or not source_index.isValid():
             return
@@ -751,7 +954,10 @@ class AttachmentDelegate(WidgetItemDelegate):
         self, editor: QWidget, option: QStyleOptionViewItem, index: QModelIndex
     ) -> None:
         """Keep editor aligned with the delegate's display layout."""
-        icon_value, title, description = self._fetch_values(index)
+        icon_value, title, description = self._fetch_values(
+            index,
+            is_edit=True,
+        )
         tool_button = editor.findChild(QToolButton, "editorToolButton")
         layout = self._compute_layout(
             option,

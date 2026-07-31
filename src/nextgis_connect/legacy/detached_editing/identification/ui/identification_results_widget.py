@@ -445,9 +445,24 @@ class IdentificationResultsWidget(QgsDockWidget, ResultsDialogBase):
             return
 
         self.__connect_feature_deleted_signal(layer)
+        self.__update_current_layer_edit_mode(layer_id, True)
 
     def __on_tracked_layer_editing_stopped(self, layer_id: str) -> None:
         self.__disconnect_feature_deleted_signal(layer_id)
+        self.__update_current_layer_edit_mode(layer_id, False)
+
+    def __update_current_layer_edit_mode(
+        self, layer_id: str, is_enabled: bool
+    ) -> None:
+        selected_result = self.__current_feature_result()
+        if selected_result is None:
+            return
+
+        layer = cast(QgsVectorLayer, selected_result.mLayer)
+        if layer.id() != layer_id:
+            return
+
+        self.__update_edit_mode(is_enabled)
 
     @pyqtSlot("QStringList")
     def __on_layers_will_be_removed(self, layer_ids: List[str]) -> None:
@@ -703,6 +718,7 @@ class IdentificationResultsWidget(QgsDockWidget, ResultsDialogBase):
 
     def __on_feature_changed(self, index: int) -> None:
         self.__disconnect_current_feature_connections()
+        self._attachments_tab.close_editor()
 
         if self._last_selected_feature_key is not None:
             self._highlight_handler.deactivate_feature()
@@ -775,13 +791,16 @@ class IdentificationResultsWidget(QgsDockWidget, ResultsDialogBase):
         self.__update_edit_mode(False)
 
     @pyqtSlot(bool)
-    def __toggle_edit_mode(self) -> None:
+    def __toggle_edit_mode(self, checked: bool) -> None:
+        del checked
+
         selected_result = self.__current_feature_result()
         if selected_result is None:
             return
 
         layer = cast(QgsVectorLayer, selected_result.mLayer)
         cast(Any, iface.mainWindow()).toggleEditing(layer)
+        self.__update_edit_mode(layer.isEditable())
 
     @pyqtSlot()
     def __on_features_found(self) -> None:
@@ -802,8 +821,31 @@ class IdentificationResultsWidget(QgsDockWidget, ResultsDialogBase):
     @pyqtSlot(bool)
     def __update_edit_mode(self, is_enabled: bool) -> None:
         self.edit_button.setChecked(is_enabled)
-        self._attachments_tab.set_read_only(not is_enabled)
+        self.__update_attachments_editing_availability()
+        if not is_enabled:
+            self._attachments_tab.close_editor()
         self._description_tab.set_read_only(not is_enabled)
+        self.__set_attribute_form_edit_mode(is_enabled)
+
+    def __set_attribute_form_edit_mode(self, is_enabled: bool) -> None:
+        if self._form is None:
+            return
+
+        mode = (
+            QgsAttributeEditorContext.Mode.SingleEditMode
+            if is_enabled
+            else QgsAttributeEditorContext.Mode.IdentifyMode
+        )
+        self._form.setMode(mode)
+
+    def __update_attachments_editing_availability(self) -> None:
+        selected_result = self.__current_feature_result()
+        if selected_result is None:
+            self._attachments_tab.set_read_only(True)
+            return
+
+        layer = cast(QgsVectorLayer, selected_result.mLayer)
+        self._attachments_tab.set_read_only(layer.readOnly())
 
     def __refresh_current_feature_after_sync(self) -> None:
         selected_result = self.__current_feature_result()
@@ -868,9 +910,8 @@ class IdentificationResultsWidget(QgsDockWidget, ResultsDialogBase):
         context.setFormMode(QgsAttributeEditorContext.FormMode.Embed)
 
         feature = layer.getFeature(feature_id)
-        editor_context = QgsAttributeEditorContext()
         self._form = QgsAttributeForm(
-            layer, feature, editor_context, self._attributes_form_container
+            layer, feature, context, self._attributes_form_container
         )
         self._form.widgetValueChanged.connect(self.__on_value_changed)
 

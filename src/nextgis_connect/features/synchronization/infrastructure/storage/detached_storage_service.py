@@ -1,6 +1,6 @@
 import shutil
 from pathlib import Path
-from typing import Optional, Union
+from typing import List, Optional, Tuple, Union
 
 from qgis.PyQt.QtCore import QMimeDatabase
 
@@ -26,6 +26,7 @@ from nextgis_connect.platform.storage.models import (
     StorageEntryState,
     StorageKey,
 )
+from nextgis_connect.platform.storage.path_resolver import StoragePathResolver
 from nextgis_connect.shared.types import FileObjectId, UnsetType
 
 
@@ -35,6 +36,7 @@ class DetachedStorageService:
     def __init__(self, cache_root: Path) -> None:
         """Initialize detached storage service."""
         self._cache_root = Path(cache_root)
+        self._path_resolver = StoragePathResolver(self._cache_root)
         self.detached_layers = DetachedLayerStore(self._cache_root)
         self.attachments = AttachmentStore(self._cache_root)
         self.migrator = LegacyCacheMigrator(self._cache_root)
@@ -203,6 +205,41 @@ class DetachedStorageService:
         file_name = f"blob{extension}" if extension else "blob"
         return attachment_directory / file_name
 
+    def cached_attachment_path(
+        self,
+        instance_uuid: str,
+        resource_id: Union[int, str],
+        attachment_id: Union[int, str],
+        *,
+        file_name: Optional[str] = None,
+        mime_type: Optional[str] = None,
+        fileobj: Union[UnsetType, None, FileObjectId] = None,
+        feature_local_id: Optional[int] = None,
+        feature_ngw_fid: Optional[int] = None,
+        ngw_aid: Optional[int] = None,
+    ) -> Path:
+        """Return an existing indexed blob path or the canonical blob path."""
+        cached_path = self._cached_attachment_entry_path(
+            instance_uuid,
+            resource_id,
+            attachment_id,
+            "active_blob_entry_id",
+            feature_local_id=feature_local_id,
+            feature_ngw_fid=feature_ngw_fid,
+            ngw_aid=ngw_aid,
+        )
+        if cached_path is not None:
+            return cached_path
+
+        return self.attachment_path(
+            instance_uuid,
+            resource_id,
+            attachment_id,
+            file_name=file_name,
+            mime_type=mime_type,
+            fileobj=fileobj,
+        )
+
     def attachment_thumbnail_directory(
         self,
         instance_uuid: str,
@@ -237,6 +274,37 @@ class DetachedStorageService:
                 fileobj=fileobj,
             )
             / "preview.jpg"
+        )
+
+    def cached_attachment_thumbnail_path(
+        self,
+        instance_uuid: str,
+        resource_id: Union[int, str],
+        attachment_id: Union[int, str],
+        *,
+        fileobj: Union[UnsetType, None, FileObjectId] = None,
+        feature_local_id: Optional[int] = None,
+        feature_ngw_fid: Optional[int] = None,
+        ngw_aid: Optional[int] = None,
+    ) -> Path:
+        """Return an existing indexed preview path or the canonical path."""
+        cached_path = self._cached_attachment_entry_path(
+            instance_uuid,
+            resource_id,
+            attachment_id,
+            "preview_entry_id",
+            feature_local_id=feature_local_id,
+            feature_ngw_fid=feature_ngw_fid,
+            ngw_aid=ngw_aid,
+        )
+        if cached_path is not None:
+            return cached_path
+
+        return self.attachment_thumbnail_path(
+            instance_uuid,
+            resource_id,
+            attachment_id,
+            fileobj=fileobj,
         )
 
     def register_attachment_file(
@@ -502,6 +570,95 @@ class DetachedStorageService:
             local_attachment_id=str(attachment_id),
             ngw_aid=ngw_aid,
         )
+
+    def _cached_attachment_entry_path(
+        self,
+        instance_uuid: str,
+        resource_id: Union[int, str],
+        attachment_id: Union[int, str],
+        entry_id_key: str,
+        *,
+        feature_local_id: Optional[int],
+        feature_ngw_fid: Optional[int],
+        ngw_aid: Optional[int],
+    ) -> Optional[Path]:
+        """Return an existing file path referenced by an attachment record."""
+        storage_index = self.attachments.index_for_instance(instance_uuid)
+        records = (
+            storage_index.attachment_record(attachment_key)
+            for attachment_key in self._attachment_lookup_keys(
+                instance_uuid,
+                resource_id,
+                attachment_id,
+                feature_local_id=feature_local_id,
+                feature_ngw_fid=feature_ngw_fid,
+                ngw_aid=ngw_aid,
+            )
+        )
+        for record in records:
+            if record is None:
+                continue
+            if record["is_deleted_locally"] or record["is_deleted_remotely"]:
+                continue
+
+            entry_id = record.get(entry_id_key)
+            if entry_id is None:
+                continue
+
+            entry = storage_index.find_entry_by_id(int(entry_id))
+            if entry is None:
+                continue
+
+            path = self._indexed_entry_path(
+                entry.instance_uuid, entry.relative_path
+            )
+            if path.exists():
+                return path
+
+        return None
+
+    def _indexed_entry_path(
+        self,
+        instance_uuid: str,
+        relative_path: Path,
+    ) -> Path:
+        """Return the exact path stored in the storage index."""
+        return self._path_resolver.absolute_from_entry(
+            instance_uuid,
+            relative_path,
+        )
+
+    def _attachment_lookup_keys(
+        self,
+        instance_uuid: str,
+        resource_id: Union[int, str],
+        attachment_id: Union[int, str],
+        *,
+        feature_local_id: Optional[int],
+        feature_ngw_fid: Optional[int],
+        ngw_aid: Optional[int],
+    ) -> Tuple[AttachmentKey, ...]:
+        """Return precise and legacy-compatible record lookup keys."""
+        keys: List[AttachmentKey] = []
+        key_values = (
+            (feature_local_id, feature_ngw_fid),
+            (feature_local_id, None),
+            (None, feature_ngw_fid),
+            (None, None),
+        )
+        for local_id, ngw_fid in key_values:
+            attachment_key = self._attachment_key(
+                instance_uuid,
+                resource_id,
+                attachment_id,
+                feature_local_id=local_id,
+                feature_ngw_fid=ngw_fid,
+                ngw_aid=ngw_aid,
+            )
+            if attachment_key not in keys:
+                keys.append(attachment_key)
+
+        return tuple(keys)
 
     def _attachment_blob_key(
         self,

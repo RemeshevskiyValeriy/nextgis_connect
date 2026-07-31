@@ -1,4 +1,6 @@
+import os
 import sqlite3
+import time
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -15,6 +17,7 @@ from nextgis_connect.platform.storage.models import (
     AttachmentKey,
     AttachmentOperation,
     LayerKey,
+    StorageEntry,
     StorageEntryKind,
     StorageEntryProtection,
     StorageEntryState,
@@ -150,7 +153,7 @@ def test_cleanup_deletes_previews_before_blobs(tmp_path: Path) -> None:
     ]
 
 
-def test_cleanup_deletes_registered_remote_attachments(
+def test_cleanup_keeps_registered_remote_attachments_by_default(
     tmp_path: Path,
 ) -> None:
     attachment_cache = _write_registered_remote_attachment(tmp_path)
@@ -162,16 +165,68 @@ def test_cleanup_deletes_registered_remote_attachments(
     )
     record = storage_index.attachment_record(attachment_cache.attachment_key)
 
-    assert [path.name for path in report.deleted_paths] == [
-        "preview.jpg",
-        "blob",
-    ]
-    assert not attachment_cache.blob_path.exists()
-    assert not attachment_cache.preview_path.exists()
+    assert report.deleted_paths == []
+    assert attachment_cache.blob_path.exists()
+    assert attachment_cache.preview_path.exists()
     assert record is not None
-    assert record["committed_blob_entry_id"] is None
-    assert record["active_blob_entry_id"] is None
-    assert record["preview_entry_id"] is None
+    assert record["committed_blob_entry_id"] is not None
+    assert record["active_blob_entry_id"] is not None
+    assert record["preview_entry_id"] is not None
+
+
+def test_automatic_purge_deletes_old_disposable_entry(
+    tmp_path: Path,
+) -> None:
+    storage_index = SqliteStorageIndex(
+        tmp_path / INSTANCE_UUID / "storage.sqlite"
+    )
+    entry = _write_disposable_entry(tmp_path, storage_index, "old")
+    path = StoragePathResolver(tmp_path).absolute_from_entry(
+        entry.instance_uuid,
+        entry.relative_path,
+    )
+    old_time = time.time() - 2 * 24 * 60 * 60
+    os.utime(path, (old_time, old_time))
+
+    report = StorageCleanupService(tmp_path).purge_automatic(
+        max_size_bytes=None,
+        max_age_days=1,
+    )
+
+    assert report.deleted_files == 1
+    assert not path.exists()
+
+
+def test_automatic_purge_deletes_oldest_entries_until_under_size(
+    tmp_path: Path,
+) -> None:
+    storage_index = SqliteStorageIndex(
+        tmp_path / INSTANCE_UUID / "storage.sqlite"
+    )
+    first_entry = _write_disposable_entry(tmp_path, storage_index, "first")
+    second_entry = _write_disposable_entry(tmp_path, storage_index, "second")
+    path_resolver = StoragePathResolver(tmp_path)
+    first_path = path_resolver.absolute_from_entry(
+        first_entry.instance_uuid,
+        first_entry.relative_path,
+    )
+    second_path = path_resolver.absolute_from_entry(
+        second_entry.instance_uuid,
+        second_entry.relative_path,
+    )
+    old_time = time.time() - 20
+    new_time = time.time() - 10
+    os.utime(first_path, (old_time, old_time))
+    os.utime(second_path, (new_time, new_time))
+
+    report = StorageCleanupService(tmp_path).purge_automatic(
+        max_size_bytes=second_path.stat().st_size,
+        max_age_days=None,
+    )
+
+    assert report.deleted_files == 1
+    assert not first_path.exists()
+    assert second_path.exists()
 
 
 def test_clear_connection_cache_deletes_registered_remote_attachments(
@@ -189,6 +244,55 @@ def test_clear_connection_cache_deletes_registered_remote_attachments(
     ]
     assert not attachment_cache.blob_path.exists()
     assert not attachment_cache.preview_path.exists()
+
+
+def test_clear_resource_cache_deletes_resource_entries(
+    tmp_path: Path,
+) -> None:
+    source_path = tmp_path / "source.gpkg"
+    _create_container(source_path, INSTANCE_UUID, 42)
+    layer_store = DetachedLayerStore(tmp_path)
+    layer_store.ensure_container_entry(
+        LayerKey(INSTANCE_UUID, 42), source_path
+    )
+    layer_path = layer_store.container_path(LayerKey(INSTANCE_UUID, 42))
+    attachment_cache = _write_registered_remote_attachment(tmp_path)
+
+    report = StorageCleanupService(tmp_path).clear_resource_cache(
+        INSTANCE_UUID,
+        42,
+    )
+
+    assert [path.name for path in report.deleted_paths] == [
+        "preview.jpg",
+        "blob",
+        "42.gpkg",
+    ]
+    assert not layer_path.exists()
+    assert not attachment_cache.blob_path.exists()
+    assert not attachment_cache.preview_path.exists()
+
+
+def test_clear_resource_cache_keeps_dirty_resource(
+    tmp_path: Path,
+) -> None:
+    source_path = tmp_path / "source.gpkg"
+    _create_container(source_path, INSTANCE_UUID, 42, has_changes=True)
+    layer_store = DetachedLayerStore(tmp_path)
+    layer_store.ensure_container_entry(
+        LayerKey(INSTANCE_UUID, 42),
+        source_path,
+        has_local_changes=True,
+    )
+    target_path = layer_store.container_path(LayerKey(INSTANCE_UUID, 42))
+
+    report = StorageCleanupService(tmp_path).clear_resource_cache(
+        INSTANCE_UUID,
+        42,
+    )
+
+    assert report.blocked_files == 1
+    assert target_path.exists()
 
 
 def test_cleanup_does_not_delete_dirty_detached_container(
@@ -276,6 +380,33 @@ def _write_registered_remote_attachment(
         blob_path=blob_path,
         preview_path=preview_path,
     )
+
+
+def _write_disposable_entry(
+    tmp_path: Path,
+    storage_index: SqliteStorageIndex,
+    suffix: str,
+) -> StorageEntry:
+    path_resolver = StoragePathResolver(tmp_path)
+    file_store = FileStore(path_resolver, storage_index)
+    storage_key = StorageKeyFactory.temporary_file(
+        INSTANCE_UUID,
+        suffix,
+        "test",
+    )
+    blob_ref = file_store.write_bytes(
+        storage_key,
+        f"{suffix}.tmp",
+        f"payload-{suffix}".encode(),
+        kind=StorageEntryKind.TEMPORARY_FILE,
+        resource_id=None,
+        state=StorageEntryState.TEMPORARY,
+        protection=StorageEntryProtection.NONE,
+    )
+    assert blob_ref.entry_id is not None
+    entry = storage_index.find_entry_by_id(blob_ref.entry_id)
+    assert entry is not None
+    return entry
 
 
 def _create_container(

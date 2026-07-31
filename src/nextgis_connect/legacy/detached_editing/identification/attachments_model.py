@@ -7,23 +7,24 @@ to the standard display role (name).
 """
 
 from dataclasses import replace
-from enum import IntEnum
-from pathlib import Path
-from typing import Any, ClassVar, Dict, List, Optional
+from enum import Enum, IntEnum
+from typing import Any, Dict, List, Optional, Union
 
 from qgis.PyQt.QtCore import (
     QAbstractListModel,
     QByteArray,
     QModelIndex,
     QObject,
-    QRect,
     Qt,
     QVariant,
     pyqtSignal,
     pyqtSlot,
 )
-from qgis.PyQt.QtGui import QColor, QIcon, QPainter, QPixmap
+from qgis.PyQt.QtGui import QPixmap
 
+from nextgis_connect.features.synchronization.presentation.attachments.attachment_icon_provider import (
+    AttachmentIconProvider,
+)
 from nextgis_connect.legacy.detached_editing.identification.settings import (
     IdentificationSettings,
 )
@@ -31,11 +32,11 @@ from nextgis_connect.legacy.detached_editing.utils import AttachmentMetadata
 from nextgis_connect.platform.logging import logger
 from nextgis_connect.platform.qgis.utils import human_readable_size
 from nextgis_connect.shared.types import AttachmentId
-from nextgis_connect.ui_kit.icons import (
-    icon_from_pixmap,
-    material_icon,
-    plugin_icon,
-)
+
+
+class AttachmentLoadingKind(str, Enum):
+    FILE = "file"
+    PREVIEW = "preview"
 
 
 class AttachmentsModel(QAbstractListModel):
@@ -57,12 +58,13 @@ class AttachmentsModel(QAbstractListModel):
         MIME_TYPE = Qt.ItemDataRole.UserRole + 4
         SIZE = Qt.ItemDataRole.UserRole + 5
         IS_CACHED = Qt.ItemDataRole.UserRole + 6
+        IS_LOADING = Qt.ItemDataRole.UserRole + 7
+        LOADING_PROGRESS = Qt.ItemDataRole.UserRole + 8
+        LOADING_KIND = Qt.ItemDataRole.UserRole + 9
 
     attachment_added = pyqtSignal(AttachmentId)
     attachment_updated = pyqtSignal(AttachmentId)
     attachment_removed = pyqtSignal(AttachmentId)
-
-    _ICONS_CACHE: ClassVar[Dict[int, Any]] = {}
 
     _attachments: List[AttachmentMetadata]
 
@@ -74,8 +76,14 @@ class AttachmentsModel(QAbstractListModel):
         super().__init__(parent)
         self._attachments = list(attachments) if attachments else []
         self._is_cached = dict()
+        self._icons_cache: Dict[AttachmentId, Any] = {}
+        self._loading_progress_by_attachment_id: Dict[AttachmentId, float] = {}
+        self._loading_kind_by_attachment_id: Dict[
+            AttachmentId, AttachmentLoadingKind
+        ] = {}
         self._is_editable = False
         self._is_initialized = False
+        self._icon_provider = AttachmentIconProvider()
         self.update_cached_states()
 
     @property
@@ -153,6 +161,15 @@ class AttachmentsModel(QAbstractListModel):
             return attachment.size
         if role == self.Roles.IS_CACHED:
             return self._is_cached.get(attachment.aid, False)
+        if role == self.Roles.IS_LOADING:
+            return attachment.aid in self._loading_progress_by_attachment_id
+        if role == self.Roles.LOADING_PROGRESS:
+            return self._loading_progress_by_attachment_id.get(attachment.aid)
+        if role == self.Roles.LOADING_KIND:
+            loading_kind = self._loading_kind_by_attachment_id.get(
+                attachment.aid
+            )
+            return loading_kind.value if loading_kind is not None else ""
 
         return QVariant()
 
@@ -180,6 +197,7 @@ class AttachmentsModel(QAbstractListModel):
 
         if role == self.Roles.NAME:
             if isinstance(value, str) and value != attachment.name:
+                self._icons_cache.pop(attachment.aid, None)
                 self._attachments[index.row()] = replace(
                     attachment, name=value
                 )
@@ -221,6 +239,11 @@ class AttachmentsModel(QAbstractListModel):
         roles = super().roleNames()
         roles[int(self.Roles.DESCRIPTION)] = QByteArray(b"description")
         roles[int(self.Roles.ATTACHMENT)] = QByteArray(b"attachment")
+        roles[int(self.Roles.IS_LOADING)] = QByteArray(b"is_loading")
+        roles[int(self.Roles.LOADING_PROGRESS)] = QByteArray(
+            b"loading_progress"
+        )
+        roles[int(self.Roles.LOADING_KIND)] = QByteArray(b"loading_kind")
         return roles
 
     # --- Convenience methods ------------------------------------------
@@ -235,6 +258,8 @@ class AttachmentsModel(QAbstractListModel):
         """
         self.beginResetModel()
         self._attachments = list(attachments)
+        self._loading_progress_by_attachment_id.clear()
+        self._loading_kind_by_attachment_id.clear()
         self._is_initialized = True
         self.update_cached_states(emit_changes=False)
         self.endResetModel()
@@ -244,8 +269,10 @@ class AttachmentsModel(QAbstractListModel):
         self.beginResetModel()
         self._attachments.clear()
         self._is_cached.clear()
+        self._loading_progress_by_attachment_id.clear()
+        self._loading_kind_by_attachment_id.clear()
         self._is_initialized = False
-        self._ICONS_CACHE.clear()
+        self._icons_cache.clear()
         self.endResetModel()
 
     def add_attachment(self, attachment: AttachmentMetadata) -> None:
@@ -272,6 +299,7 @@ class AttachmentsModel(QAbstractListModel):
         """
         for row, existing_attachment in enumerate(self._attachments):
             if existing_attachment.aid == attachment.aid:
+                self._icons_cache.pop(attachment.aid, None)
                 self._attachments[row] = attachment
                 self._is_cached[attachment.aid] = (
                     attachment.file_path.exists()
@@ -298,6 +326,8 @@ class AttachmentsModel(QAbstractListModel):
         attachment_id = self._attachments[row].aid
         del self._attachments[row]
         del self._is_cached[attachment_id]
+        self._loading_progress_by_attachment_id.pop(attachment_id, None)
+        self._loading_kind_by_attachment_id.pop(attachment_id, None)
         self.endRemoveRows()
 
         self.attachment_removed.emit(attachment_id)
@@ -313,17 +343,22 @@ class AttachmentsModel(QAbstractListModel):
         self.beginRemoveRows(QModelIndex(), 0, last)
         self._attachments.clear()
         self._is_cached.clear()
+        self._loading_progress_by_attachment_id.clear()
+        self._loading_kind_by_attachment_id.clear()
         self.endRemoveRows()
 
     @pyqtSlot()
     def update_cached_states(self, emit_changes: bool = True) -> None:
         for attachment in self._attachments:
+            if attachment.aid in self._loading_progress_by_attachment_id:
+                continue
+
             self._is_cached[attachment.aid] = (
                 attachment.file_path.exists()
                 if attachment.file_path is not None
                 else False
             )
-        self._ICONS_CACHE.clear()
+        self._icons_cache.clear()
         if emit_changes and self._attachments:
             top_left = self.index(0)
             bottom_right = self.index(len(self._attachments) - 1)
@@ -335,6 +370,74 @@ class AttachmentsModel(QAbstractListModel):
                     int(self.Roles.IS_CACHED),
                 ],
             )
+
+    def set_attachment_loading_progress(
+        self,
+        attachment_id: AttachmentId,
+        progress: Optional[float],
+        loading_kind: Union[
+            AttachmentLoadingKind, str
+        ] = AttachmentLoadingKind.FILE,
+    ) -> None:
+        """Set or clear loading progress for an attachment."""
+        previous_progress = self._loading_progress_by_attachment_id.get(
+            attachment_id
+        )
+        if progress is None:
+            has_loading_progress = (
+                attachment_id in self._loading_progress_by_attachment_id
+            )
+            has_loading_kind = (
+                attachment_id in self._loading_kind_by_attachment_id
+            )
+            if not has_loading_progress and not has_loading_kind:
+                return
+            self._loading_progress_by_attachment_id.pop(attachment_id, None)
+            self._loading_kind_by_attachment_id.pop(attachment_id, None)
+        else:
+            progress = max(0.0, min(100.0, float(progress)))
+            normalized_loading_kind = self._normalize_loading_kind(
+                loading_kind
+            )
+            previous_loading_kind = self._loading_kind_by_attachment_id.get(
+                attachment_id
+            )
+            if (
+                previous_progress == progress
+                and previous_loading_kind == normalized_loading_kind
+            ):
+                return
+            self._loading_progress_by_attachment_id[attachment_id] = progress
+            self._loading_kind_by_attachment_id[attachment_id] = (
+                normalized_loading_kind
+            )
+
+        index = self.index_for_attachment_id(attachment_id)
+        if not index.isValid():
+            return
+
+        self.dataChanged.emit(
+            index,
+            index,
+            [
+                Qt.ItemDataRole.DecorationRole,
+                int(self.Roles.IS_LOADING),
+                int(self.Roles.LOADING_PROGRESS),
+                int(self.Roles.LOADING_KIND),
+            ],
+        )
+
+    def _normalize_loading_kind(
+        self,
+        loading_kind: Union[AttachmentLoadingKind, str],
+    ) -> AttachmentLoadingKind:
+        if isinstance(loading_kind, AttachmentLoadingKind):
+            return loading_kind
+
+        try:
+            return AttachmentLoadingKind(str(loading_kind))
+        except ValueError:
+            return AttachmentLoadingKind.FILE
 
     def attachment_by_id(self, aid: int) -> Optional[AttachmentMetadata]:
         """Return attachment by identifier.
@@ -353,60 +456,23 @@ class AttachmentsModel(QAbstractListModel):
         :param aid: Attachment identifier.
         :return: Icon or pixmap object.
         """
-        if aid in self._ICONS_CACHE:
-            return self._ICONS_CACHE[aid]
+        if aid in self._icons_cache:
+            return self._icons_cache[aid]
 
         attachment = self.attachment_by_id(aid)
         if not attachment:
             return None
 
-        is_cached = self.data(
-            self.index(self._attachments.index(attachment)),
-            self.Roles.IS_CACHED,
-        )
-
-        thumbnail = self._thumbnail(attachment, is_cached=bool(is_cached))
+        thumbnail = self._thumbnail(attachment)
         if thumbnail is not None:
-            self._ICONS_CACHE[aid] = thumbnail
+            self._icons_cache[aid] = thumbnail
             return thumbnail
 
-        suffix = (
-            Path(attachment.name).suffix.lstrip(".").upper()
-            if attachment.name
-            else ""
-        )
-        if len(suffix) > 4:
-            suffix = "…" + suffix[-3:]
-
-        icon_name = "attachments/general_file.svg"
-        if not is_cached:
-            icon_name = "attachments/not_downloaded_file.svg"
-        elif self._is_image(attachment):
-            icon_name = "attachments/image_file.svg"
-        else:
-            icon_name = "attachments/no_extension_file.svg"
-
-        if attachment.size is None:
-            size = ""
-            unit = ""
-        else:
-            size, unit = human_readable_size(attachment.size).split(" ")
-
-        replacements = {
-            "{FMT}": suffix,
-            "{SIZE}": size,
-            "{UNIT}": unit,
-        }
-        icon = plugin_icon(icon_name, replacements=replacements)
-        if not is_cached:
-            icon = self._with_download_overlay(icon)
-
-        self._ICONS_CACHE[aid] = icon
+        icon = self._icon_provider.icon_for_file_name(attachment.name)
+        self._icons_cache[aid] = icon
         return icon
 
-    def _thumbnail(
-        self, attachment: AttachmentMetadata, *, is_cached: bool
-    ) -> Optional[QPixmap]:
+    def _thumbnail(self, attachment: AttachmentMetadata) -> Optional[QPixmap]:
         if not self._is_image(attachment):
             return None
 
@@ -420,41 +486,7 @@ class AttachmentsModel(QAbstractListModel):
         if pixmap.isNull():
             return None
 
-        if not is_cached:
-            return self._dimmed_thumbnail(pixmap)
-
         return pixmap
-
-    def _dimmed_thumbnail(self, pixmap: QPixmap) -> QPixmap:
-        result = QPixmap(pixmap)
-        painter = QPainter(result)
-        painter.fillRect(result.rect(), QColor(0, 0, 0, 56))
-        self._paint_download_overlay(painter, result.rect())
-        painter.end()
-        return result
-
-    def _with_download_overlay(self, icon: QIcon) -> QIcon:
-        size = IdentificationSettings().attachment_thumbnail_size
-        pixmap = QPixmap(size, size)
-        pixmap.fill(Qt.GlobalColor.transparent)
-
-        painter = QPainter(pixmap)
-        icon.paint(painter, pixmap.rect(), Qt.AlignmentFlag.AlignCenter)
-        self._paint_download_overlay(painter, pixmap.rect())
-        painter.end()
-
-        return icon_from_pixmap(pixmap)
-
-    def _paint_download_overlay(self, painter: QPainter, rect: QRect) -> None:
-        icon_size = max(18, min(rect.width(), rect.height()) // 2)
-        overlay_rect = QRect(0, 0, icon_size, icon_size)
-        overlay_rect.moveCenter(rect.center())
-        icon = material_icon(
-            "download_for_offline",
-            color="#ffffff",
-            size=icon_size,
-        )
-        icon.paint(painter, overlay_rect, Qt.AlignmentFlag.AlignCenter)
 
     def _is_image(self, attachment: AttachmentMetadata) -> bool:
         mime_type = attachment.mime_type or ""

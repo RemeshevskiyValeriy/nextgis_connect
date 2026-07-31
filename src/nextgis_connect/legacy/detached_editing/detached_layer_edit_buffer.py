@@ -46,6 +46,8 @@ class DetachedLayerEditBuffer(QObject):
     attachment_updated = pyqtSignal(QgsFeatureId, AttachmentId)
     attachment_removed = pyqtSignal(QgsFeatureId, AttachmentId)
 
+    TEMPORARY_STORAGE_PREFIX = "nextgis-connect-attachments-"
+
     def __init__(self, layer: "DetachedLayer") -> None:
         super().__init__(layer)
         self._detached_layer = layer
@@ -214,7 +216,9 @@ class DetachedLayerEditBuffer(QObject):
         )
 
         if self.__temporary_storage_path is None:
-            self.__temporary_storage_path = Path(tempfile.mkdtemp())
+            self.__temporary_storage_path = Path(
+                tempfile.mkdtemp(prefix=self.TEMPORARY_STORAGE_PREFIX)
+            )
 
         storage_service = DetachedStorageServiceFactory.create()
         temp_file_path = storage_service.attachment_path(

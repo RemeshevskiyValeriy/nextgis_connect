@@ -119,7 +119,7 @@ class AttachmentRemoveCommand(DetachedLayerBaseCommand):
         edit_buffer = self._detached_layer.edit_buffer
 
         # If the attachment was new in this session, drop it from added map.
-        if is_attachment_new(self._attachment.fid):
+        if is_attachment_new(self._attachment.aid):
             edit_buffer._added_attachments[self._attachment.fid].pop(
                 self._attachment.aid, None
             )

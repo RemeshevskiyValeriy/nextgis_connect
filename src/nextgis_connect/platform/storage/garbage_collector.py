@@ -19,6 +19,7 @@ class CachePurgePolicy:
 
     instance_uuid: Optional[str] = None
     discard_dirty: bool = False
+    delete_referenced_attachments: bool = False
 
 
 @dataclass
@@ -51,7 +52,9 @@ class GarbageCollector:
     ) -> List[StorageEntry]:
         """Return cleanup candidates."""
         policy = policy or CachePurgePolicy()
-        candidates = self._storage_index.gc_candidates()
+        candidates = self._storage_index.gc_candidates(
+            delete_referenced_attachments=policy.delete_referenced_attachments,
+        )
         if policy.instance_uuid is None:
             return self._sort_entries(candidates)
         return self._sort_entries(

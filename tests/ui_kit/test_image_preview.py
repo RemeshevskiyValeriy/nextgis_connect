@@ -137,6 +137,65 @@ def test_image_preview_dialog_boundary_buttons_show_status(qgis_app) -> None:
         dialog.deleteLater()
 
 
+def test_image_preview_dialog_prefetches_adjacent_items(
+    qgis_app,
+    tmp_path: Path,
+) -> None:
+    del qgis_app
+
+    requested_indices = []
+    items = [
+        ImagePreviewItem(tmp_path / f"photo-{index}.png", f"photo-{index}.png")
+        for index in range(5)
+    ]
+
+    def ensure_item_ready(index: int) -> bool:
+        requested_indices.append(index)
+        return True
+
+    dialog = ImagePreviewDialog(
+        items,
+        2,
+        ensure_item_ready=ensure_item_ready,
+        prefetch_radius=1,
+    )
+    try:
+        assert requested_indices == [2, 3, 1]
+        assert dialog._image_ready_check_timer.isActive()
+    finally:
+        dialog.deleteLater()
+
+
+def test_image_preview_dialog_loads_file_when_async_request_finishes(
+    qgis_app,
+    tmp_path: Path,
+) -> None:
+    del qgis_app
+
+    image_path = tmp_path / "photo.png"
+
+    def ensure_item_ready(index: int) -> bool:
+        del index
+        return True
+
+    dialog = ImagePreviewDialog(
+        [ImagePreviewItem(image_path, image_path.name)],
+        0,
+        ensure_item_ready=ensure_item_ready,
+    )
+    try:
+        assert dialog._source_pixmap.isNull()
+
+        _write_png(image_path, 12, 8)
+        dialog._try_load_current_item()
+
+        assert not dialog._source_pixmap.isNull()
+        assert dialog.windowTitle() == "photo.png - 12x8"
+        assert not dialog._image_ready_check_timer.isActive()
+    finally:
+        dialog.deleteLater()
+
+
 def test_image_preview_dialog_keeps_panel_visible_under_cursor(
     qgis_app,
     monkeypatch,

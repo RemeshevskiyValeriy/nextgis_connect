@@ -1,6 +1,8 @@
 import logging
 import re
 import shutil
+import tempfile
+import time
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Union
 
@@ -35,6 +37,10 @@ from nextgis_connect.shared.constants import PLUGIN_NAME
 
 class CacheMaintenanceService:
     """Maintain local detached cache lifecycle."""
+
+    TEMPORARY_CACHE_MAX_AGE_SECONDS = 24 * 60 * 60
+    TEMPORARY_FILE_PREFIX = "nextgis-connect-"
+    TEMPORARY_DOWNLOAD_SUFFIX = ".download"
 
     __settings: NgConnectSettings
     __project_containers: Optional[List[Path]]
@@ -305,7 +311,7 @@ class CacheMaintenanceService:
 
         report = StorageCleanupService(
             Path(self.cache_directory)
-        ).clear_disposable_cache()
+        ).clear_disposable_cache(delete_referenced_attachments=True)
         if report.errors:
             logger.debug("Cache clearing error: %s", "; ".join(report.errors))
             return False
@@ -353,6 +359,45 @@ class CacheMaintenanceService:
 
         self.__remove_empty_dirs(self.cache_directory)
         return not has_errors
+
+    def clear_resource_cache(
+        self,
+        connection: NgwConnection,
+        resource_id: Union[int, str],
+    ) -> bool:
+        """Clear local cache for one resource in a connection."""
+        resource_id_value = self.__parse_int(resource_id)
+        if resource_id_value is None:
+            return False
+
+        self.__refresh_detached_storage_index()
+        if self.__has_resource_container(
+            self.containers_used_by_project(connection),
+            resource_id_value,
+        ):
+            return False
+        if self.__has_resource_container(
+            self.containers_with_changes(connection),
+            resource_id_value,
+        ):
+            return False
+
+        logger = logging.getLogger(PLUGIN_NAME)
+        cleanup_report = StorageCleanupService(
+            Path(self.cache_directory)
+        ).clear_resource_cache(
+            connection.domain_uuid,
+            resource_id_value,
+        )
+        if cleanup_report.errors or cleanup_report.blocked_files:
+            logger.warning(
+                "Could not clear indexed resource cache: %s",
+                "; ".join(cleanup_report.errors + cleanup_report.warnings),
+            )
+            return False
+
+        self.__remove_empty_dirs(self.cache_directory)
+        return True
 
     def containers_with_changes(
         self, connection=None
@@ -423,6 +468,8 @@ class CacheMaintenanceService:
     def purge_cache(self) -> bool:
         logger = logging.getLogger(PLUGIN_NAME)
 
+        self.__clear_temporary_cache()
+
         need_check_size = self.cache_max_size != -1
         need_check_date = self.cache_duration != -1
         if not need_check_size and not need_check_date:
@@ -432,10 +479,56 @@ class CacheMaintenanceService:
         self.__refresh_detached_storage_index()
         report = StorageCleanupService(
             Path(self.cache_directory)
-        ).clear_disposable_cache()
+        ).purge_automatic(
+            max_size_bytes=None
+            if not need_check_size
+            else self.cache_max_size * 1024 * 1024,
+            max_age_days=None if not need_check_date else self.cache_duration,
+        )
         logger.debug(f"Deleted {report.deleted_files} indexed cache files")
 
         return not report.errors
+
+    def __clear_temporary_cache(self) -> None:
+        self.__clear_download_temporary_cache()
+        self.__clear_system_temporary_cache()
+
+    def __clear_download_temporary_cache(self) -> None:
+        cache_path = Path(self.cache_directory)
+        if not cache_path.exists():
+            return
+
+        for path in cache_path.glob(f"**/*{self.TEMPORARY_DOWNLOAD_SUFFIX}"):
+            self.__unlink_stale_temporary_path(path)
+
+    def __clear_system_temporary_cache(self) -> None:
+        temporary_root = Path(tempfile.gettempdir())
+        if not temporary_root.exists():
+            return
+
+        for path in temporary_root.glob(f"{self.TEMPORARY_FILE_PREFIX}*"):
+            self.__unlink_stale_temporary_path(path)
+
+    def __unlink_stale_temporary_path(self, path: Path) -> None:
+        try:
+            age_seconds = time.time() - path.stat().st_mtime
+        except OSError:
+            return
+
+        if age_seconds < self.TEMPORARY_CACHE_MAX_AGE_SECONDS:
+            return
+
+        try:
+            if path.is_dir():
+                shutil.rmtree(path)
+            else:
+                path.unlink()
+        except OSError:
+            logging.getLogger(PLUGIN_NAME).debug(
+                "Could not remove temporary cache path: %s",
+                path,
+                exc_info=True,
+            )
 
     def __remove_empty_dirs(self, path: Union[str, Path]):
         path = Path(path)
@@ -491,6 +584,22 @@ class CacheMaintenanceService:
             metadata.connection_id in connection_ids
             or metadata.instance_id == connection.domain_uuid
         )
+
+    def __has_resource_container(
+        self,
+        containers: List[Tuple[Path, str]],
+        resource_id: int,
+    ) -> bool:
+        for file_path, _label in containers:
+            try:
+                metadata = container_metadata(file_path)
+            except Exception:
+                continue
+
+            if metadata.resource_id == resource_id:
+                return True
+
+        return False
 
     def __is_file_used_by_project(self, file_path: Path) -> bool:
         return file_path in self.__project_container_paths()

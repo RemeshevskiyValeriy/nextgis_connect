@@ -172,6 +172,64 @@ def test_gc_skips_blob_referenced_by_pending_delete(tmp_path: Path) -> None:
     assert storage_index.gc_candidates() == []
 
 
+def test_gc_skips_referenced_attachment_by_default(tmp_path: Path) -> None:
+    instance_uuid = "4bdf8332-5df3-4dd4-b9d4-a57d98436b0e"
+    storage_index = SqliteStorageIndex(
+        tmp_path / instance_uuid / "storage.sqlite"
+    )
+    blob_entry = _write_entry(tmp_path, storage_index, instance_uuid)
+    assert blob_entry.id is not None
+    storage_index.upsert_attachment_record(
+        AttachmentKey(
+            instance_uuid=instance_uuid,
+            resource_id=42,
+            feature_local_id=1,
+            feature_ngw_fid=101,
+            local_attachment_id="100",
+            ngw_aid=100,
+        ),
+        committed_blob_entry_id=blob_entry.id,
+        staged_blob_entry_id=None,
+        active_blob_entry_id=blob_entry.id,
+        preview_entry_id=None,
+        pending_operation=AttachmentOperation.NONE,
+    )
+
+    assert storage_index.gc_candidates() == []
+
+
+def test_gc_includes_referenced_attachment_when_requested(
+    tmp_path: Path,
+) -> None:
+    instance_uuid = "4bdf8332-5df3-4dd4-b9d4-a57d98436b0e"
+    storage_index = SqliteStorageIndex(
+        tmp_path / instance_uuid / "storage.sqlite"
+    )
+    blob_entry = _write_entry(tmp_path, storage_index, instance_uuid)
+    assert blob_entry.id is not None
+    storage_index.upsert_attachment_record(
+        AttachmentKey(
+            instance_uuid=instance_uuid,
+            resource_id=42,
+            feature_local_id=1,
+            feature_ngw_fid=101,
+            local_attachment_id="100",
+            ngw_aid=100,
+        ),
+        committed_blob_entry_id=blob_entry.id,
+        staged_blob_entry_id=None,
+        active_blob_entry_id=blob_entry.id,
+        preview_entry_id=None,
+        pending_operation=AttachmentOperation.NONE,
+    )
+
+    candidates = storage_index.gc_candidates(
+        delete_referenced_attachments=True
+    )
+
+    assert candidates == [blob_entry]
+
+
 def _write_entry(
     tmp_path: Path,
     storage_index: SqliteStorageIndex,

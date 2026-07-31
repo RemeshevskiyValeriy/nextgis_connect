@@ -1743,7 +1743,18 @@ class DetachedLayer(QObject):
         assert self.__container.metadata.instance_id
 
         storage_service = DetachedStorageServiceFactory.create()
-        path = storage_service.attachment_path(
+        path = storage_service.cached_attachment_path(
+            self.__container.metadata.instance_id,
+            self.__container.metadata.resource_id,
+            attachment.aid,
+            file_name=attachment.name,
+            mime_type=attachment.mime_type,
+            fileobj=attachment.fileobj,
+            feature_local_id=int(attachment.fid),
+            feature_ngw_fid=attachment.ngw_fid,
+            ngw_aid=attachment.ngw_aid,
+        )
+        canonical_path = storage_service.attachment_path(
             self.__container.metadata.instance_id,
             self.__container.metadata.resource_id,
             attachment.aid,
@@ -1751,7 +1762,7 @@ class DetachedLayer(QObject):
             mime_type=attachment.mime_type,
             fileobj=attachment.fileobj,
         )
-        if path.exists():
+        if path == canonical_path and path.exists():
             storage_service.register_attachment_file(
                 self.__container.metadata.instance_id,
                 self.__container.metadata.resource_id,
@@ -2027,13 +2038,22 @@ class DetachedLayer(QObject):
         assert self.__container.metadata.instance_id
 
         storage_service = DetachedStorageServiceFactory.create()
-        path = storage_service.attachment_thumbnail_path(
+        path = storage_service.cached_attachment_thumbnail_path(
+            self.__container.metadata.instance_id,
+            self.__container.metadata.resource_id,
+            attachment.aid,
+            fileobj=attachment.fileobj,
+            feature_local_id=int(attachment.fid),
+            feature_ngw_fid=attachment.ngw_fid,
+            ngw_aid=attachment.ngw_aid,
+        )
+        canonical_path = storage_service.attachment_thumbnail_path(
             self.__container.metadata.instance_id,
             self.__container.metadata.resource_id,
             attachment.aid,
             fileobj=attachment.fileobj,
         )
-        if path.exists():
+        if path == canonical_path and path.exists():
             storage_service.register_attachment_thumbnail(
                 self.__container.metadata.instance_id,
                 self.__container.metadata.resource_id,

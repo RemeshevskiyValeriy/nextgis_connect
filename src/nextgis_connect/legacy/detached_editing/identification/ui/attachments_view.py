@@ -4,7 +4,7 @@ from qgis.PyQt.QtCore import QAbstractItemModel, QModelIndex, Qt, pyqtSignal
 from qgis.PyQt.QtGui import QContextMenuEvent, QKeyEvent, QMouseEvent
 from qgis.PyQt.QtWidgets import QListView, QWidget
 
-from nextgis_connect.legacy.detached_editing.identification.ui.attachment_delegate import (
+from nextgis_connect.features.synchronization.presentation.attachments.attachment_delegate import (
     AttachmentDelegate,
 )
 
@@ -21,6 +21,8 @@ class AttachmentsView(QListView):
     :ivar cache_attachment: Emit when the user requests caching an attachment.
     :ivar show_in_folder: Emit when the user requests revealing an attachment.
     :ivar save_as: Emit when the user requests saving an attachment.
+    :ivar delete_attachment: Emit when the user requests deleting an
+        attachment.
     """
 
     model_changed = pyqtSignal(object)  # Optional[QAbstractItemModel]
@@ -30,6 +32,7 @@ class AttachmentsView(QListView):
     show_in_folder = pyqtSignal(QModelIndex)
     save_as = pyqtSignal(QModelIndex)
     copy_attachment = pyqtSignal(QModelIndex)
+    delete_attachment = pyqtSignal(QModelIndex)
 
     def __init__(self, parent: Optional[QWidget] = None) -> None:
         """Initialize the attachments view.
@@ -44,6 +47,7 @@ class AttachmentsView(QListView):
         self._delegate.show_in_folder.connect(self.show_in_folder)
         self._delegate.save_as.connect(self.save_as)
         self._delegate.copy_attachment.connect(self.copy_attachment)
+        self._delegate.delete_attachment.connect(self.delete_attachment)
         self.setItemDelegate(self._delegate)
 
         self.setEditTriggers(QListView.EditTrigger.NoEditTriggers)
@@ -63,9 +67,13 @@ class AttachmentsView(QListView):
             ``False`` to make it editable.
         """
         if read_only:
-            self._delegate.close_current_editor()
+            self.close_current_editor()
 
         self._read_only = read_only
+
+    def close_current_editor(self) -> None:
+        """Close the inline attachment editor, if it is open."""
+        self._delegate.close_current_editor()
 
     def setModel(self, model: Optional[QAbstractItemModel]) -> None:
         """Attach a model and notify listeners about the change.

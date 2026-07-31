@@ -10,7 +10,6 @@ from qgis.core import (
 )
 from qgis.PyQt.QtNetwork import QNetworkRequest
 
-from nextgis_connect.platform.logging import logger
 from nextgis_connect.plugin.plugin_interface import NgConnectInterface
 from nextgis_connect.shared.constants import PLUGIN_NAME
 
@@ -77,11 +76,6 @@ class NgwConnection:
             return False
 
         update_user_agent_suffix(request)
-        logger.debug(
-            "Updating network request for connection %s (%s)",
-            self.name,
-            self.id,
-        )
 
         if self.auth_config_id is None:
             return False

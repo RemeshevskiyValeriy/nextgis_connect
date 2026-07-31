@@ -234,7 +234,11 @@ class SqliteStorageIndex:
             rows = cursor.fetchall()
         return [self._entry_from_row(row) for row in rows]
 
-    def gc_candidates(self) -> List[StorageEntry]:
+    def gc_candidates(
+        self,
+        *,
+        delete_referenced_attachments: bool = False,
+    ) -> List[StorageEntry]:
         """Return entries that can be considered for cleanup."""
         self._ensure_initialized()
         now = utc_now_text()
@@ -249,10 +253,15 @@ class SqliteStorageIndex:
             *states,
             StorageEntryProtection.NONE.value,
             now,
-            StorageEntryKind.ATTACHMENT_BLOB.value,
-            StorageEntryKind.ATTACHMENT_PREVIEW.value,
-            AttachmentOperation.NONE.value,
         ]
+        if delete_referenced_attachments:
+            params.extend(
+                [
+                    StorageEntryKind.ATTACHMENT_BLOB.value,
+                    StorageEntryKind.ATTACHMENT_PREVIEW.value,
+                    AttachmentOperation.NONE.value,
+                ]
+            )
         with self._connect() as connection:
             cursor = connection.execute(
                 f"""
@@ -274,7 +283,7 @@ class SqliteStorageIndex:
                             OR leases.expires_at > ?
                         )
                   )
-                  {self._gc_reference_filter()}
+                  {self._gc_reference_filter(delete_referenced_attachments)}
                   AND COALESCE(layers.has_local_changes, 0) = 0
                   AND COALESCE(layers.is_used_by_project, 0) = 0
                 ORDER BY entries.id
@@ -678,7 +687,10 @@ class SqliteStorageIndex:
             result.update(int(value) for value in row if value is not None)
         return result
 
-    def _gc_reference_filter(self) -> str:
+    def _gc_reference_filter(
+        self,
+        delete_referenced_attachments: bool,
+    ) -> str:
         """Return SQL that protects attachment references during cleanup."""
         reference_exists = """
                   SELECT 1
@@ -690,6 +702,13 @@ class SqliteStorageIndex:
                       OR records.preview_entry_id = entries.id
                   )
         """
+        if not delete_referenced_attachments:
+            return f"""
+                  AND NOT EXISTS (
+                      {reference_exists}
+                  )
+            """
+
         return f"""
                   AND (
                       (

@@ -81,7 +81,7 @@ class AttachmentUpdateCommand(DetachedLayerBaseCommand):
 
         # If the attachment belongs to a newly added feature, keep it in
         # the added attachments mapping; otherwise restore into updates.
-        if is_attachment_new(self._old_attachment.fid):
+        if is_attachment_new(self._old_attachment.aid):
             edit_buffer._added_attachments[self._old_attachment.fid][
                 self._old_attachment.aid
             ] = self._old_attachment
@@ -111,7 +111,7 @@ class AttachmentUpdateCommand(DetachedLayerBaseCommand):
 
         edit_buffer = self._detached_layer.edit_buffer
 
-        if is_attachment_new(self._old_attachment.fid):
+        if is_attachment_new(self._old_attachment.aid):
             edit_buffer._added_attachments[self._old_attachment.fid][
                 self._old_attachment.aid
             ] = self._new_attachment

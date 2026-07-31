@@ -3,7 +3,7 @@ import shutil
 from dataclasses import dataclass
 from html import escape
 from pathlib import Path
-from typing import Callable, Optional, Sequence
+from typing import Callable, Optional, Sequence, Set
 
 from qgis.PyQt.QtCore import (
     QEasingCurve,
@@ -88,6 +88,8 @@ class ImagePreviewDialog(QDialog):
     ZOOM_LABEL_HEIGHT = 34
     ZOOM_LABEL_VISIBLE_MS = 1400
     ZOOM_LABEL_FADE_MS = 220
+    IMAGE_READY_CHECK_INTERVAL_MS = 150
+    IMAGE_READY_MAX_WAIT_MS = 120000
     ACTIVE_ICON_COLOR = "#ffffff"
     UNAVAILABLE_ICON_COLOR = "#8f8f8f"
     ANCHOR_PATTERN = re.compile(
@@ -103,7 +105,8 @@ class ImagePreviewDialog(QDialog):
         current_index: int,
         parent: Optional[QWidget] = None,
         *,
-        ensure_item_ready: Optional[Callable[[int], None]] = None,
+        ensure_item_ready: Optional[Callable[[int], Optional[bool]]] = None,
+        prefetch_radius: int = 0,
         window_title_suffix: str = "",
     ) -> None:
         super().__init__(parent)
@@ -111,6 +114,7 @@ class ImagePreviewDialog(QDialog):
         self._items = list(items)
         self._current_index = max(0, min(current_index, len(items) - 1))
         self._ensure_item_ready = ensure_item_ready
+        self._prefetch_radius = max(0, prefetch_radius)
         self._window_title_suffix = window_title_suffix.strip()
         self._clipboard = Clipboard()
         self._source_pixmap = QPixmap()
@@ -122,6 +126,8 @@ class ImagePreviewDialog(QDialog):
         self._temporary_pan_offset = QPoint()
         self._description = ""
         self._is_description_expanded = False
+        self._requested_item_indices: Set[int] = set()
+        self._loading_attempts_remaining = 0
 
         self._idle_timer = QTimer(self)
         self._idle_timer.setSingleShot(True)
@@ -132,6 +138,15 @@ class ImagePreviewDialog(QDialog):
         self._zoom_label_timer.setSingleShot(True)
         self._zoom_label_timer.setInterval(self.ZOOM_LABEL_VISIBLE_MS)
         self._zoom_label_timer.timeout.connect(self._fade_zoom_label)
+
+        self._image_ready_check_timer = QTimer(self)
+        self._image_ready_check_timer.setSingleShot(True)
+        self._image_ready_check_timer.setInterval(
+            self.IMAGE_READY_CHECK_INTERVAL_MS
+        )
+        self._image_ready_check_timer.timeout.connect(
+            self._try_load_current_item
+        )
 
         self._update_window_title()
         self.resize(900, 700)
@@ -755,12 +770,10 @@ class ImagePreviewDialog(QDialog):
         self._image_label.clear()
         self._is_description_expanded = False
         self._set_image_controls_enabled(False)
-        self._set_loading_visible(True)
-        try:
-            if self._ensure_item_ready is not None:
-                self._ensure_item_ready(self._current_index)
-        finally:
-            self._set_loading_visible(False)
+        self._image_ready_check_timer.stop()
+        self._loading_attempts_remaining = (
+            self.IMAGE_READY_MAX_WAIT_MS // self.IMAGE_READY_CHECK_INTERVAL_MS
+        )
 
         item = self._current_item()
         if item is None:
@@ -768,7 +781,72 @@ class ImagePreviewDialog(QDialog):
             return
 
         self._update_panel_state()
-        self._load_pixmap(item.file_path)
+        self._request_ready_items()
+        self._try_load_current_item()
+
+    def _request_ready_items(self) -> None:
+        if self._ensure_item_ready is None:
+            return
+
+        for item_index in self._item_indices_to_request():
+            self._request_item_ready(item_index)
+
+    def _item_indices_to_request(self) -> Sequence[int]:
+        item_indices = [self._current_index]
+        for offset in range(1, self._prefetch_radius + 1):
+            item_indices.append(self._current_index + offset)
+            item_indices.append(self._current_index - offset)
+
+        return [
+            item_index
+            for item_index in item_indices
+            if 0 <= item_index < len(self._items)
+        ]
+
+    def _request_item_ready(self, item_index: int) -> None:
+        if item_index in self._requested_item_indices:
+            return
+
+        item = self._items[item_index]
+        if item.file_path is not None and item.file_path.exists():
+            return
+
+        assert self._ensure_item_ready is not None
+        self._requested_item_indices.add(item_index)
+        is_request_accepted = self._ensure_item_ready(item_index)
+        if is_request_accepted is False:
+            self._requested_item_indices.discard(item_index)
+
+    def _try_load_current_item(self) -> None:
+        item = self._current_item()
+        if item is None:
+            self._show_empty_state()
+            return
+
+        if self._load_pixmap(item.file_path):
+            self._requested_item_indices.discard(self._current_index)
+            self._image_ready_check_timer.stop()
+            self._set_loading_visible(False)
+            return
+
+        if not self._should_wait_for_current_item(item):
+            if self._loading_attempts_remaining <= 0:
+                self._requested_item_indices.discard(self._current_index)
+            self._image_ready_check_timer.stop()
+            self._set_loading_visible(False)
+            return
+
+        self._loading_attempts_remaining -= 1
+        self._set_loading_visible(True)
+        self._image_ready_check_timer.start()
+
+    def _should_wait_for_current_item(self, item: ImagePreviewItem) -> bool:
+        return (
+            self._ensure_item_ready is not None
+            and item.file_path is not None
+            and self._current_index in self._requested_item_indices
+            and self._loading_attempts_remaining > 0
+        )
 
     def _show_empty_state(self) -> None:
         self._source_pixmap = QPixmap()
@@ -784,13 +862,13 @@ class ImagePreviewDialog(QDialog):
         self._update_window_title()
         self._panel.adjustSize()
 
-    def _load_pixmap(self, image_path: Optional[Path]) -> None:
+    def _load_pixmap(self, image_path: Optional[Path]) -> bool:
         if image_path is None or not image_path.is_file():
             self._source_pixmap = QPixmap()
             self._image_label.clear()
             self._update_window_title()
             self._set_image_controls_enabled(False)
-            return
+            return False
 
         image_reader = QImageReader(str(image_path))
         image_reader.setAutoTransform(True)
@@ -800,18 +878,19 @@ class ImagePreviewDialog(QDialog):
             self._image_label.clear()
             self._update_window_title()
             self._set_image_controls_enabled(False)
-            return
+            return False
 
         self._source_pixmap = QPixmap.fromImage(image)
         if self._source_pixmap.isNull():
             self._image_label.clear()
             self._update_window_title()
             self._set_image_controls_enabled(False)
-            return
+            return False
 
         self._update_window_title()
         self._set_image_controls_enabled(True)
         self._refit_current_image()
+        return True
 
     def _refit_current_image(self) -> None:
         if self._source_pixmap.isNull():
