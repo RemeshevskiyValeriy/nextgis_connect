@@ -304,16 +304,21 @@ class NgConnectOptionsPageWidget(QgsOptionsPageWidget):
         cache_service = CacheMaintenanceService()
         initial_directory = self.__cache_directory_input_path(cache_service)
         initial_directory.mkdir(parents=True, exist_ok=True)
-        directory = QFileDialog.getExistingDirectory(
+        file_dialog = QFileDialog(
             self,
             caption=self.tr(
                 "Choose a directory to store NextGIS Connect cache"
             ),
-            directory=str(initial_directory),
         )
-        if not directory:
+        file_dialog.setOption(QFileDialog.Option.DontUseNativeDialog, True)
+        file_dialog.setFileMode(QFileDialog.FileMode.Directory)
+        file_dialog.setOption(QFileDialog.Option.ShowDirsOnly, True)
+        file_dialog.setDirectory(str(initial_directory))
+
+        if not file_dialog.exec():
             return
 
+        directory = file_dialog.selectedFiles()[0]
         self.__widget.cacheDirectoryLineEdit.setText(directory)
 
     def __cache_directory_input_path(
@@ -323,7 +328,7 @@ class NgConnectOptionsPageWidget(QgsOptionsPageWidget):
         cache_directory = self.__widget.cacheDirectoryLineEdit.text()
         if len(cache_directory) > 0:
             return Path(cache_directory)
-        return Path(cache_service.default_user_profile_cache_directory)
+        return Path(cache_service.cache_directory)
 
     def __update_reset_cache_button(self, text: str) -> None:
         self.__widget.resetCacheDirectoryButton.setEnabled(len(text) > 0)
