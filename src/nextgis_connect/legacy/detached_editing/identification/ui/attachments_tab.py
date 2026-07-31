@@ -20,7 +20,7 @@ from qgis.PyQt.QtCore import (
     QUrl,
     pyqtSlot,
 )
-from qgis.PyQt.QtGui import QDesktopServices, QImageReader
+from qgis.PyQt.QtGui import QDesktopServices, QImageReader, QPixmap
 from qgis.PyQt.QtWidgets import (
     QAction,
     QActionGroup,
@@ -65,13 +65,19 @@ from nextgis_connect.legacy.ngw_connection import (
     NgwConnection,
     NgwConnectionsManager,
 )
+from nextgis_connect.platform.clipboard import Clipboard
 from nextgis_connect.platform.filesystem import reveal_in_file_manager
 from nextgis_connect.platform.logging import logger
 from nextgis_connect.platform.qgis.compat import QgsFeatureId
 from nextgis_connect.platform.tasks import NgConnectTask
 from nextgis_connect.plugin.plugin_interface import NgConnectInterface
+from nextgis_connect.shared.constants import PLUGIN_NAME
 from nextgis_connect.shared.types import AttachmentId
 from nextgis_connect.ui_kit.icons import material_icon, qgis_icon
+from nextgis_connect.ui_kit.widgets.image_preview import (
+    ImagePreviewDialog,
+    ImagePreviewItem,
+)
 
 AttachmentThumbnailKey = Tuple[
     str,
@@ -306,6 +312,7 @@ class AttachmentsTab(QWidget):
         self._thumbnails_task: Optional[AttachmentThumbnailsTask] = None
         self._failed_thumbnail_keys: Set[AttachmentThumbnailKey] = set()
         self._is_read_only = True
+        self._clipboard = Clipboard()
 
         self._attachment_added_connection: Optional[Any] = None
         self._attachment_updated_connection: Optional[Any] = None
@@ -410,6 +417,7 @@ class AttachmentsTab(QWidget):
         )
         self._view_wrapper.view.save_as.connect(self._save_attachment_as)
         self._view_wrapper.view.show_in_folder.connect(self._show_in_folder)
+        self._view_wrapper.view.copy_attachment.connect(self._copy_attachment)
         self._view_wrapper.files_dropped.connect(self._add_files)
         layout.addWidget(self._view_wrapper)
 
@@ -829,9 +837,82 @@ class AttachmentsTab(QWidget):
         if attachment is None:
             return
 
+        if _is_image_attachment(attachment):
+            self._open_image_preview(index)
+            return
+
         self._cache_attachment(index)
 
         QDesktopServices.openUrl(QUrl.fromLocalFile(str(attachment.file_path)))
+
+    def _open_image_preview(self, index: QModelIndex) -> None:
+        items = self._image_preview_items()
+        image_row = self._image_preview_row(index)
+        if not items or image_row is None:
+            return
+
+        dialog = ImagePreviewDialog(
+            items,
+            image_row,
+            self,
+            ensure_item_ready=self._cache_image_preview_item,
+            window_title_suffix=PLUGIN_NAME,
+        )
+        dialog.exec()
+
+    def _image_preview_items(self) -> List[ImagePreviewItem]:
+        items = []
+        for row in range(self._attachments_proxy.rowCount()):
+            index = self._attachments_proxy.index(row, 0)
+            attachment: Optional[AttachmentMetadata] = index.data(
+                AttachmentsModel.Roles.ATTACHMENT
+            )
+            if attachment is None or not _is_image_attachment(attachment):
+                continue
+
+            items.append(
+                ImagePreviewItem(
+                    file_path=attachment.file_path,
+                    file_name=attachment.name or "",
+                    description=attachment.description,
+                )
+            )
+
+        return items
+
+    def _image_preview_row(self, index: QModelIndex) -> Optional[int]:
+        image_row = 0
+        for row in range(self._attachments_proxy.rowCount()):
+            current_index = self._attachments_proxy.index(row, 0)
+            attachment: Optional[AttachmentMetadata] = current_index.data(
+                AttachmentsModel.Roles.ATTACHMENT
+            )
+            if attachment is None or not _is_image_attachment(attachment):
+                continue
+
+            if current_index == index:
+                return image_row
+
+            image_row += 1
+
+        return None
+
+    def _cache_image_preview_item(self, image_row: int) -> None:
+        current_image_row = 0
+        for row in range(self._attachments_proxy.rowCount()):
+            index = self._attachments_proxy.index(row, 0)
+            attachment: Optional[AttachmentMetadata] = index.data(
+                AttachmentsModel.Roles.ATTACHMENT
+            )
+            if attachment is None or not _is_image_attachment(attachment):
+                continue
+
+            if current_image_row == image_row:
+                self._cache_attachment(index)
+                self._view_wrapper.view.viewport().update()
+                return
+
+            current_image_row += 1
 
     def _show_in_folder(self, index: QModelIndex) -> None:
         attachment: Optional[AttachmentMetadata] = index.data(
@@ -843,6 +924,21 @@ class AttachmentsTab(QWidget):
 
         assert attachment.file_path is not None
         reveal_in_file_manager(attachment.file_path)
+
+    def _copy_attachment(self, index: QModelIndex) -> None:
+        attachment: Optional[AttachmentMetadata] = index.data(
+            AttachmentsModel.Roles.ATTACHMENT
+        )
+
+        if attachment is None or not _is_image_attachment(attachment):
+            return
+
+        self._cache_attachment(index)
+        if attachment.file_path is None or not attachment.file_path.exists():
+            return
+
+        pixmap = QPixmap(str(attachment.file_path))
+        self._clipboard.copy_image(pixmap)
 
     def _save_attachment_as(self, index: QModelIndex) -> None:
         attachment: Optional[AttachmentMetadata] = index.data(

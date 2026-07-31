@@ -29,6 +29,7 @@ class AttachmentsView(QListView):
     cache_attachment = pyqtSignal(QModelIndex)
     show_in_folder = pyqtSignal(QModelIndex)
     save_as = pyqtSignal(QModelIndex)
+    copy_attachment = pyqtSignal(QModelIndex)
 
     def __init__(self, parent: Optional[QWidget] = None) -> None:
         """Initialize the attachments view.
@@ -42,6 +43,7 @@ class AttachmentsView(QListView):
         self._delegate.cache_attachment.connect(self.cache_attachment)
         self._delegate.show_in_folder.connect(self.show_in_folder)
         self._delegate.save_as.connect(self.save_as)
+        self._delegate.copy_attachment.connect(self.copy_attachment)
         self.setItemDelegate(self._delegate)
 
         self.setEditTriggers(QListView.EditTrigger.NoEditTriggers)
@@ -94,6 +96,13 @@ class AttachmentsView(QListView):
             and self.currentIndex().isValid()
         ):
             self.edit(self.currentIndex())
+        elif (
+            event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter)
+            and event.modifiers() == Qt.KeyboardModifier.NoModifier
+            and self.currentIndex().isValid()
+            and not self._delegate.has_current_editor()
+        ):
+            self.open_attachment.emit(self.currentIndex())
         else:
             super().keyPressEvent(event)
 

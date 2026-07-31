@@ -56,6 +56,7 @@ class AttachmentDelegate(WidgetItemDelegate):
     cache_attachment = pyqtSignal(QModelIndex)
     show_in_folder = pyqtSignal(QModelIndex)
     save_as = pyqtSignal(QModelIndex)
+    copy_attachment = pyqtSignal(QModelIndex)
 
     @dataclass
     class _Layout:
@@ -276,6 +277,13 @@ class AttachmentDelegate(WidgetItemDelegate):
         )
         show_in_folder_action.setObjectName("showInFolderAttachmentAction")
 
+        copy_action = attachment_menu.addAction(
+            qgis_icon("mActionEditCopy.svg"),
+            self.tr("Copy"),
+            lambda index=index: self.copy_attachment.emit(index),
+        )
+        copy_action.setObjectName("copyAttachmentAction")
+
         # Save As action
         attachment_menu.addAction(
             qgis_icon("mActionFileSaveAs.svg"),
@@ -291,6 +299,13 @@ class AttachmentDelegate(WidgetItemDelegate):
         )
         delete_action.setObjectName("deleteAttachmentAction")
 
+        persistent_index = QPersistentModelIndex(index)
+        attachment_menu.aboutToShow.connect(
+            lambda menu=attachment_menu, index=persistent_index: (
+                self._update_attachment_menu_state(menu, QModelIndex(index))
+            )
+        )
+
         return attachment_menu
 
     def _update_attachment_menu_state(
@@ -301,6 +316,7 @@ class AttachmentDelegate(WidgetItemDelegate):
         """
         is_cached = bool(index.data(AttachmentsModel.Roles.IS_CACHED))
         is_editable = bool(index.flags() & Qt.ItemFlag.ItemIsEditable)
+        mime_type = str(index.data(AttachmentsModel.Roles.MIME_TYPE) or "")
 
         open_action = menu.findChild(QAction, "openAttachmentAction")
         cache_action = menu.findChild(QAction, "cacheAttachmentAction")
@@ -308,6 +324,7 @@ class AttachmentDelegate(WidgetItemDelegate):
         show_in_folder_action = menu.findChild(
             QAction, "showInFolderAttachmentAction"
         )
+        copy_action = menu.findChild(QAction, "copyAttachmentAction")
         delete_action = menu.findChild(QAction, "deleteAttachmentAction")
 
         open_action.setText(
@@ -316,6 +333,7 @@ class AttachmentDelegate(WidgetItemDelegate):
         cache_action.setVisible(not is_cached)
         edit_action.setEnabled(is_editable)
         show_in_folder_action.setVisible(is_cached)
+        copy_action.setEnabled(is_cached and mime_type.startswith("image/"))
         delete_action.setEnabled(is_editable)
 
     def _fetch_values(
