@@ -452,6 +452,9 @@ class QGISResourceJob(NGWResourceModelJob):
             True,
             uploadFileCallback,
             createLayerCallback,
+            metadata=ResourceCreator.resource_creation_metadata(
+                qgs_raster_layer.source()
+            ),
             feedback=self._feedback,
         )
         self._raise_if_canceled()
@@ -532,6 +535,9 @@ class QGISResourceJob(NGWResourceModelJob):
             old_fid_name,
             uploadFileCallback,
             createLayerCallback,
+            metadata=ResourceCreator.resource_creation_metadata(
+                qgs_vector_layer.source()
+            ),
             feedback=self._feedback,
         )
         self._raise_if_canceled()
@@ -1475,10 +1481,16 @@ class QGISResourcesUploader(QGISResourceJob):
             lookup_table_name = self.unique_resource_name(
                 layer_node.name(), parent_group_resource
             )
+            layer = layer_node.layer()
+            assert layer is not None
+            layer = cast(QgsVectorLayer, layer)
             lookup_table = ResourceCreator.create_lookup_table(
                 lookup_table_name,
                 extract_items(layer_node, value_relation),
                 parent_group_resource,
+                metadata=ResourceCreator.resource_creation_metadata(
+                    layer.source()
+                ),
             )
             self._lookup_tables_id[value_relation] = lookup_table.resource_id
             self.putAddedResourceToResult(lookup_table)

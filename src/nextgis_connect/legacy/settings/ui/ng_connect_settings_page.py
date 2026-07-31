@@ -152,6 +152,9 @@ class NgConnectOptionsPageWidget(QgsOptionsPageWidget):
         self.__need_reinit = False
 
     def __init_resources_settings(self, settings: NgConnectSettings) -> None:
+        self.__widget.addResourceCreationMetadataCheckBox.setChecked(
+            settings.add_resource_creation_metadata
+        )
         self.__widget.addWfsLayerAfterServiceCreationCheckBox.setChecked(
             settings.add_layer_after_service_creation
         )
@@ -329,6 +332,9 @@ class NgConnectOptionsPageWidget(QgsOptionsPageWidget):
         self.__widget.cacheDirectoryLineEdit.setText("")
 
     def __save_resources_settings(self, settings: NgConnectSettings) -> None:
+        settings.add_resource_creation_metadata = (
+            self.__widget.addResourceCreationMetadataCheckBox.isChecked()
+        )
         settings.add_layer_after_service_creation = (
             self.__widget.addWfsLayerAfterServiceCreationCheckBox.isChecked()
         )

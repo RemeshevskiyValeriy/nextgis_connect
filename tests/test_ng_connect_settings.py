@@ -48,5 +48,28 @@ def test_migration_removes_obsolete_uploading_settings(
         _reset_settings_migration()
 
 
+def test_resource_creation_metadata_setting_defaults_to_enabled(
+    reset_qgis_settings: None,
+) -> None:
+    del reset_qgis_settings
+
+    _reset_settings_migration()
+
+    assert NgConnectSettings().add_resource_creation_metadata is True
+
+
+def test_resource_creation_metadata_setting_can_be_disabled(
+    reset_qgis_settings: None,
+) -> None:
+    del reset_qgis_settings
+
+    _reset_settings_migration()
+
+    settings = NgConnectSettings()
+    settings.add_resource_creation_metadata = False
+
+    assert NgConnectSettings().add_resource_creation_metadata is False
+
+
 def _reset_settings_migration() -> None:
     NgConnectSettings._NgConnectSettings__is_migrated = False

@@ -18,9 +18,14 @@
  ***************************************************************************/
 """
 
+import configparser
+import re
+from pathlib import Path
 from typing import Any, Dict, Iterable, Optional
 
 from qgis.core import QgsFeedback
+
+from nextgis_connect.legacy.settings import NgConnectSettings
 
 from .ngw_group_resource import NGWGroupResource
 from .ngw_ogcf_service import NGWOgcfService
@@ -31,6 +36,47 @@ from .ngw_wfs_service import NGWWfsService
 
 
 class ResourceCreator:
+    @staticmethod
+    def resource_created_by_metadata() -> Dict[str, str]:
+        if not NgConnectSettings().add_resource_creation_metadata:
+            return {}
+
+        return {
+            "created_by": (
+                f"NextGIS Connect/{ResourceCreator._plugin_version()}"
+            )
+        }
+
+    @staticmethod
+    def resource_creation_metadata(source: str) -> Dict[str, str]:
+        metadata = ResourceCreator.resource_created_by_metadata()
+        if len(metadata) == 0:
+            return metadata
+
+        metadata["source"] = ResourceCreator._sanitized_source(source)
+        return metadata
+
+    @staticmethod
+    def _add_metadata(
+        params: Dict[str, Any],
+        metadata: Optional[Dict[str, str]],
+    ) -> None:
+        if metadata is None or len(metadata) == 0:
+            return
+
+        params["resmeta"] = {"items": metadata}
+
+    @staticmethod
+    def _plugin_version() -> str:
+        metadata_path = Path(__file__).resolve().parents[3] / "metadata.txt"
+        metadata = configparser.ConfigParser()
+        metadata.read(str(metadata_path), encoding="utf-8")
+        return metadata.get("general", "version")
+
+    @staticmethod
+    def _sanitized_source(source: str) -> str:
+        return re.sub(r"(/[^/:\s]+):([^/@\s]*)(?=@)", r"\1:***", source)
+
     @staticmethod
     def create_group(
         parent_ngw_resource,
@@ -83,6 +129,7 @@ class ResourceCreator:
         old_fid_name,
         upload_callback,
         create_callback,
+        metadata: Optional[Dict[str, str]] = None,
         feedback: Optional[QgsFeedback] = None,
     ) -> NGWVectorLayer:
         connection = parent_ngw_resource.res_factory.connection
@@ -112,6 +159,7 @@ class ResourceCreator:
                 fid_field=",".join(fid_fields),
             ),
         )
+        ResourceCreator._add_metadata(params, metadata)
         create_callback()  # show "Create" status
 
         # Use "lunkwill" layer creation request (specific type of long request) by default.
@@ -136,6 +184,7 @@ class ResourceCreator:
         upload_as_cog,
         upload_callback,
         create_callback,
+        metadata: Optional[Dict[str, str]] = None,
         feedback: Optional[QgsFeedback] = None,
     ):
         connection = parent_ngw_resource.res_factory.connection
@@ -157,6 +206,7 @@ class ResourceCreator:
                 srs=dict(id=3857), source=raster_file_desc, cog=upload_as_cog
             ),
         )
+        ResourceCreator._add_metadata(params, metadata)
 
         create_callback()  # show "Create" status
 
@@ -223,6 +273,7 @@ class ResourceCreator:
         name: str,
         items: Dict[str, str],
         parent_group_resource: NGWGroupResource,
+        metadata: Optional[Dict[str, str]] = None,
     ) -> NGWResource:
         connection = parent_group_resource.res_factory.connection
         url = parent_group_resource.get_api_collection_url()
@@ -235,6 +286,7 @@ class ResourceCreator:
             ),
             lookup_table=dict(items=items),
         )
+        ResourceCreator._add_metadata(params, metadata)
 
         result = connection.post(url, params=params)
 

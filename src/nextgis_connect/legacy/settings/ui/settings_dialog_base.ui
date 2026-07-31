@@ -56,9 +56,19 @@
    <item>
     <widget class="QGroupBox" name="groupBox">
      <property name="title">
-      <string>Resources</string>
+      <string>Uploading</string>
      </property>
      <layout class="QVBoxLayout" name="verticalLayout_5">
+      <item>
+       <widget class="QCheckBox" name="addResourceCreationMetadataCheckBox">
+        <property name="text">
+         <string>Add metadata to layers on creation</string>
+        </property>
+        <property name="checked">
+         <bool>true</bool>
+        </property>
+       </widget>
+      </item>
       <item>
        <widget class="QCheckBox" name="addWfsLayerAfterServiceCreationCheckBox">
         <property name="text">

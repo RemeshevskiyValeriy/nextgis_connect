@@ -125,6 +125,25 @@ def test_build_resource_omits_versioning_in_auto_mode(qgis_app) -> None:
     dialog.deleteLater()
 
 
+def test_build_resource_adds_created_by_metadata(qgis_app) -> None:
+    del qgis_app
+
+    dialog, _ = _creation_dialog()
+
+    with mock.patch(
+        "nextgis_connect.legacy.ngw.core.ngw_resource_creator"
+        ".ResourceCreator._plugin_version",
+        return_value="4.0.0",
+    ):
+        resource = dialog._VectorLayerCreationDialog__build_resource()
+
+    assert resource["resmeta"] == {
+        "items": {"created_by": "NextGIS Connect/4.0.0"}
+    }
+
+    dialog.deleteLater()
+
+
 def test_build_resource_enables_versioning_explicitly(qgis_app) -> None:
     del qgis_app
 
@@ -179,6 +198,100 @@ def test_upload_vector_layer_does_not_send_versioning_flag() -> None:
     params = connection.post.call_args.kwargs["params"]
 
     assert "feature_layer" not in params
+
+
+def test_upload_vector_layer_sends_creation_metadata() -> None:
+    connection = mock.Mock()
+    connection.tus_upload_file.return_value = {"id": "upload"}
+    connection.post.return_value = {"id": 99}
+
+    parent_resource = mock.Mock()
+    parent_resource.resource_id = 42
+    parent_resource.res_factory.connection = connection
+    parent_resource.get_api_collection_url.return_value = "/api/resource/"
+
+    with mock.patch(
+        "nextgis_connect.legacy.ngw.core.ngw_resource_creator.NGWResource"
+        ".receive_resource_obj",
+        return_value=mock.Mock(),
+    ), mock.patch(
+        "nextgis_connect.legacy.ngw.core.ngw_resource_creator.NGWVectorLayer",
+        return_value=mock.Mock(),
+    ):
+        ResourceCreator.create_vector_layer(
+            parent_resource,
+            "/tmp/fake.gpkg",
+            "Created layer",
+            None,
+            lambda *_args: None,
+            lambda: None,
+            metadata={
+                "created_by": "NextGIS Connect/4.0.0",
+                "source": "/project/layer.gpkg|layername=places",
+            },
+        )
+
+    params = connection.post.call_args.kwargs["params"]
+
+    assert params["resmeta"] == {
+        "items": {
+            "created_by": "NextGIS Connect/4.0.0",
+            "source": "/project/layer.gpkg|layername=places",
+        }
+    }
+
+
+def test_resource_creation_metadata_sanitizes_source_password() -> None:
+    with mock.patch(
+        "nextgis_connect.legacy.ngw.core.ngw_resource_creator"
+        ".ResourceCreator._plugin_version",
+        return_value="4.0.0",
+    ):
+        metadata = ResourceCreator.resource_creation_metadata(
+            "service='/alice:secret@example.com/layer' "
+            "fallback='/bob:@example.com/empty-password'"
+        )
+
+    assert metadata == {
+        "created_by": "NextGIS Connect/4.0.0",
+        "source": (
+            "service='/alice:***@example.com/layer' "
+            "fallback='/bob:***@example.com/empty-password'"
+        ),
+    }
+
+
+def test_upload_vector_layer_skips_empty_creation_metadata() -> None:
+    connection = mock.Mock()
+    connection.tus_upload_file.return_value = {"id": "upload"}
+    connection.post.return_value = {"id": 99}
+
+    parent_resource = mock.Mock()
+    parent_resource.resource_id = 42
+    parent_resource.res_factory.connection = connection
+    parent_resource.get_api_collection_url.return_value = "/api/resource/"
+
+    with mock.patch(
+        "nextgis_connect.legacy.ngw.core.ngw_resource_creator.NGWResource"
+        ".receive_resource_obj",
+        return_value=mock.Mock(),
+    ), mock.patch(
+        "nextgis_connect.legacy.ngw.core.ngw_resource_creator.NGWVectorLayer",
+        return_value=mock.Mock(),
+    ):
+        ResourceCreator.create_vector_layer(
+            parent_resource,
+            "/tmp/fake.gpkg",
+            "Created layer",
+            None,
+            lambda *_args: None,
+            lambda: None,
+            metadata={},
+        )
+
+    params = connection.post.call_args.kwargs["params"]
+
+    assert "resmeta" not in params
 
 
 def _creation_dialog(

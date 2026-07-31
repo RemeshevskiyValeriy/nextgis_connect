@@ -90,6 +90,25 @@ class NgConnectSettings:
         self.__settings.endGroup()
 
     @property
+    def add_resource_creation_metadata(self) -> bool:
+        self.__settings.beginGroup(self.__plugin_group)
+        result = self.__settings.value(
+            "uploading/addResourceCreationMetadata",
+            defaultValue=True,
+            type=bool,
+        )
+        self.__settings.endGroup()
+        return result
+
+    @add_resource_creation_metadata.setter
+    def add_resource_creation_metadata(self, value: bool) -> None:
+        self.__settings.beginGroup(self.__plugin_group)
+        self.__settings.setValue(
+            "uploading/addResourceCreationMetadata", value
+        )
+        self.__settings.endGroup()
+
+    @property
     def open_web_map_after_creation(self) -> bool:
         self.__settings.beginGroup(self.__plugin_group)
         result = self.__settings.value(

@@ -23,6 +23,9 @@ from qgis.PyQt.QtWidgets import (
     QWidget,
 )
 
+from nextgis_connect.legacy.ngw.core.ngw_resource_creator import (
+    ResourceCreator,
+)
 from nextgis_connect.legacy.ngw.core.ngw_vector_layer import NGWVectorLayer
 from nextgis_connect.legacy.ngw.resources.ngw_data_type_delegate import (
     NgwDataTypeDelegate,
@@ -120,7 +123,7 @@ class VectorLayerCreationDialog(QDialog, VectorLayerCreationDialogBase):
                 enabled=versioning_mode == VersioningMode.ENABLED
             )
 
-        return dict(
+        resource = dict(
             resource=dict(
                 cls=NGWVectorLayer.type_id,
                 parent=dict(id=parent_id),
@@ -133,6 +136,11 @@ class VectorLayerCreationDialog(QDialog, VectorLayerCreationDialogBase):
                 fields=[],
             ),
         )
+        ResourceCreator._add_metadata(
+            resource,
+            ResourceCreator.resource_created_by_metadata(),
+        )
+        return resource
 
     def __save_creation_settings(self) -> None:
         NgConnectSettings().add_vector_layer_after_creation = (
