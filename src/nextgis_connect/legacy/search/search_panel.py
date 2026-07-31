@@ -51,6 +51,7 @@ class SearchPanel(QWidget):
             Qt.ToolButtonStyle.ToolButtonIconOnly
         )
         self.__search_button.setIcon(qgis_icon("search.svg"))
+        self.__search_button.setToolTip(self.tr("Run resource search"))
         self.__search_button.clicked.connect(self.__request_search)
         layout.addWidget(self.__search_button)
 

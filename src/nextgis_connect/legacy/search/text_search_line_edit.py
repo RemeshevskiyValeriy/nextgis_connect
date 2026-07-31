@@ -37,6 +37,11 @@ class TextSearchLineEdit(AbstractSearchLineEdit):
     ) -> None:
         super().__init__(parent)
         self.setPlaceholderText(self.tr("Resource name…"))
+        self.setToolTip(
+            self.tr(
+                "Search by resource name, resource URLs and simple filters"
+            )
+        )
         self.__connection_id = connection_id
         self.__resource_url_parser = SearchResourceUrlParser()
 

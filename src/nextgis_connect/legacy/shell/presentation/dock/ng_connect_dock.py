@@ -3830,7 +3830,9 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
         )
         self.search_button.setIcon(plugin_icon("actions/filter.svg"))
         self.search_button.setText(self.tr("Search"))
-        self.search_button.setToolTip(self.tr("Search"))
+        self.search_button.setToolTip(
+            self.tr("Show resource search by name or metadata")
+        )
         self.search_button.setCheckable(True)
         self.search_button.clicked.connect(self.__toggle_filter)
 

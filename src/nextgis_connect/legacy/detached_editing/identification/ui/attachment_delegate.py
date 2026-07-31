@@ -579,6 +579,7 @@ class AttachmentDelegate(WidgetItemDelegate):
         title_edit = QLineEdit(container)
         title_edit.setObjectName("editorTitle")
         title_edit.setText(title)
+        title_edit.setPlaceholderText(self.tr("Attachment name"))
         title_edit.setContentsMargins(0, 0, 0, 0)
         # Align text vertically centered like painted labels
         title_edit.setAlignment(
@@ -607,6 +608,7 @@ class AttachmentDelegate(WidgetItemDelegate):
         desc_edit = QLineEdit(container)
         desc_edit.setObjectName("editorDescription")
         desc_edit.setText(description)
+        desc_edit.setPlaceholderText(self.tr("Attachment description"))
         desc_edit.setContentsMargins(0, 0, 0, 0)
         desc_edit.setAlignment(
             cast(
