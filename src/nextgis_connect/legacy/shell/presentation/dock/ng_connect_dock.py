@@ -203,6 +203,7 @@ from nextgis_connect.legacy.tree_widget.overlay import (
     OverlayButtonState,
 )
 from nextgis_connect.legacy.tree_widget.proxy_model import NgConnectProxyModel
+from nextgis_connect.platform.clipboard import Clipboard
 from nextgis_connect.platform.logging import logger
 from nextgis_connect.platform.qgis import utils
 from nextgis_connect.platform.qgis.compat import QGIS_3_32, parse_version
@@ -3606,7 +3607,7 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
         QGSCLIPBOARD_STYLE_MIME = "application/qgis.style"
         data = dom_document.toByteArray()
         text = dom_document.toString()
-        utils.set_clipboard_data(QGSCLIPBOARD_STYLE_MIME, data, text)
+        Clipboard().set_data(QGSCLIPBOARD_STYLE_MIME, data, text)
 
     def show_msg_box(
         self,

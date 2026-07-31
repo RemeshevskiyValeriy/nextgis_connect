@@ -21,7 +21,7 @@ from nextgis_connect.legacy.ngw_connection.domain.diagnostics import (
 from nextgis_connect.legacy.ngw_connection.presentation.diagnostics.ui import (
     NgwConnectionDiagnosticsWidget,
 )
-from nextgis_connect.platform.qgis.utils import set_clipboard_data
+from nextgis_connect.platform.clipboard import Clipboard
 
 
 class NgwConnectionDiagnosticsDialog(QDialog):
@@ -127,7 +127,7 @@ class NgwConnectionDiagnosticsDialog(QDialog):
     def _copy_logs(self) -> None:
         logs = self._logs or self.tr("No logs were captured.")
 
-        set_clipboard_data(
+        Clipboard().set_data(
             "text/plain",
             logs.encode("utf-8"),
             logs,

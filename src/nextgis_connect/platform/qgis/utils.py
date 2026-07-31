@@ -1,9 +1,8 @@
-import platform
 from enum import Enum, auto
 from functools import lru_cache
 from itertools import islice
 from pathlib import Path
-from typing import Any, Optional, Tuple, Union
+from typing import Any, Optional, Tuple
 
 import qgis.utils
 from qgis.core import (
@@ -12,12 +11,7 @@ from qgis.core import (
     QgsSettings,
 )
 from qgis.gui import QgisInterface
-from qgis.PyQt.QtCore import (
-    QByteArray,
-    QLocale,
-    QMimeData,
-)
-from qgis.PyQt.QtGui import QClipboard
+from qgis.PyQt.QtCore import QLocale
 from qgis.PyQt.QtWidgets import (
     QAction,
     QMenu,
@@ -55,31 +49,6 @@ def open_plugin_help():
     components_path = package_path / "assets" / "components.json"
     dialog = AboutDialog(PACKAGE_NAME, components_path=components_path)
     dialog.exec()
-
-
-def set_clipboard_data(
-    mime_type: str, data: Union[QByteArray, bytes, bytearray], text: str
-):
-    """Set binary and text data on the application clipboard.
-
-    :param mime_type: MIME type for the binary clipboard data.
-    :param data: Binary payload to store.
-    :param text: Plain text payload to store.
-    """
-
-    def create_mime_data() -> QMimeData:
-        mime_data = QMimeData()
-        mime_data.setData(mime_type, data)
-        if len(text) > 0:
-            mime_data.setText(text)
-        return mime_data
-
-    clipboard = QgsApplication.clipboard()
-    assert clipboard is not None
-    if platform.system() == "Linux":
-        selection_mode = QClipboard.Mode.Selection
-        clipboard.setMimeData(create_mime_data(), selection_mode)
-    clipboard.setMimeData(create_mime_data(), QClipboard.Mode.Clipboard)
 
 
 def is_version_supported(current_version_string: str) -> SupportStatus:
