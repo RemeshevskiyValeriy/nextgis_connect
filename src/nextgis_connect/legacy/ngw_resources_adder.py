@@ -500,13 +500,22 @@ class NgwResourcesAdder(QObject):
             NGWWfsService, NGWOgcfService, NGWWmsService
         ] = service_index.data(QNGWResourceItem.NGWResourceRole)
 
+        layers = [
+            layer
+            for layer in service_resource.layers
+            if id(layer) not in self.__skipped_resources
+        ]
+        if len(layers) == 0:
+            return
+
+        if len(layers) == 1:
+            self.__add_service_layer(service_resource, layers[0])
+            return
+
         self.__insert_group(service_resource.display_name)
 
         # Add children
-        for layer in service_resource.layers:
-            if id(layer) in self.__skipped_resources:
-                continue
-
+        for layer in layers:
             self.__add_service_layer(service_resource, layer)
 
         self.__insertion_stack.pop()
