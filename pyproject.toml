@@ -7,17 +7,17 @@ license = { file = "LICENSE" }
 [project.optional-dependencies]
 dev = ["ruff", "pre-commit", "pytest"]
 
-[tool.qgspb.package-data]
+[tool.qgsmith.package-data]
 "nextgis_connect.assets" = ["components.json"]
 "nextgis_connect.assets.icons" = ["**/*.svg", "**/*.png"]
 "nextgis_connect.assets.styles" = ["**/*.qml"]
 "nextgis_connect.assets.themes" = ["**/*.json"]
 
-[tool.qgspb.forms]
+[tool.qgsmith.forms]
 ui-files = ["src/nextgis_connect/**/*.ui"]
 compile = false
 
-[tool.qgspb.translations]
+[tool.qgsmith.translations]
 ts-files = [
     "src/nextgis_connect/i18n/*.ts",
     "src/nextgis_connect/legacy/ngw/qgis/i18n/*.ts",

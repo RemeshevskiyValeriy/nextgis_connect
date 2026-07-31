@@ -133,6 +133,6 @@ def test_theme_file_is_included_in_package_data() -> None:
     pyproject = tomllib.loads(
         (ROOT / "pyproject.toml").read_text(encoding="utf-8")
     )
-    package_data = pyproject["tool"]["qgspb"]["package-data"]
+    package_data = pyproject["tool"]["qgsmith"]["package-data"]
 
     assert package_data["nextgis_connect.assets.themes"] == ["**/*.json"]

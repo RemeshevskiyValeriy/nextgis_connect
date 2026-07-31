@@ -46,11 +46,13 @@ class QgisPluginBuilder:
 
         self.settings = tomllib.loads(pyproject_file.read_text())
         self.project_settings = self.settings.get("project", {})
-        self.qgspb_settings = self.settings.get("tool", {}).get("qgspb", {})
-        self.data_settings = self.qgspb_settings.get("package-data", {})
-        self.ui_settings = self.qgspb_settings.get("forms", {})
-        self.qrc_settings = self.qgspb_settings.get("resources", {})
-        self.ts_settings = self.qgspb_settings.get("translations", {})
+        self.qgsmith_settings = self.settings.get("tool", {}).get(
+            "qgsmith", {}
+        )
+        self.data_settings = self.qgsmith_settings.get("package-data", {})
+        self.ui_settings = self.qgsmith_settings.get("forms", {})
+        self.qrc_settings = self.qgsmith_settings.get("resources", {})
+        self.ts_settings = self.qgsmith_settings.get("translations", {})
 
     def bootstrap(
         self,
@@ -461,7 +463,7 @@ class QgisPluginBuilder:
         project_name: str = self.project_settings["name"]
         src_directory = Path(__file__).parent / "src"
 
-        exclude_patterns = self.qgspb_settings.get("exclude-files", [])
+        exclude_patterns = self.qgsmith_settings.get("exclude-files", [])
         exclude_paths = set(
             exclude_path.absolute()
             for exclude_pattern in exclude_patterns

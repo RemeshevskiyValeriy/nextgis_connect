@@ -25,7 +25,7 @@
 - Keep `pyproject.toml` version and `src/nextgis_connect/metadata.txt` version equal; `setup.py build/install` prompts if they differ.
 
 ## Generated Files
-- `.ui` files are packaged directly because `[tool.qgspb.forms] compile = false`; do not add generated UI Python files unless this changes.
+- `.ui` files are packaged directly because `[tool.qgsmith.forms] compile = false`; do not add generated UI Python files unless this changes.
 - `python setup.py bootstrap` compiles configured assets/translations; `python setup.py bootstrap --ts` compiles only translations with `lrelease`.
 - `python setup.py update_ts` updates `.ts` translation files with `pylupdate5`; `python setup.py clean` removes generated outputs known to `setup.py`.
 
