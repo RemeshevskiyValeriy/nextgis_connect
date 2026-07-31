@@ -70,10 +70,10 @@ def test_set_added_layers_extent_combines_qgis_layer_extents(
     canvas = _run_extent_update(adder, _crs(4326))
 
     referenced_extent = canvas.setReferencedExtent.call_args.args[0]
-    assert referenced_extent.xMinimum() == pytest.approx(-10)
-    assert referenced_extent.yMinimum() == pytest.approx(20)
-    assert referenced_extent.xMaximum() == pytest.approx(10)
-    assert referenced_extent.yMaximum() == pytest.approx(40)
+    assert referenced_extent.xMinimum() == pytest.approx(-11)
+    assert referenced_extent.yMinimum() == pytest.approx(19)
+    assert referenced_extent.xMaximum() == pytest.approx(11)
+    assert referenced_extent.yMaximum() == pytest.approx(41)
     assert referenced_extent.crs().authid() == "EPSG:4326"
     canvas.refresh.assert_called_once()
 
@@ -107,10 +107,10 @@ def test_set_added_layers_extent_uses_ngw_endpoint_as_fallback(
 
     resource.connection.get.assert_called_once_with("/api/resource/42/extent")
     referenced_extent = canvas.setReferencedExtent.call_args.args[0]
-    assert referenced_extent.xMinimum() == pytest.approx(10)
-    assert referenced_extent.yMinimum() == pytest.approx(20)
-    assert referenced_extent.xMaximum() == pytest.approx(30)
-    assert referenced_extent.yMaximum() == pytest.approx(40)
+    assert referenced_extent.xMinimum() == pytest.approx(9)
+    assert referenced_extent.yMinimum() == pytest.approx(19)
+    assert referenced_extent.xMaximum() == pytest.approx(31)
+    assert referenced_extent.yMaximum() == pytest.approx(41)
 
 
 def test_set_added_layers_extent_prefers_ngw_endpoint_for_ngw_layer(
@@ -140,7 +140,7 @@ def test_set_added_layers_extent_prefers_ngw_endpoint_for_ngw_layer(
 
     resource.connection.get.assert_called_once_with("/api/resource/42/extent")
     referenced_extent = canvas.setReferencedExtent.call_args.args[0]
-    assert referenced_extent.xMinimum() == pytest.approx(10)
-    assert referenced_extent.yMinimum() == pytest.approx(20)
-    assert referenced_extent.xMaximum() == pytest.approx(30)
-    assert referenced_extent.yMaximum() == pytest.approx(40)
+    assert referenced_extent.xMinimum() == pytest.approx(9)
+    assert referenced_extent.yMinimum() == pytest.approx(19)
+    assert referenced_extent.xMaximum() == pytest.approx(31)
+    assert referenced_extent.yMaximum() == pytest.approx(41)

@@ -39,6 +39,9 @@ class ExtentBounds:
 
 class ExtentCalculator:
     _WEB_MERCATOR_EXTENT_LIMIT = 20037508.342789244
+    _EXTENT_BUFFER_RATIO = 0.05
+    _GEOGRAPHIC_MIN_BUFFER = 0.0001
+    _PROJECTED_MIN_BUFFER = 1.0
 
     @classmethod
     def from_ngw_extent_dict(
@@ -243,6 +246,42 @@ class ExtentCalculator:
         return cls.from_qgs_rectangle(rectangle, target_crs)
 
     @classmethod
+    def buffered(
+        cls,
+        extent: QgsReferencedRectangle,
+    ) -> Optional[QgsReferencedRectangle]:
+        crs = extent.crs()
+        if not crs.isValid():
+            return None
+
+        bounds = cls._bounds_from_values(
+            extent.xMinimum(),
+            extent.yMinimum(),
+            extent.xMaximum(),
+            extent.yMaximum(),
+        )
+        if bounds is None:
+            return None
+
+        width = bounds.x_max - bounds.x_min
+        height = bounds.y_max - bounds.y_min
+        min_buffer = cls._minimum_buffer(crs)
+        x_buffer = max(width * cls._EXTENT_BUFFER_RATIO, min_buffer)
+        y_buffer = max(height * cls._EXTENT_BUFFER_RATIO, min_buffer)
+
+        buffered_bounds = ExtentBounds(
+            x_min=bounds.x_min - x_buffer,
+            y_min=bounds.y_min - y_buffer,
+            x_max=bounds.x_max + x_buffer,
+            y_max=bounds.y_max + y_buffer,
+        ).normalized()
+
+        if crs.isGeographic():
+            buffered_bounds = cls._clamp_geographic_bounds(buffered_bounds)
+
+        return QgsReferencedRectangle(buffered_bounds.to_qgs_rectangle(), crs)
+
+    @classmethod
     def to_webmap_extent(
         cls,
         extent: QgsReferencedRectangle,
@@ -315,6 +354,22 @@ class ExtentCalculator:
             and -90.0 <= bounds.y_min <= 90.0
             and -90.0 <= bounds.y_max <= 90.0
         )
+
+    @classmethod
+    def _clamp_geographic_bounds(cls, bounds: ExtentBounds) -> ExtentBounds:
+        return ExtentBounds(
+            x_min=max(bounds.x_min, -180.0),
+            y_min=max(bounds.y_min, -90.0),
+            x_max=min(bounds.x_max, 180.0),
+            y_max=min(bounds.y_max, 90.0),
+        )
+
+    @classmethod
+    def _minimum_buffer(cls, crs: QgsCoordinateReferenceSystem) -> float:
+        if crs.isGeographic():
+            return cls._GEOGRAPHIC_MIN_BUFFER
+
+        return cls._PROJECTED_MIN_BUFFER
 
     @classmethod
     def _looks_like_web_mercator_rectangle(

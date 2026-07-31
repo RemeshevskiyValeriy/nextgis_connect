@@ -1529,4 +1529,8 @@ class NgwResourcesAdder(QObject):
 
     @staticmethod
     def __update_calculated_extent(extent: QgsReferencedRectangle) -> None:
-        NgwResourcesAdder.__update_extent(extent)
+        buffered_extent = ExtentCalculator.buffered(extent)
+        if buffered_extent is None:
+            buffered_extent = extent
+
+        NgwResourcesAdder.__update_extent(buffered_extent)

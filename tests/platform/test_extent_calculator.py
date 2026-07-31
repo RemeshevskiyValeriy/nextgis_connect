@@ -222,6 +222,61 @@ def test_combine_extents(qgis_app) -> None:
     assert extent.yMaximum() == pytest.approx(50)
 
 
+def test_buffered_expands_extent_by_ratio(qgis_app) -> None:
+    del qgis_app
+
+    crs = _crs(4326)
+    extent = QgsReferencedRectangle(
+        QgsRectangle(10.0, 20.0, 30.0, 40.0),
+        crs,
+    )
+
+    buffered_extent = ExtentCalculator.buffered(extent)
+
+    assert buffered_extent is not None
+    assert buffered_extent.crs().authid() == "EPSG:4326"
+    assert buffered_extent.xMinimum() == pytest.approx(9.0)
+    assert buffered_extent.yMinimum() == pytest.approx(19.0)
+    assert buffered_extent.xMaximum() == pytest.approx(31.0)
+    assert buffered_extent.yMaximum() == pytest.approx(41.0)
+
+
+def test_buffered_expands_zero_size_extent(qgis_app) -> None:
+    del qgis_app
+
+    crs = _crs(4326)
+    extent = QgsReferencedRectangle(
+        QgsRectangle(10.0, 20.0, 10.0, 20.0),
+        crs,
+    )
+
+    buffered_extent = ExtentCalculator.buffered(extent)
+
+    assert buffered_extent is not None
+    assert buffered_extent.xMinimum() == pytest.approx(9.9999)
+    assert buffered_extent.yMinimum() == pytest.approx(19.9999)
+    assert buffered_extent.xMaximum() == pytest.approx(10.0001)
+    assert buffered_extent.yMaximum() == pytest.approx(20.0001)
+
+
+def test_buffered_clamps_geographic_extent(qgis_app) -> None:
+    del qgis_app
+
+    crs = _crs(4326)
+    extent = QgsReferencedRectangle(
+        QgsRectangle(-180.0, -90.0, 180.0, 90.0),
+        crs,
+    )
+
+    buffered_extent = ExtentCalculator.buffered(extent)
+
+    assert buffered_extent is not None
+    assert buffered_extent.xMinimum() == pytest.approx(-180.0)
+    assert buffered_extent.yMinimum() == pytest.approx(-90.0)
+    assert buffered_extent.xMaximum() == pytest.approx(180.0)
+    assert buffered_extent.yMaximum() == pytest.approx(90.0)
+
+
 def test_to_webmap_extent_transforms_to_wgs84(qgis_app) -> None:
     del qgis_app
 
