@@ -1,4 +1,5 @@
 from qgis.core import QgsFeedback, QgsSettings
+from qgis.PyQt.QtNetwork import QNetworkReply
 
 from nextgis_connect.legacy.plugin_update import (
     NEXTGIS_REPOSITORY_URL,
@@ -7,6 +8,7 @@ from nextgis_connect.legacy.plugin_update import (
     PluginRepository,
     PluginRepositoryUrlBuilder,
     PluginUpdateChecker,
+    QgisPluginRepositoryPayloadFetcher,
     QgisPluginRepositorySettingsReader,
 )
 
@@ -124,6 +126,42 @@ def test_plugin_repository_url_adds_qgis_version_once(qgis_app) -> None:
     assert "stable=true" in url
     assert "&qgis=" in url
     assert builder.build(url) == url
+
+
+def test_plugin_repository_fetcher_updates_user_agent_suffix(
+    qgis_app,
+    monkeypatch,
+) -> None:
+    del qgis_app
+
+    updated_requests = []
+
+    class FakeResponse:
+        def error(self):
+            return QNetworkReply.NetworkError.NoError
+
+        def content(self) -> bytes:
+            return b"<plugins />"
+
+    def fake_update_user_agent_suffix(request) -> None:
+        updated_requests.append(request)
+
+    monkeypatch.setattr(
+        "nextgis_connect.legacy.plugin_update.update_user_agent_suffix",
+        fake_update_user_agent_suffix,
+    )
+    monkeypatch.setattr(
+        "nextgis_connect.legacy.plugin_update."
+        "QgsNetworkAccessManager.blockingGet",
+        lambda *args: FakeResponse(),
+    )
+
+    QgisPluginRepositoryPayloadFetcher().fetch(
+        PluginRepository("Repository", "https://example.com/plugins.xml"),
+        QgsFeedback(),
+    )
+
+    assert len(updated_requests) == 1
 
 
 def test_read_plugin_repositories_returns_enabled_qgis_repositories(

@@ -3,8 +3,48 @@ from dataclasses import dataclass
 from typing import Any, Dict, Iterable, Optional, Tuple
 from urllib.parse import quote, urlparse
 
-from qgis.core import QgsApplication, QgsAuthMethodConfig
+from qgis.core import (
+    QgsApplication,
+    QgsAuthMethodConfig,
+    QgsNetworkRequestParameters,
+)
 from qgis.PyQt.QtNetwork import QNetworkRequest
+
+from nextgis_connect.platform.logging import logger
+from nextgis_connect.plugin.plugin_interface import NgConnectInterface
+from nextgis_connect.shared.constants import PLUGIN_NAME
+
+
+def _plugin_version() -> str:
+    return NgConnectInterface.instance().version
+
+
+def update_user_agent_suffix(request: QNetworkRequest) -> None:
+    request_attributes = getattr(
+        QgsNetworkRequestParameters, "RequestAttributes", None
+    )
+    if request_attributes is None:
+        return
+
+    user_agent_suffix_flag = getattr(
+        request_attributes,
+        "AttributeUserAgentSuffix",
+        None,
+    )
+    if user_agent_suffix_flag is None:
+        return
+
+    user_agent_suffix_attribute = QNetworkRequest.Attribute(
+        user_agent_suffix_flag
+    )
+
+    version = _plugin_version()
+    if version == "":
+        return
+
+    request.setAttribute(
+        user_agent_suffix_attribute, f"{PLUGIN_NAME}/{version}"
+    )
 
 
 @dataclass(frozen=True)
@@ -31,12 +71,19 @@ class NgwConnection:
         return self.domain_uuid_for_url(self.url)
 
     def update_network_request(self, request: QNetworkRequest) -> bool:
-        if self.auth_config_id is None:
-            return False
-
         request_host = urlparse(request.url().toString()).netloc
         connection_host = urlparse(self.normalize_url(self.url)).netloc
         if request_host != connection_host:
+            return False
+
+        update_user_agent_suffix(request)
+        logger.debug(
+            "Updating network request for connection %s (%s)",
+            self.name,
+            self.id,
+        )
+
+        if self.auth_config_id is None:
             return False
 
         auth_manager = QgsApplication.authManager()

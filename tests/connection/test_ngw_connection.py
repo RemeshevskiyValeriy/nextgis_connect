@@ -1,10 +1,15 @@
 import unittest
 import uuid
 from dataclasses import replace
+from types import SimpleNamespace
 from unittest.mock import MagicMock, patch, sentinel
 from urllib.parse import quote
 
-from qgis.core import QgsApplication, QgsAuthMethodConfig
+from qgis.core import (
+    QgsApplication,
+    QgsAuthMethodConfig,
+    QgsNetworkRequestParameters,
+)
 from qgis.PyQt.QtCore import QUrl
 from qgis.PyQt.QtNetwork import QNetworkRequest
 
@@ -76,16 +81,39 @@ class TestNgwConnection(NgConnectTestCase):
         self.assertNotIn(connection_id, [domain_uuid, "existing-random-id"])
         uuid.UUID(connection_id)
 
-    def test_update_network_request_guest(self):
+    @patch(
+        "nextgis_connect.legacy.ngw_connection.domain.connection."
+        "_plugin_version",
+        return_value="4.0.0",
+    )
+    def test_update_network_request_guest(self, mock_plugin_version):
+        del mock_plugin_version
+
         connection = self.connection(TestConnection.SandboxGuest)
         url = f"{connection.url}/api/component/auth/current_user"
         request_before = QNetworkRequest(QUrl(url))
         request_after = QNetworkRequest(QUrl(url))
         is_updated = connection.update_network_request(request_after)
         self.assertFalse(is_updated)
-        self.assertEqual(request_before, request_after)
 
-    def test_update_network_request_login(self):
+        user_agent_suffix_attribute = self._user_agent_suffix_attribute()
+        if user_agent_suffix_attribute is None:
+            self.assertEqual(request_before, request_after)
+            return
+
+        self.assertEqual(
+            request_after.attribute(user_agent_suffix_attribute),
+            "NextGIS Connect/4.0.0",
+        )
+
+    @patch(
+        "nextgis_connect.legacy.ngw_connection.domain.connection."
+        "_plugin_version",
+        return_value="4.0.0",
+    )
+    def test_update_network_request_login(self, mock_plugin_version):
+        del mock_plugin_version
+
         connection = self.connection(TestConnection.SandboxWithLogin)
         url = f"{connection.url}/api/component/auth/current_user"
         request_before = QNetworkRequest(QUrl(url))
@@ -96,6 +124,70 @@ class TestNgwConnection(NgConnectTestCase):
         self.assertTrue(
             request.rawHeader(b"Authorization").startsWith(b"Basic")
         )
+        user_agent_suffix_attribute = self._user_agent_suffix_attribute()
+        if user_agent_suffix_attribute is not None:
+            self.assertEqual(
+                request.attribute(user_agent_suffix_attribute),
+                "NextGIS Connect/4.0.0",
+            )
+
+    def test_update_network_request_skips_user_agent_suffix_for_another_domain(
+        self,
+    ) -> None:
+        connection = replace(
+            self.ngw_connection, url="http://demo.nextgis.com"
+        )
+        request = QNetworkRequest(QUrl("http://example.com"))
+        is_updated = connection.update_network_request(request)
+        self.assertFalse(is_updated)
+
+        user_agent_suffix_attribute = self._user_agent_suffix_attribute()
+        if user_agent_suffix_attribute is not None:
+            self.assertIsNone(request.attribute(user_agent_suffix_attribute))
+
+    def test_update_user_agent_suffix_uses_plugin_version(self) -> None:
+        from nextgis_connect.legacy.ngw_connection.domain import (
+            connection as connection_module,
+        )
+
+        class FakeRequest:
+            attribute = None
+            value = None
+
+            def setAttribute(self, attribute, value) -> None:
+                self.attribute = attribute
+                self.value = value
+
+        fake_attribute = getattr(
+            QNetworkRequest.Attribute.UserMax,
+            "value",
+            QNetworkRequest.Attribute.UserMax,
+        )
+        fake_request_attributes = SimpleNamespace(
+            AttributeUserAgentSuffix=fake_attribute
+        )
+        fake_request = FakeRequest()
+
+        fake_request_parameters = SimpleNamespace(
+            RequestAttributes=fake_request_attributes
+        )
+        with patch.object(
+            connection_module,
+            "QgsNetworkRequestParameters",
+            fake_request_parameters,
+        ):
+            with patch.object(
+                connection_module,
+                "_plugin_version",
+                return_value="4.0.0",
+            ):
+                connection_module.update_user_agent_suffix(fake_request)
+
+        self.assertEqual(
+            fake_request.attribute,
+            QNetworkRequest.Attribute(fake_attribute),
+        )
+        self.assertEqual(fake_request.value, "NextGIS Connect/4.0.0")
 
     def test_update_uri_config_for_another_domain(self):
         connection = replace(
@@ -129,6 +221,24 @@ class TestNgwConnection(NgConnectTestCase):
             self.assertIn("authcfg", config)
             self.assertEqual(config[key], config_original[key])
             self.assertEqual(config["authcfg"], connection.auth_config_id)
+
+    @staticmethod
+    def _user_agent_suffix_attribute():
+        request_attributes = getattr(
+            QgsNetworkRequestParameters, "RequestAttributes", None
+        )
+        if request_attributes is None:
+            return None
+
+        user_agent_suffix_flag = getattr(
+            request_attributes,
+            "AttributeUserAgentSuffix",
+            None,
+        )
+        if user_agent_suffix_flag is None:
+            return None
+
+        return QNetworkRequest.Attribute(user_agent_suffix_flag)
 
     @patch.object(QgsApplication, "authManager")
     def test_update_uri_config_without_expand_basic(self, mock_auth_manager):

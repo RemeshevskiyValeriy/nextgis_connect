@@ -16,6 +16,9 @@ from nextgis_connect.legacy.ngw_connection.application.diagnostics.parsers impor
     PluginVersionProvider,
     QgisPluginRepositoryParser,
 )
+from nextgis_connect.legacy.ngw_connection.domain.connection import (
+    update_user_agent_suffix,
+)
 from nextgis_connect.platform.logging import logger
 from nextgis_connect.platform.qgis.compat import parse_version
 from nextgis_connect.platform.tasks import NgConnectTask
@@ -139,6 +142,7 @@ class QgisPluginRepositoryPayloadFetcher:
         request = QNetworkRequest(
             QUrl(self._url_builder.build(repository.url))
         )
+        update_user_agent_suffix(request)
         response = QgsNetworkAccessManager.blockingGet(
             request,
             repository.authcfg,
