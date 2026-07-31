@@ -19,17 +19,16 @@
 """
 
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Mapping, Optional, Tuple, Union
 
 from qgis.core import (
     QgsCoordinateReferenceSystem,
-    QgsCoordinateTransform,
-    QgsProject,
     QgsRectangle,
     QgsReferencedRectangle,
 )
 
 from nextgis_connect.legacy.ngw.core.ngw_group_resource import NGWGroupResource
+from nextgis_connect.platform.qgis.extent_calculator import ExtentCalculator
 
 from .ngw_resource import NGWResource
 
@@ -73,19 +72,7 @@ class NGWWebMap(NGWResource):
     def to_webmap_extent(
         rectangle: QgsReferencedRectangle,
     ) -> Dict[str, float]:
-        transform = QgsCoordinateTransform(
-            rectangle.crs(),
-            QgsCoordinateReferenceSystem.fromEpsgId(4326),
-            QgsProject.instance(),
-        )
-        extent = transform.transform(rectangle)
-
-        return {
-            "extent_left": extent.xMinimum(),
-            "extent_bottom": extent.yMinimum(),
-            "extent_right": extent.xMaximum(),
-            "extent_top": extent.yMaximum(),
-        }
+        return ExtentCalculator.to_webmap_extent(rectangle)
 
     @property
     def extent(self) -> Optional[QgsReferencedRectangle]:
@@ -191,39 +178,16 @@ class NGWWebMap(NGWResource):
         ngw_webmap_items: List[Dict[str, Any]],
         ngw_base_maps=None,
         bbox: Union[
-            Dict[str, float], Tuple[float, float, float, float], None
+            Mapping[str, Any],
+            QgsReferencedRectangle,
+            Tuple[float, float, float, float],
+            None,
         ] = None,
     ):
         if ngw_base_maps is None:
             ngw_base_maps = []
 
-        if bbox is None:
-            left, right, bottom, top = (-180.0, 180.0, -90.0, 90.0)
-        elif isinstance(bbox, tuple):
-            left, right, bottom, top = bbox
-        else:
-            left, right, bottom, top = (
-                bbox[f"extent_{side}"]
-                for side in ["left", "right", "bottom", "top"]
-            )
-
-        def normalize_longitude(lon: float) -> float:
-            return (lon + 180.0) % 360 - 180.0
-
-        def normalize_latitude(lat: float) -> float:
-            return max(-90.0, min(90.0, lat))
-
-        left = normalize_longitude(left) if left is not None else -180.0
-        right = normalize_longitude(right) if right is not None else 180.0
-        bottom = normalize_latitude(bottom) if bottom is not None else -90.0
-        top = normalize_latitude(top) if top is not None else 90.0
-
-        bbox = {
-            "extent_left": min(left, right),
-            "extent_right": max(left, right),
-            "extent_bottom": min(bottom, top),
-            "extent_top": max(bottom, top),
-        }
+        bbox = cls.__webmap_bbox(bbox)
 
         connection = ngw_group_resource.res_factory.connection
         url = ngw_group_resource.get_api_collection_url()
@@ -265,6 +229,34 @@ class NGWWebMap(NGWResource):
         )
 
         return ngw_resource
+
+    @classmethod
+    def __webmap_bbox(
+        cls,
+        bbox: Union[
+            Mapping[str, Any],
+            QgsReferencedRectangle,
+            Tuple[float, float, float, float],
+            None,
+        ],
+    ) -> Dict[str, float]:
+        if isinstance(bbox, QgsReferencedRectangle):
+            return ExtentCalculator.to_webmap_extent(bbox)
+
+        if bbox is None:
+            return ExtentCalculator.default_webmap_extent()
+
+        if isinstance(bbox, tuple):
+            extent = ExtentCalculator.from_ngw_extent_tuple(bbox)
+        elif isinstance(bbox, Mapping):
+            extent = ExtentCalculator.from_webmap_extent_dict(bbox)
+        else:
+            extent = None
+
+        if extent is None:
+            return ExtentCalculator.default_webmap_extent()
+
+        return ExtentCalculator.to_webmap_extent(extent)
 
 
 class NGWWebMapItem:

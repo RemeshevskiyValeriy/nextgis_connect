@@ -28,6 +28,7 @@ from nextgis_connect.legacy.ngw.resources.ngw_fields import NgwFields
 from nextgis_connect.legacy.ngw_connection import NgwConnection
 from nextgis_connect.legacy.settings import NgConnectSettings
 from nextgis_connect.platform.qgis.compat import FieldType
+from nextgis_connect.platform.qgis.extent_calculator import ExtentCalculator
 from tests.ng_connect_testcase import (
     NgConnectTestCase,
     TestConnection,
@@ -200,6 +201,51 @@ class TestDetachedContainerFactory(NgConnectTestCase):
             metadata_columns = {row[1] for row in cursor.fetchall()}
 
         self.assertNotIn("old_connection_ids", metadata_columns)
+
+    def test_create_initial_container_sets_gpkg_extent(self) -> None:
+        connection = self.connection(TestConnection.SandboxGuest)
+        ngw_layer = cast(
+            NGWVectorLayer,
+            self.resource(TestData.Points, connection),
+        )
+        extent_response = {
+            "extent": {
+                "minLon": 10,
+                "minLat": 20,
+                "maxLon": 30,
+                "maxLat": 40,
+            }
+        }
+        ngw_layer.connection.get.return_value = extent_response
+        container_path = self.create_temp_file(".gpkg")
+
+        DetachedContainerFactory().create_initial_container(
+            ngw_layer,
+            container_path,
+        )
+
+        extent = ExtentCalculator.from_ngw_extent_dict(extent_response)
+        assert extent is not None
+        expected_extent = ExtentCalculator.transform(extent, ngw_layer.qgs_srs)
+        assert expected_extent is not None
+
+        with closing(make_connection(container_path)) as connection, closing(
+            connection.cursor()
+        ) as cursor:
+            cursor.execute(
+                """
+                SELECT min_x, min_y, max_x, max_y
+                FROM gpkg_contents
+                WHERE table_name = ?
+                """,
+                (f"vector_layer_{ngw_layer.resource_id}",),
+            )
+            row = cursor.fetchone()
+
+        self.assertAlmostEqual(row[0], expected_extent.xMinimum())
+        self.assertAlmostEqual(row[1], expected_extent.yMinimum())
+        self.assertAlmostEqual(row[2], expected_extent.xMaximum())
+        self.assertAlmostEqual(row[3], expected_extent.yMaximum())
 
     @mock.patch(
         "nextgis_connect.legacy.ngw.core.NGWVectorLayer.is_versioning_enabled",

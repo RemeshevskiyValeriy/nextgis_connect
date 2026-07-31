@@ -55,6 +55,7 @@ from nextgis_connect.legacy.ngw.core import (
 from nextgis_connect.legacy.ngw.core.ngw_abstract_vector_resource import (
     NGWAbstractVectorResource,
 )
+from nextgis_connect.legacy.ngw.core.ngw_resource import API_LAYER_EXTENT
 from nextgis_connect.legacy.ngw.core.ngw_tms_resources import (
     NGWTmsConnection,
     NGWTmsLayer,
@@ -62,6 +63,9 @@ from nextgis_connect.legacy.ngw.core.ngw_tms_resources import (
 from nextgis_connect.legacy.ngw.core.ngw_webmap import (
     NGWWebMapGroup,
     NGWWebMapLayer,
+)
+from nextgis_connect.legacy.ngw.qgis.qgis_ngw_connection import (
+    QgsNgwConnection,
 )
 from nextgis_connect.legacy.ngw.resources.ngw_data_type import NgwDataType
 from nextgis_connect.legacy.ngw_connection import NgwConnectionsManager
@@ -73,6 +77,9 @@ from nextgis_connect.platform.qgis.errors import (
     NgConnectError,
     NgConnectWarning,
     NgwError,
+)
+from nextgis_connect.platform.qgis.extent_calculator import (
+    ExtentCalculator,
 )
 from nextgis_connect.platform.tasks import NgConnectTask
 from nextgis_connect.plugin.plugin_interface import NgConnectInterface
@@ -234,6 +241,9 @@ class NgwResourcesAdder(QObject):
     __skipped_resources: Set[InsertionId]
     __insertion_stack: List[InsertionPoint]
     __warnings: List[NgConnectWarning]
+    __extent_layers: List[QgsMapLayer]
+    __extent_resource_ids_by_layer_id: Dict[str, Tuple[str, int]]
+    __is_single_webmap_adding: bool
 
     def __init__(
         self,
@@ -247,6 +257,9 @@ class NgwResourcesAdder(QObject):
         self.__model = model
         self.__indices = indices if isinstance(indices, list) else [indices]
         self.__process_indexes_list()
+        self.__is_single_webmap_adding = len(
+            self.__indices
+        ) == 1 and is_webmap(self.__indices[0])
         self.__is_mass_adding = len(self.__indices) > 1 or (
             len(self.__indices) == 1
             and not (
@@ -262,6 +275,8 @@ class NgwResourcesAdder(QObject):
         self.__insertion_stack = []
         self.__insertion_stack.append(insertion_point)
         self.__warnings = []
+        self.__extent_layers = []
+        self.__extent_resource_ids_by_layer_id = {}
 
     def missing_resources(self) -> Tuple[bool, List[int]]:
         """Extract resources needed for layers to add to QGIS"""
@@ -325,6 +340,8 @@ class NgwResourcesAdder(QObject):
                 self.__add_resource(index)
 
             added_layers = len(self.__layers)
+            if not self.__is_single_webmap_adding:
+                self.__set_added_layers_extent()
 
         except NgwError as error:
             NgConnectInterface.instance().notifier.display_exception(error)
@@ -352,6 +369,8 @@ class NgwResourcesAdder(QObject):
             self.__insertion_stack.clear()
             self.__layers_params.clear()
             self.__layers.clear()
+            self.__extent_layers.clear()
+            self.__extent_resource_ids_by_layer_id.clear()
 
         if added_layers == 0:
             layer_label = "No layers"
@@ -465,6 +484,11 @@ class NgwResourcesAdder(QObject):
         assert layer_node is not None
         layer_node.setExpanded(not self.__is_mass_adding)
         insertion_point.position += 1
+        self.__register_extent_layer(
+            layer,
+            layer_resource.connection_id,
+            layer_resource.resource_id,
+        )
 
         return layer_node
 
@@ -524,6 +548,11 @@ class NgwResourcesAdder(QObject):
         assert layer_node is not None
         layer_node.setExpanded(False)
         insertion_point.position += 1
+        self.__register_extent_layer(
+            layer,
+            ngw_resource.connection_id,
+            getattr(service_layer, "resource_id", ngw_resource.resource_id),
+        )
 
     def __add_webmap(self, webmap_index: QModelIndex) -> None:
         webmap_resource: NGWWebMap = webmap_index.data(
@@ -551,8 +580,8 @@ class NgwResourcesAdder(QObject):
 
         self.__insertion_stack.pop()
 
-        # Set extent
-        self.__set_webmap_extent(webmap_resource)
+        if self.__is_single_webmap_adding:
+            self.__set_webmap_extent(webmap_resource)
 
     def __add_webmap_group(
         self, webmap: NGWWebMap, webmap_group: NGWWebMapGroup
@@ -622,6 +651,11 @@ class NgwResourcesAdder(QObject):
             webmap_layer.legend if webmap_layer.legend is not None else False
         )
         insertion_point.position += 1
+        self.__register_extent_layer(
+            layer,
+            webmap.connection_id,
+            layer_resource_id,
+        )
 
     def __add_webmap_basemaps(
         self,
@@ -674,6 +708,98 @@ class NgwResourcesAdder(QObject):
             return
 
         QTimer.singleShot(0, lambda: self.__update_extent(extent))
+
+    def __register_extent_layer(
+        self,
+        layer: QgsMapLayer,
+        connection_id: str,
+        resource_id: Optional[int],
+    ) -> None:
+        self.__extent_layers.append(layer)
+        if resource_id is None or isinstance(resource_id, bool):
+            return
+
+        try:
+            normalized_resource_id = int(resource_id)
+        except (TypeError, ValueError):
+            return
+
+        self.__extent_resource_ids_by_layer_id[layer.id()] = (
+            connection_id,
+            normalized_resource_id,
+        )
+
+    def __set_added_layers_extent(self) -> None:
+        try:
+            target_crs = self.__extent_target_crs()
+            if target_crs is None:
+                return
+
+            extent = ExtentCalculator.combine(
+                self.__added_layers_extents(),
+                target_crs,
+            )
+            if extent is None:
+                return
+
+            QTimer.singleShot(
+                0,
+                lambda: self.__update_calculated_extent(extent),
+            )
+        except Exception:
+            logger.exception("Could not calculate added layers extent")
+
+    def __added_layers_extents(self) -> List[QgsReferencedRectangle]:
+        result = []
+        for layer in self.__extent_layers:
+            extent = self.__ngw_extent_for_layer(layer)
+            if extent is None:
+                extent = ExtentCalculator.from_qgs_layer(layer)
+
+            if extent is not None:
+                result.append(extent)
+
+        return result
+
+    def __ngw_extent_for_layer(
+        self,
+        layer: QgsMapLayer,
+    ) -> Optional[QgsReferencedRectangle]:
+        resource_info = self.__extent_resource_ids_by_layer_id.get(layer.id())
+        if resource_info is None:
+            return None
+
+        connection_id, resource_id = resource_info
+        try:
+            resource = self.__model.resource(resource_id)
+            if resource is not None:
+                response = resource.connection.get(
+                    API_LAYER_EXTENT(resource_id)
+                )
+            else:
+                response = QgsNgwConnection(connection_id).get(
+                    API_LAYER_EXTENT(resource_id)
+                )
+        except Exception:
+            logger.exception(
+                f"Could not fetch extent for NGW resource {resource_id}"
+            )
+            return None
+
+        return ExtentCalculator.from_ngw_extent_dict(response)
+
+    def __extent_target_crs(
+        self,
+    ) -> Optional[QgsCoordinateReferenceSystem]:
+        canvas_crs = iface.mapCanvas().mapSettings().destinationCrs()
+        if canvas_crs.isValid():
+            return canvas_crs
+
+        project_crs = self.__project.crs()
+        if project_crs.isValid():
+            return project_crs
+
+        return None
 
     def __insert_group(self, name: str) -> QgsLayerTreeGroup:
         insertion_point = self.__insertion_stack.pop()
@@ -1400,3 +1526,7 @@ class NgwResourcesAdder(QObject):
     def __update_extent(extent: QgsReferencedRectangle) -> None:
         iface.mapCanvas().setReferencedExtent(extent)
         iface.mapCanvas().refresh()
+
+    @staticmethod
+    def __update_calculated_extent(extent: QgsReferencedRectangle) -> None:
+        NgwResourcesAdder.__update_extent(extent)

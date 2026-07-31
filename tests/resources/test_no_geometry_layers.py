@@ -1,4 +1,5 @@
 import urllib.parse
+from contextlib import closing
 from copy import deepcopy
 from pathlib import Path
 from typing import cast
@@ -12,6 +13,7 @@ from nextgis_connect.legacy.detached_editing.container.container_factory import 
 from nextgis_connect.legacy.detached_editing.utils import (
     container_metadata,
     detached_layer_uri,
+    make_connection,
 )
 from nextgis_connect.legacy.ngw.core import NGWVectorLayer
 from nextgis_connect.legacy.ngw.core.vector_layer_export import (
@@ -183,6 +185,20 @@ class TestNoGeometryLayers(NgConnectTestCase):
         self.assertEqual(
             metadata.table_name, f"vector_layer_{ngw_layer.resource_id}"
         )
+        ngw_layer.connection.get.assert_not_called()
+
+        with closing(make_connection(container_path)) as connection, closing(
+            connection.cursor()
+        ) as cursor:
+            cursor.execute(
+                """
+                SELECT min_x, min_y, max_x, max_y
+                FROM gpkg_contents
+                WHERE table_name = ?
+                """,
+                (metadata.table_name,),
+            )
+            self.assertEqual(cursor.fetchone(), (None, None, None, None))
 
         layer = QgsVectorLayer(detached_layer_uri(container_path), "", "ogr")
         self.assertTrue(layer.isValid())

@@ -21,6 +21,7 @@ from nextgis_connect.legacy.detached_editing.utils import (
     detached_layer_uri,
     make_connection,
 )
+from nextgis_connect.legacy.ngw.core.ngw_resource import API_LAYER_EXTENT
 from nextgis_connect.legacy.ngw.core.ngw_vector_layer import NGWVectorLayer
 from nextgis_connect.legacy.ngw.qgis.qgis_ngw_connection import (
     NgwServerFeature,
@@ -35,6 +36,7 @@ from nextgis_connect.platform.qgis.errors import (
     LayerEditError,
     NgConnectError,
 )
+from nextgis_connect.platform.qgis.extent_calculator import ExtentCalculator
 from nextgis_connect.platform.qgis.utils import (
     wrap_sql_table_name,
     wrap_sql_value,
@@ -63,6 +65,7 @@ class DetachedContainerFactory:
             with closing(
                 make_connection(container_path)
             ) as connection, closing(connection.cursor()) as cursor:
+                self.__update_container_extent(ngw_layer, cursor)
                 self.__initialize_container_settings(cursor)
                 self.__create_container_tables(cursor)
                 self.__insert_metadata(ngw_layer, cursor)
@@ -195,6 +198,50 @@ class DetachedContainerFactory:
         writer = None
 
         return is_success
+
+    def __update_container_extent(
+        self,
+        ngw_layer: NGWVectorLayer,
+        cursor: sqlite3.Cursor,
+    ) -> None:
+        if ngw_layer.geom_name in (None, "NONE"):
+            return
+
+        target_crs = ngw_layer.qgs_srs
+        if not target_crs.isValid():
+            return
+
+        try:
+            response = ngw_layer.connection.get(
+                API_LAYER_EXTENT(ngw_layer.resource_id)
+            )
+            extent = ExtentCalculator.from_ngw_extent_dict(response)
+            if extent is None:
+                return
+
+            extent = ExtentCalculator.transform(extent, target_crs)
+            if extent is None:
+                return
+
+            cursor.execute(
+                """
+                UPDATE gpkg_contents
+                SET min_x = ?, min_y = ?, max_x = ?, max_y = ?
+                WHERE table_name = ?
+                """,
+                (
+                    extent.xMinimum(),
+                    extent.yMinimum(),
+                    extent.xMaximum(),
+                    extent.yMaximum(),
+                    f"vector_layer_{ngw_layer.resource_id}",
+                ),
+            )
+        except Exception:
+            logger.exception(
+                f"Could not set extent for detached container "
+                f"{ngw_layer.resource_id}"
+            )
 
     def __initialize_container_settings(self, cursor: sqlite3.Cursor) -> None:
         pass

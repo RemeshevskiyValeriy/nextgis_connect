@@ -30,6 +30,7 @@ from nextgis_connect.legacy.ngw.core.ngw_group_resource import NGWGroupResource
 from nextgis_connect.legacy.ngw.core.ngw_qgis_style import NGWQGISStyle
 from nextgis_connect.legacy.ngw.core.ngw_raster_layer import NGWRasterLayer
 from nextgis_connect.legacy.ngw.core.ngw_resource import (
+    API_LAYER_EXTENT,
     NGWResource,
     NGWResourceDeletePreview,
 )
@@ -52,6 +53,7 @@ from nextgis_connect.legacy.ngw.resources.utils import generate_unique_name
 from nextgis_connect.legacy.settings import NgConnectSettings
 from nextgis_connect.platform.logging import logger
 from nextgis_connect.platform.qgis.errors import NgConnectError
+from nextgis_connect.platform.qgis.extent_calculator import ExtentCalculator
 
 from .qt_ngw_resource_model_job_error import (
     JobNGWError,
@@ -148,6 +150,34 @@ class NGWResourceModelJob(QObject):
             resource_name, children_names
         )
         return unique_resource_name
+
+    def webmap_extent_from_ngw_resource(
+        self,
+        ngw_resource: NGWResource,
+    ) -> Optional[Dict[str, float]]:
+        try:
+            response = ngw_resource.connection.get(
+                API_LAYER_EXTENT(ngw_resource.resource_id)
+            )
+        except Exception:
+            logger.exception(
+                f"Could not fetch extent for NGW resource "
+                f"{ngw_resource.resource_id}"
+            )
+            return None
+
+        extent = ExtentCalculator.from_ngw_extent_dict(response)
+        if extent is None:
+            return None
+
+        try:
+            return ExtentCalculator.to_webmap_extent(extent)
+        except ValueError:
+            logger.exception(
+                f"Could not convert extent for NGW resource "
+                f"{ngw_resource.resource_id}"
+            )
+            return None
 
     def getResourcesChain2Root(self, ngw_resource):
         ngw_resource.update()
@@ -477,7 +507,7 @@ class NGWCreateMapForStyle(NGWResourceModelJob):
             ngw_map_name,
             ngw_group,
             [item.toDict() for item in ngw_webmap_root_group.children],
-            bbox=ngw_layer.extent(),
+            bbox=self.webmap_extent_from_ngw_resource(ngw_layer),
         )
 
         self.putAddedResourceToResult(ngw_resource, is_main=True)

@@ -86,6 +86,7 @@ from nextgis_connect.platform.qgis.errors import (
     NgConnectError,
     NgwError,
 )
+from nextgis_connect.platform.qgis.extent_calculator import ExtentCalculator
 from qgis.core import (
     Qgis,
     QgsApplication,
@@ -106,7 +107,6 @@ from qgis.core import (
     QgsProject,
     QgsProviderRegistry,
     QgsRasterLayer,
-    QgsReferencedRectangle,
     QgsValueRelationFieldFormatter,
     QgsVectorFileWriter,
     QgsVectorLayer,
@@ -1714,10 +1714,19 @@ class QGISProjectUploader(QGISResourcesUploader):
             QgsApplication.translate("QGISResourceJob", "creating"),
         )
 
-        extent = QgsReferencedRectangle(
-            self.iface.mapCanvas().extent(),
-            self.iface.mapCanvas().mapSettings().destinationCrs(),
+        canvas = self.iface.mapCanvas()
+        extent = ExtentCalculator.from_canvas_extent(
+            canvas.extent(),
+            canvas.mapSettings().destinationCrs(),
+            QgsProject.instance().crs(),
         )
+        bbox = None
+        if extent is not None:
+            try:
+                bbox = ExtentCalculator.to_webmap_extent(extent)
+            except ValueError:
+                logger.exception("Could not convert canvas extent")
+
         ngw_webmap_items_as_dicts = [
             item.toDict() for item in ngw_webmap_items
         ]
@@ -1736,7 +1745,7 @@ class QGISProjectUploader(QGISResourcesUploader):
             ngw_resource,
             ngw_webmap_items_as_dicts,
             ngw_webmap_basemaps,
-            NGWWebMap.to_webmap_extent(extent),
+            bbox,
         )
 
 
@@ -1785,7 +1794,7 @@ class MapForLayerCreater(QGISResourceJob):
             ngw_group,
             [item.toDict() for item in ngw_webmap_root_group.children],
             [],
-            bbox=self.ngw_layer.extent(),
+            bbox=self.webmap_extent_from_ngw_resource(self.ngw_layer),
         )
 
         self.putAddedResourceToResult(ngw_resource, is_main=True)
