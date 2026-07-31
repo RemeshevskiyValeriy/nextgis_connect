@@ -6,10 +6,16 @@ from typing import Dict, List, Optional, Tuple, Union
 
 from qgis.core import QgsProject
 
-from nextgis_connect.features.synchronization.infrastructure.storage import (
+from nextgis_connect.features.synchronization.infrastructure.storage.detached_storage_service import (
     DetachedStorageService,
+)
+from nextgis_connect.features.synchronization.infrastructure.storage.legacy_cache_migrator import (
     LegacyCacheMigrator,
+)
+from nextgis_connect.features.synchronization.infrastructure.storage.qgis_project_storage_usage import (
     QgisProjectStorageUsage,
+)
+from nextgis_connect.features.synchronization.infrastructure.storage.storage_cleanup_service import (
     StorageCleanupService,
 )
 from nextgis_connect.legacy.detached_editing.utils import (
@@ -25,12 +31,18 @@ from nextgis_connect.legacy.settings.ng_connect_settings import (
     NgConnectSettings,
 )
 from nextgis_connect.shared.constants import PLUGIN_NAME
-from nextgis_connect.shared.types import FileObjectId, UnsetType
 
 
-class NgConnectCacheManager:
+class CacheMaintenanceService:
+    """Maintain local detached cache lifecycle."""
+
     __settings: NgConnectSettings
     __project_containers: Optional[List[Path]]
+    __uuid_pattern = re.compile(
+        r"^[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-"
+        r"[89ab][a-f0-9]{3}-[a-f0-9]{12}$",
+        re.IGNORECASE,
+    )
 
     def __init__(self) -> None:
         self.__settings = NgConnectSettings()
@@ -116,7 +128,7 @@ class NgConnectCacheManager:
                 return True
 
             for directory in cache_path.glob("*"):
-                if not _is_uuid(directory.name):
+                if not self.__is_uuid(directory.name):
                     continue
 
                 if any(True for _ in directory.glob("*.gpkg")):
@@ -141,7 +153,7 @@ class NgConnectCacheManager:
                 return False
 
             for directory in cache_path.glob("*"):
-                if not _is_uuid(directory.name):
+                if not self.__is_uuid(directory.name):
                     continue
 
                 gpkg_files = list(directory.glob("*.gpkg"))
@@ -151,205 +163,7 @@ class NgConnectCacheManager:
 
         return True
 
-    def exists(self, path: Union[str, Path]) -> bool:
-        path_to_file = Path(path)
-        if not path_to_file.is_absolute():
-            path_to_file = Path(self.cache_directory) / path_to_file
-        return path_to_file.exists()
-
-    def detached_container_path(
-        self, domain_uuid: str, resource_id: Union[int, str]
-    ) -> Path:
-        return self.__storage_service.ensure_container_placeholder(
-            domain_uuid,
-            resource_id,
-        )
-
-    def canonical_detached_container_path(
-        self,
-        connection: NgwConnection,
-        resource_id: int,
-        source_container_path: Optional[Path] = None,
-    ) -> Optional[Path]:
-        return self.__storage_service.canonical_container_path(
-            connection.domain_uuid,
-            resource_id,
-            connection_id=connection.id,
-            source_container_path=source_container_path,
-        )
-
-    def attachment_directory(
-        self,
-        domain_uuid: str,
-        resource_id: Union[int, str],
-        attachment_id: Union[int, str],
-        *,
-        fileobj: Union[UnsetType, None, FileObjectId] = None,
-    ) -> Path:
-        return self.__storage_service.attachment_directory(
-            domain_uuid,
-            resource_id,
-            attachment_id,
-            fileobj=fileobj,
-        )
-
-    def attachment_path(
-        self,
-        domain_uuid: str,
-        resource_id: Union[int, str],
-        attachment_id: Union[int, str],
-        *,
-        file_name: Optional[str] = None,
-        mime_type: Optional[str] = None,
-        fileobj: Union[UnsetType, None, FileObjectId] = None,
-    ) -> Path:
-        return self.__storage_service.attachment_path(
-            domain_uuid,
-            resource_id,
-            attachment_id,
-            file_name=file_name,
-            mime_type=mime_type,
-            fileobj=fileobj,
-        )
-
-    def attachment_thumbnail_directory(
-        self,
-        domain_uuid: str,
-        resource_id: Union[int, str],
-        attachment_id: Union[int, str],
-        *,
-        fileobj: Union[UnsetType, None, FileObjectId] = None,
-    ) -> Path:
-        return self.__storage_service.attachment_thumbnail_directory(
-            domain_uuid,
-            resource_id,
-            attachment_id,
-            fileobj=fileobj,
-        )
-
-    def attachment_thumbnail_path(
-        self,
-        domain_uuid: str,
-        resource_id: Union[int, str],
-        attachment_id: Union[int, str],
-        *,
-        fileobj: Union[UnsetType, None, FileObjectId] = None,
-    ) -> Path:
-        return self.__storage_service.attachment_thumbnail_path(
-            domain_uuid,
-            resource_id,
-            attachment_id,
-            fileobj=fileobj,
-        )
-
-    def register_detached_container(
-        self,
-        domain_uuid: str,
-        resource_id: Union[int, str],
-        *,
-        connection_id: Optional[str] = None,
-        container_path: Optional[Path] = None,
-    ) -> bool:
-        """Register an existing detached container in the storage index."""
-        effective_container_path = (
-            container_path
-            or self.__storage_service.container_path(domain_uuid, resource_id)
-        )
-        return self.__storage_service.register_detached_container(
-            domain_uuid,
-            resource_id,
-            connection_id=connection_id,
-            container_path=container_path,
-            is_used_by_project=self.__is_file_used_by_project(
-                effective_container_path
-            ),
-        )
-
-    def register_attachment_file(
-        self,
-        domain_uuid: str,
-        resource_id: Union[int, str],
-        attachment_id: Union[int, str],
-        *,
-        file_name: Optional[str] = None,
-        mime_type: Optional[str] = None,
-        fileobj: Union[UnsetType, None, FileObjectId] = None,
-        feature_local_id: Optional[int] = None,
-        feature_ngw_fid: Optional[int] = None,
-        ngw_aid: Optional[int] = None,
-        is_dirty: bool = False,
-    ) -> bool:
-        """Register an existing attachment file in the storage index."""
-        return self.__storage_service.register_attachment_file(
-            domain_uuid,
-            resource_id,
-            attachment_id,
-            file_name=file_name,
-            mime_type=mime_type,
-            fileobj=fileobj,
-            feature_local_id=feature_local_id,
-            feature_ngw_fid=feature_ngw_fid,
-            ngw_aid=ngw_aid,
-            is_dirty=is_dirty,
-        )
-
-    def register_attachment_thumbnail(
-        self,
-        domain_uuid: str,
-        resource_id: Union[int, str],
-        attachment_id: Union[int, str],
-        *,
-        fileobj: Union[UnsetType, None, FileObjectId] = None,
-        feature_local_id: Optional[int] = None,
-        feature_ngw_fid: Optional[int] = None,
-        ngw_aid: Optional[int] = None,
-    ) -> bool:
-        """Register an existing attachment thumbnail in the storage index."""
-        return self.__storage_service.register_attachment_thumbnail(
-            domain_uuid,
-            resource_id,
-            attachment_id,
-            fileobj=fileobj,
-            feature_local_id=feature_local_id,
-            feature_ngw_fid=feature_ngw_fid,
-            ngw_aid=ngw_aid,
-        )
-
-    def remove_attachment_cache(
-        self,
-        domain_uuid: str,
-        resource_id: Union[int, str],
-        attachment_id: Union[int, str],
-        *,
-        fileobj: Union[UnsetType, None, FileObjectId] = None,
-    ) -> None:
-        """Remove cached attachment blob and thumbnail files."""
-        self.__storage_service.remove_attachment_cache(
-            domain_uuid,
-            resource_id,
-            attachment_id,
-            fileobj=fileobj,
-        )
-
-    def move_attachment_cache_to_fileobj(
-        self,
-        domain_uuid: str,
-        resource_id: Union[int, str],
-        attachment_id: Union[int, str],
-        *,
-        old_fileobj: Union[UnsetType, None, FileObjectId],
-        new_fileobj: FileObjectId,
-    ) -> None:
-        """Move cached attachment files to a remote file object key."""
-        self.__storage_service.move_attachment_cache_to_fileobj(
-            domain_uuid,
-            resource_id,
-            attachment_id,
-            old_fileobj=old_fileobj,
-            new_fileobj=new_fileobj,
-        )
-
-    def migrate(self) -> bool:
+    def migrate(self, connections: List[NgwConnection]) -> bool:
         logger = logging.getLogger(PLUGIN_NAME)
         logger.debug("Start cache migration")
 
@@ -374,7 +188,7 @@ class NgConnectCacheManager:
             # Reset if default value was stored in settings
             self.cache_directory = self.__settings.user_profile_cache_directory
 
-        self.__reassign_migrated_container_connection_ids()
+        self.reassign_container_connection_ids(connections)
 
         logger.debug("Cache migration completed")
 
@@ -480,15 +294,6 @@ class NgConnectCacheManager:
             return False
 
         return True
-
-    def __reassign_migrated_container_connection_ids(self) -> None:
-        from nextgis_connect.legacy.ngw_connection.application.connections_manager import (
-            NgwConnectionsManager,
-        )
-
-        self.reassign_container_connection_ids(
-            NgwConnectionsManager().connections
-        )
 
     def clear_cache(self) -> bool:
         logger = logging.getLogger(PLUGIN_NAME)
@@ -734,7 +539,7 @@ class NgConnectCacheManager:
             return len(report.errors) == 0
 
         for directory in old_base.glob("*"):
-            if not _is_uuid(directory.name):
+            if not self.__is_uuid(directory.name):
                 continue
 
             for gpkg_file in self.__legacy_container_files(directory):
@@ -841,10 +646,5 @@ class NgConnectCacheManager:
         except (TypeError, ValueError):
             return None
 
-
-def _is_uuid(name: str) -> bool:
-    uuid_pattern = re.compile(
-        r"^[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$",
-        re.IGNORECASE,
-    )
-    return bool(uuid_pattern.match(name))
+    def __is_uuid(self, name: str) -> bool:
+        return bool(self.__uuid_pattern.match(name))

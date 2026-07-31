@@ -20,6 +20,9 @@ from qgis.PyQt.QtWidgets import (
 )
 from qgis.utils import iface
 
+from nextgis_connect.features.synchronization.infrastructure.storage.cache_maintenance_service import (
+    CacheMaintenanceService,
+)
 from nextgis_connect.legacy.ngw_connection.application.connections_manager import (
     NgwConnectionsManager,
 )
@@ -30,9 +33,6 @@ from nextgis_connect.legacy.ngw_connection.presentation.connections_widget impor
     NgwConnectionsWidget,
 )
 from nextgis_connect.legacy.settings import NgConnectSettings
-from nextgis_connect.legacy.settings.ng_connect_cache_manager import (
-    NgConnectCacheManager,
-)
 from nextgis_connect.legacy.settings.tasks.clear_ng_connect_cache_task import (
     ClearNgConnectCacheTask,
 )
@@ -175,19 +175,19 @@ class NgConnectOptionsPageWidget(QgsOptionsPageWidget):
         )
 
     def __init_cache_settings(self) -> None:
-        cache_manager = NgConnectCacheManager()
+        cache_service = CacheMaintenanceService()
         is_cache_directory_default = (
-            cache_manager.cache_directory
-            == cache_manager.default_user_profile_cache_directory
+            cache_service.cache_directory
+            == cache_service.default_user_profile_cache_directory
         )
 
         # Cache directory lineedit
         self.__widget.cacheDirectoryLineEdit.setPlaceholderText(
-            cache_manager.default_user_profile_cache_directory
+            cache_service.default_user_profile_cache_directory
         )
         if not is_cache_directory_default:
             self.__widget.cacheDirectoryLineEdit.setText(
-                cache_manager.cache_directory
+                cache_service.cache_directory
             )
         self.__widget.cacheDirectoryLineEdit.textChanged.connect(
             self.__update_reset_cache_button
@@ -221,12 +221,12 @@ class NgConnectOptionsPageWidget(QgsOptionsPageWidget):
         cache_duration_combobox.setItemData(2, 30)
         cache_duration_combobox.setItemData(3, -1)
         cache_duration_combobox.setCurrentIndex(
-            cache_duration_combobox.findData(cache_manager.cache_duration)
+            cache_duration_combobox.findData(cache_service.cache_duration)
         )
 
         # Cache size button
         self.__widget.cacheSizeSlider.setValue(
-            self.CACHE_SIZE_VALUES.index(cache_manager.cache_max_size)
+            self.CACHE_SIZE_VALUES.index(cache_service.cache_max_size)
         )
 
         # Clear cache button
@@ -235,12 +235,12 @@ class NgConnectOptionsPageWidget(QgsOptionsPageWidget):
         )
         self.__widget.clearCacheButton.clicked.connect(self.__clear_cache)
 
-        self.__update_cache_button(cache_manager)
+        self.__update_cache_button(cache_service)
 
     def __update_cache_button(
-        self, cache_manager: NgConnectCacheManager
+        self, cache_service: CacheMaintenanceService
     ) -> None:
-        cache_size = cache_manager.cache_size
+        cache_size = cache_service.cache_size
         if cache_size == 0:
             self.__widget.clearCacheButton.setText(self.tr("Clear Cache"))
             self.__widget.clearCacheButton.setToolTip(
@@ -298,8 +298,8 @@ class NgConnectOptionsPageWidget(QgsOptionsPageWidget):
         self.__need_reinit = False
 
     def __choose_cache_directory(self) -> None:
-        cache_manager = NgConnectCacheManager()
-        initial_directory = self.__cache_directory_input_path(cache_manager)
+        cache_service = CacheMaintenanceService()
+        initial_directory = self.__cache_directory_input_path(cache_service)
         initial_directory.mkdir(parents=True, exist_ok=True)
         directory = QFileDialog.getExistingDirectory(
             self,
@@ -315,12 +315,12 @@ class NgConnectOptionsPageWidget(QgsOptionsPageWidget):
 
     def __cache_directory_input_path(
         self,
-        cache_manager: NgConnectCacheManager,
+        cache_service: CacheMaintenanceService,
     ) -> Path:
         cache_directory = self.__widget.cacheDirectoryLineEdit.text()
         if len(cache_directory) > 0:
             return Path(cache_directory)
-        return Path(cache_manager.default_user_profile_cache_directory)
+        return Path(cache_service.default_user_profile_cache_directory)
 
     def __update_reset_cache_button(self, text: str) -> None:
         self.__widget.resetCacheDirectoryButton.setEnabled(len(text) > 0)
@@ -354,17 +354,17 @@ class NgConnectOptionsPageWidget(QgsOptionsPageWidget):
         )
 
     def __save_cache_settings(self) -> None:
-        cache_manager = NgConnectCacheManager()
+        cache_service = CacheMaintenanceService()
         cache_directory = self.__widget.cacheDirectoryLineEdit.text()
-        cache_manager.cache_directory = (
+        cache_service.cache_directory = (
             cache_directory if len(cache_directory) > 0 else None
         )
         cache_duration_combobox = cast(
             QComboBox, self.__widget.autoRemoveCacheComboBox
         )
-        cache_manager.cache_duration = cache_duration_combobox.currentData()
+        cache_service.cache_duration = cache_duration_combobox.currentData()
         cache_size_index = self.__widget.cacheSizeSlider.value()
-        cache_manager.cache_max_size = self.CACHE_SIZE_VALUES[cache_size_index]
+        cache_service.cache_max_size = self.CACHE_SIZE_VALUES[cache_size_index]
 
     def __save_other_settings(self, settings: NgConnectSettings) -> None:
         old_debug_enabled = settings.is_debug_enabled
@@ -382,9 +382,9 @@ class NgConnectOptionsPageWidget(QgsOptionsPageWidget):
         self.__widget.clearCacheProgressBar.show()
         self.__widget.clearCacheButton.hide()
 
-        cache_manager = NgConnectCacheManager()
+        cache_service = CacheMaintenanceService()
 
-        if cache_manager.has_files_used_by_project:
+        if cache_service.has_files_used_by_project:
             message = self.tr(
                 "It is not possible to clear the cache while layers from it"
                 " are being used in a project."
@@ -397,7 +397,7 @@ class NgConnectOptionsPageWidget(QgsOptionsPageWidget):
             self.__widget.clearCacheButton.show()
             return
 
-        if cache_manager.has_containers_with_changes:
+        if cache_service.has_containers_with_changes:
             answer = QMessageBox.question(
                 self,
                 self.tr("Possible data loss"),
@@ -450,8 +450,8 @@ class NgConnectOptionsPageWidget(QgsOptionsPageWidget):
         self.__widget.clearCacheProgressBar.hide()
         self.__widget.clearCacheButton.show()
 
-        cache_manager = NgConnectCacheManager()
-        self.__update_cache_button(cache_manager)
+        cache_service = CacheMaintenanceService()
+        self.__update_cache_button(cache_service)
 
     def __on_debug_state_changed(self, state: bool) -> None:
         self.__widget.debugNetworkCheckBox.setEnabled(state)

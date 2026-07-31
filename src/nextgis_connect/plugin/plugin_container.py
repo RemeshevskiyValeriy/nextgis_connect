@@ -17,17 +17,20 @@ from qgis.PyQt.QtCore import (
 )
 from qgis.PyQt.QtWidgets import QAction, QToolBar
 
+from nextgis_connect.features.synchronization.infrastructure.storage.cache_maintenance_service import (
+    CacheMaintenanceService,
+)
 from nextgis_connect.legacy.detached_editing.detached_editing import (
     DetachedEditing,
+)
+from nextgis_connect.legacy.ngw_connection.application.connections_manager import (
+    NgwConnectionsManager,
 )
 from nextgis_connect.legacy.notifier.message_bar_notifier import (
     MessageBarNotifier,
 )
 from nextgis_connect.legacy.notifier.notifier_interface import (
     NotifierInterface,
-)
-from nextgis_connect.legacy.settings.ng_connect_cache_manager import (
-    NgConnectCacheManager,
 )
 from nextgis_connect.legacy.settings.ui.ng_connect_settings_page import (
     NgConnectOptionsWidgetFactory,
@@ -109,10 +112,11 @@ class PluginContainer:
             )
         )
         with QgsRuntimeProfiler.profile("Cache migration"):  # type: ignore
-            cache_manager = NgConnectCacheManager()
-            if cache_manager.need_migration:
-                if cache_manager.can_migrate:
-                    cache_manager.migrate()
+            cache_service = CacheMaintenanceService()
+            if cache_service.need_migration:
+                if cache_service.can_migrate:
+                    connections_manager = NgwConnectionsManager()
+                    cache_service.migrate(connections_manager.connections)
                 else:
                     # Cache will be cleared after QGIS restart before any
                     # project is loaded

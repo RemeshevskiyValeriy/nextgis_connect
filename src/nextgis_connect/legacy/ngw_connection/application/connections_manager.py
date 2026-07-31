@@ -32,6 +32,7 @@ class NgwConnectionsManager(QObject):
     __initial_current_connection_id: Optional[str]
     __migrator: NgwConnectionSettingsMigrator
     __auth_config_ids_to_remove: Set[str]
+    __is_migrated: bool
 
     def __init__(
         self,
@@ -43,11 +44,6 @@ class NgwConnectionsManager(QObject):
         migrator: Optional[NgwConnectionSettingsMigrator] = None,
     ) -> None:
         super().__init__(parent)
-        should_reassign_cache = (
-            connections is None
-            and settings_repository is None
-            and migrator is None
-        )
         self.__settings_repository = (
             QgisConnectionSettingsRepository()
             if settings_repository is None
@@ -57,6 +53,7 @@ class NgwConnectionsManager(QObject):
             NgwConnectionSettingsMigrator() if migrator is None else migrator
         )
         self.__auth_config_ids_to_remove = set()
+        self.__is_migrated = False
 
         if connections is None:
             snapshot = self.__settings_repository.read_snapshot()
@@ -84,9 +81,8 @@ class NgwConnectionsManager(QObject):
             loaded_current_connection_id
         )
         if is_migrated:
+            self.__is_migrated = True
             self.__write_all_connections()
-            if should_reassign_cache:
-                self.__reassign_cached_container_connection_ids()
 
         self.__initial_connections = dict(self.__connections)
         self.__initial_current_connection_id = self.__current_connection_id
@@ -121,6 +117,10 @@ class NgwConnectionsManager(QObject):
             != self.__initial_current_connection_id
             or self.__connections != self.__initial_connections
         )
+
+    @property
+    def is_migrated(self) -> bool:
+        return self.__is_migrated
 
     def connection(self, connection_id: str) -> Optional[NgwConnection]:
         connection = self.__connections.get(connection_id)
@@ -291,15 +291,6 @@ class NgwConnectionsManager(QObject):
         self.__settings_repository.write_snapshot(
             list(self.__connections.values()),
             self.__current_connection_id,
-        )
-
-    def __reassign_cached_container_connection_ids(self) -> None:
-        from nextgis_connect.legacy.settings.ng_connect_cache_manager import (
-            NgConnectCacheManager,
-        )
-
-        NgConnectCacheManager().reassign_container_connection_ids(
-            self.connections
         )
 
     def is_valid(self, connection_id: Optional[str]) -> bool:

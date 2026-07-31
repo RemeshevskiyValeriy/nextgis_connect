@@ -1,5 +1,8 @@
 from qgis.core import QgsApplication
 
+from nextgis_connect.features.synchronization.infrastructure.storage.cache_maintenance_service import (
+    CacheMaintenanceService,
+)
 from nextgis_connect.legacy.detached_editing.detached_editing import (
     DetachedEditing,
 )
@@ -18,6 +21,10 @@ from nextgis_connect.plugin.service_container import ServiceContainer
 def initialize_connections() -> None:
     """Initialize connection settings and migrations."""
     connections_manager = NgwConnectionsManager()
+    if connections_manager.is_migrated:
+        CacheMaintenanceService().reassign_container_connection_ids(
+            connections_manager.connections
+        )
     connections_manager.clear_old_connections_if_converted()
 
 

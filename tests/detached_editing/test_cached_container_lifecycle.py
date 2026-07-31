@@ -4,6 +4,12 @@ from unittest.mock import MagicMock
 
 from qgis.core import QgsProject, QgsVectorLayer
 
+from nextgis_connect.features.synchronization.infrastructure.storage.cache_maintenance_service import (
+    CacheMaintenanceService,
+)
+from nextgis_connect.features.synchronization.infrastructure.storage.detached_storage_service import (
+    DetachedStorageService,
+)
 from nextgis_connect.legacy.detached_editing.utils import (
     container_metadata,
     detached_layer_uri,
@@ -13,9 +19,6 @@ from nextgis_connect.legacy.ngw_connection import (
     NgwConnectionsManager,
 )
 from nextgis_connect.legacy.ngw_resources_adder import NgwResourcesAdder
-from nextgis_connect.legacy.settings.ng_connect_cache_manager import (
-    NgConnectCacheManager,
-)
 from nextgis_connect.legacy.settings.ng_connect_settings import (
     NgConnectSettings,
 )
@@ -36,9 +39,8 @@ from tests.ng_connect_testcase import (
 class TestCachedContainerLifecycle(NgConnectTestCase):
     def setUp(self) -> None:
         super().setUp()
-        cache_manager = NgConnectCacheManager()
         self.cache_directory = self.create_temp_dir("-Cache")
-        cache_manager.cache_directory = str(self.cache_directory)
+        CacheMaintenanceService().cache_directory = str(self.cache_directory)
 
     def tearDown(self) -> None:
         shutil.rmtree(str(self.cache_directory))
@@ -145,10 +147,11 @@ class TestCachedContainerLifecycle(NgConnectTestCase):
             manager.current_connection_id = old_connection.id
             manager.save()
 
-            cache_manager = NgConnectCacheManager()
-            container_path = cache_manager.detached_container_path(
-                old_connection.domain_uuid,
-                resource.resource_id,
+            container_path = (
+                self._storage_service().ensure_container_placeholder(
+                    old_connection.domain_uuid,
+                    resource.resource_id,
+                )
             )
             container_path.parent.mkdir(exist_ok=True, parents=True)
             cp(container_mock.path, container_path)
@@ -205,7 +208,7 @@ class TestCachedContainerLifecycle(NgConnectTestCase):
         )
 
         is_succeeded = (
-            NgConnectCacheManager().reassign_container_connection_ids(
+            CacheMaintenanceService().reassign_container_connection_ids(
                 [connection]
             )
         )
@@ -232,13 +235,15 @@ class TestCachedContainerLifecycle(NgConnectTestCase):
             legacy_container_path,
             connection_id=obsolete_connection_id,
         )
-        cache_manager = NgConnectCacheManager()
-        canonical_container_path = cache_manager.detached_container_path(
-            connection.domain_uuid,
-            resource.resource_id,
+        cache_service = CacheMaintenanceService()
+        canonical_container_path = (
+            self._storage_service().ensure_container_placeholder(
+                connection.domain_uuid,
+                resource.resource_id,
+            )
         )
 
-        is_succeeded = cache_manager.reassign_container_connection_ids(
+        is_succeeded = cache_service.reassign_container_connection_ids(
             [connection]
         )
 
@@ -268,7 +273,7 @@ class TestCachedContainerLifecycle(NgConnectTestCase):
         )
 
         is_succeeded = (
-            NgConnectCacheManager().reassign_container_connection_ids(
+            CacheMaintenanceService().reassign_container_connection_ids(
                 [connection, duplicate_connection]
             )
         )
@@ -280,14 +285,16 @@ class TestCachedContainerLifecycle(NgConnectTestCase):
     def _move_to_cache(self, container_mock: MagicMock):
         resource = self.resource(TestData.Points)
         connection = self.connection(TestConnection.SandboxGuest)
-        cache_manager = NgConnectCacheManager()
-        container_path = cache_manager.detached_container_path(
+        container_path = self._storage_service().ensure_container_placeholder(
             connection.domain_uuid,
             resource.resource_id,
         )
         container_path.parent.mkdir(exist_ok=True, parents=True)
         cp(container_mock.path, container_path)
         return container_path
+
+    def _storage_service(self) -> DetachedStorageService:
+        return DetachedStorageService(self.cache_directory)
 
     def _collect_detached_layer_params(self, ngw_layer):
         adder = NgwResourcesAdder.__new__(NgwResourcesAdder)

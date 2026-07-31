@@ -1,5 +1,5 @@
-from nextgis_connect.legacy.settings.ng_connect_cache_manager import (
-    NgConnectCacheManager,
+from nextgis_connect.features.synchronization.infrastructure.storage.cache_maintenance_service import (
+    CacheMaintenanceService,
 )
 from nextgis_connect.platform.logging import logger
 from nextgis_connect.platform.tasks import NgConnectTask
@@ -17,8 +17,8 @@ class PurgeNgConnectCacheTask(NgConnectTask):
         logger.debug("<b>Purging cache</b>")
 
         try:
-            cache_manager = NgConnectCacheManager()
-            cache_manager.purge_cache()
+            cache_service = CacheMaintenanceService()
+            cache_service.purge_cache()
         except Exception:
             logger.exception("An error occurred while cache purging")
             return False

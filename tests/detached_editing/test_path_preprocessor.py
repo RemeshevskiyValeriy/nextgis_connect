@@ -15,14 +15,17 @@ from qgis.core import (
 )
 from qgis.PyQt.QtCore import QDir
 
+from nextgis_connect.features.synchronization.infrastructure.storage.cache_maintenance_service import (
+    CacheMaintenanceService,
+)
+from nextgis_connect.features.synchronization.infrastructure.storage.detached_storage_service import (
+    DetachedStorageService,
+)
 from nextgis_connect.legacy.detached_editing.container.path_preprocessor import (
     DetachedEditingPathPreprocessor,
 )
 from nextgis_connect.legacy.detached_editing.utils import (
     container_metadata,
-)
-from nextgis_connect.legacy.settings.ng_connect_cache_manager import (
-    NgConnectCacheManager,
 )
 from nextgis_connect.legacy.settings.ng_connect_settings import (
     NgConnectSettings,
@@ -52,9 +55,8 @@ class TestPathPreprocessor(NgConnectTestCase):
         self._error_mock = MagicMock()
         self._path_preprocessor.error_occurred.connect(self._error_mock)
 
-        cache_manager = NgConnectCacheManager()
         self.cache_directory = self.create_temp_dir("-Cache")
-        cache_manager.cache_directory = str(self.cache_directory)
+        CacheMaintenanceService().cache_directory = str(self.cache_directory)
 
         self.project_directory = self.create_temp_dir("-Project")
         project = QgsProject.instance()
@@ -369,8 +371,7 @@ class TestPathPreprocessor(NgConnectTestCase):
         }
         connection_mock.return_value = permissions_mock
 
-        cache_manager = NgConnectCacheManager()
-        container_path = cache_manager.detached_container_path(
+        container_path = self._storage_service().ensure_container_placeholder(
             connection.domain_uuid, resource.resource_id
         )
 
@@ -445,9 +446,10 @@ class TestPathPreprocessor(NgConnectTestCase):
         resource = self.resource(TestData.Points)
         layer_name = container_mock.metadata.table_name
 
-        cache_manager = NgConnectCacheManager()
-        current_layer_path = cache_manager.detached_container_path(
-            connection.domain_uuid, resource.resource_id
+        current_layer_path = (
+            self._storage_service().ensure_container_placeholder(
+                connection.domain_uuid, resource.resource_id
+            )
         )
 
         with self.subTest("Absolute path"):
@@ -541,9 +543,11 @@ class TestPathPreprocessor(NgConnectTestCase):
                 + f"{resource.resource_id}.gpkg|layername={layer_name}"
             )
 
-            cache_manager = NgConnectCacheManager()
-            current_layer_path = cache_manager.detached_container_path(
-                connection.domain_uuid, resource.resource_id
+            current_layer_path = (
+                self._storage_service().ensure_container_placeholder(
+                    connection.domain_uuid,
+                    resource.resource_id,
+                )
             )
             current_source = str(
                 f"{current_layer_path}|layername={layer_name}"
@@ -558,8 +562,7 @@ class TestPathPreprocessor(NgConnectTestCase):
         resource = self.resource(TestData.Points)
         connection = self.connection(TestConnection.SandboxGuest)
 
-        cache_manager = NgConnectCacheManager()
-        container_path = cache_manager.detached_container_path(
+        container_path = self._storage_service().ensure_container_placeholder(
             connection.domain_uuid, resource.resource_id
         )
         container_path.parent.mkdir(exist_ok=True, parents=True)
@@ -567,6 +570,9 @@ class TestPathPreprocessor(NgConnectTestCase):
         cp(container_mock.path, container_path)
 
         container_mock.path = container_path
+
+    def _storage_service(self) -> DetachedStorageService:
+        return DetachedStorageService(self.cache_directory)
 
 
 if __name__ == "__main__":

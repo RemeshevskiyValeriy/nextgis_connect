@@ -14,6 +14,9 @@ from qgis.PyQt.QtWidgets import (
     QWidget,
 )
 
+from nextgis_connect.features.synchronization.infrastructure.storage.cache_maintenance_service import (
+    CacheMaintenanceService,
+)
 from nextgis_connect.legacy.ngw_connection.application.connections_manager import (
     NgwConnectionsManager,
 )
@@ -22,9 +25,6 @@ from nextgis_connect.legacy.ngw_connection.domain.connection import (
 )
 from nextgis_connect.legacy.ngw_connection.presentation.connection_edit_dialog import (
     NgwConnectionEditDialog,
-)
-from nextgis_connect.legacy.settings.ng_connect_cache_manager import (
-    NgConnectCacheManager,
 )
 from nextgis_connect.ui_kit.graphics.decorator import (
     NextgisBrandColor,
@@ -217,8 +217,8 @@ class NgwConnectionsWidget(QWidget):
                 connection_id
             )
         )
-        cache_manager = NgConnectCacheManager()
-        project_containers = cache_manager.containers_used_by_project(
+        cache_service = CacheMaintenanceService()
+        project_containers = cache_service.containers_used_by_project(
             connection
         )
         if len(project_containers) > 0:
@@ -228,7 +228,7 @@ class NgwConnectionsWidget(QWidget):
             )
             return
 
-        changed_containers = cache_manager.containers_with_changes(connection)
+        changed_containers = cache_service.containers_with_changes(connection)
         if not self.__confirm_remove_connection(
             connection,
             len(auth_config_ids),
@@ -237,7 +237,7 @@ class NgwConnectionsWidget(QWidget):
             return
 
         self.__connections_manager.remove(connection_id)
-        if not cache_manager.clear_connection_cache(connection):
+        if not cache_service.clear_connection_cache(connection):
             QMessageBox.warning(
                 self,
                 self.tr("Cache was not fully deleted"),

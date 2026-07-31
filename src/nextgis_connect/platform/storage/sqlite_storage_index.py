@@ -245,6 +245,14 @@ class SqliteStorageIndex:
             StorageEntryState.TEMPORARY.value,
         )
         placeholders = ", ".join("?" for _ in states)
+        params: List[object] = [
+            *states,
+            StorageEntryProtection.NONE.value,
+            now,
+            StorageEntryKind.ATTACHMENT_BLOB.value,
+            StorageEntryKind.ATTACHMENT_PREVIEW.value,
+            AttachmentOperation.NONE.value,
+        ]
         with self._connect() as connection:
             cursor = connection.execute(
                 f"""
@@ -266,19 +274,12 @@ class SqliteStorageIndex:
                             OR leases.expires_at > ?
                         )
                   )
-                  AND NOT EXISTS (
-                      SELECT 1
-                      FROM attachment_records AS records
-                      WHERE records.committed_blob_entry_id = entries.id
-                         OR records.staged_blob_entry_id = entries.id
-                         OR records.active_blob_entry_id = entries.id
-                         OR records.preview_entry_id = entries.id
-                  )
+                  {self._gc_reference_filter()}
                   AND COALESCE(layers.has_local_changes, 0) = 0
                   AND COALESCE(layers.is_used_by_project, 0) = 0
                 ORDER BY entries.id
                 """,
-                (*states, StorageEntryProtection.NONE.value, now),
+                params,
             )
             rows = cursor.fetchall()
         return [self._entry_from_row(row) for row in rows]
@@ -676,6 +677,33 @@ class SqliteStorageIndex:
         for row in rows:
             result.update(int(value) for value in row if value is not None)
         return result
+
+    def _gc_reference_filter(self) -> str:
+        """Return SQL that protects attachment references during cleanup."""
+        reference_exists = """
+                  SELECT 1
+                  FROM attachment_records AS records
+                  WHERE (
+                      records.committed_blob_entry_id = entries.id
+                      OR records.staged_blob_entry_id = entries.id
+                      OR records.active_blob_entry_id = entries.id
+                      OR records.preview_entry_id = entries.id
+                  )
+        """
+        return f"""
+                  AND (
+                      (
+                          entries.kind IN (?, ?)
+                          AND NOT EXISTS (
+                              {reference_exists}
+                              AND records.pending_operation <> ?
+                          )
+                      )
+                      OR NOT EXISTS (
+                          {reference_exists}
+                      )
+                  )
+        """
 
     def _ensure_initialized(self) -> None:
         """Initialize schema on first use."""
