@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg
+   width="128"
+   height="128"
+   viewBox="0 0 32 32"
+   fill="none"
+   version="1.1"
+   id="svg5"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg">
+  <defs
+     id="defs5" />
+  <mask
+     id="path-3-inside-1_2680_191"
+     fill="#ffffff">
+    <path
+       fill-rule="evenodd"
+       clip-rule="evenodd"
+       d="m 28.3333,17 h -4.6666 v 4.6667 H 19 v 4.6666 h 4.6667 V 31 h 4.6666 V 26.3333 H 33 v -4.6666 h -4.6667 z"
+       id="path3" />
+  </mask>
+  <g
+     id="g7"
+     transform="matrix(0.95238095,0,0,0.95238095,1.130016,-1.5675495)"
+     style="stroke-width:1.05">
+    <g
+       id="g6"
+       style="stroke-width:1.05"
+       transform="translate(-0.58651672,1.9643894)">
+      <path
+         fill-rule="evenodd"
+         clip-rule="evenodd"
+         d="m 28.3333,17 h -4.6666 v 4.6667 H 19 v 4.6666 h 4.6667 V 31 h 4.6666 V 26.3333 H 33 v -4.6666 h -4.6667 z"
+         fill="#12fd1a"
+         id="path4"
+         style="stroke-width:1.05" />
+      <path
+         d="m 23.6667,17 v -1 h -1 v 1 z m 4.6666,0 h 1 v -1 h -1 z m -4.6666,4.6667 v 1 h 1 v -1 z m -4.6667,0 v -1 h -1 v 1 z m 0,4.6666 h -1 v 1 h 1 z m 4.6667,0 h 1 v -1 h -1 z m 0,4.6667 h -1 v 1 h 1 z m 4.6666,0 v 1 h 1 v -1 z m 0,-4.6667 v -1 h -1 v 1 z m 4.6667,0 v 1 h 1 v -1 z m 0,-4.6666 h 1 v -1 h -1 z m -4.6667,0 h -1 v 1 h 1 z M 23.6667,18 h 4.6666 v -2 h -4.6666 z m 1,3.6667 V 17 h -2 v 4.6667 z m -5.6667,1 h 4.6667 v -2 H 19 Z m 1,3.6666 v -4.6666 h -2 v 4.6666 z m 3.6667,-1 H 19 v 2 h 4.6667 z m 1,5.6667 v -4.6667 h -2 V 31 Z m 3.6666,-1 h -4.6666 v 2 h 4.6666 z m -1,-3.6667 V 31 h 2 v -4.6667 z m 5.6667,-1 h -4.6667 v 2 H 33 Z m -1,-3.6666 v 4.6666 h 2 v -4.6666 z m -3.6667,1 H 33 v -2 h -4.6667 z m -1,-5.6667 v 4.6667 h 2 V 17 Z"
+         fill="#284161"
+         mask="url(#path-3-inside-1_2680_191)"
+         id="path5"
+         style="stroke-width:1.05" />
+    </g>
+  </g>
+</svg>

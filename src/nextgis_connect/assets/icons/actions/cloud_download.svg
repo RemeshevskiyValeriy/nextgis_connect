@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg
+   height="48"
+   viewBox="0 -960 960 960"
+   width="48"
+   fill="#ffffff"
+   version="1.1"
+   id="svg1"
+   xml:space="preserve"
+   xmlns:xlink="http://www.w3.org/1999/xlink"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg"><defs
+     id="defs1"><linearGradient
+       id="linearGradient2"><stop
+         style="stop-color:#5a8c5a;stop-opacity:1;"
+         offset="0"
+         id="stop2" /><stop
+         style="stop-color:#12fd1a;stop-opacity:1;"
+         offset="1"
+         id="stop3" /></linearGradient><linearGradient
+       xlink:href="#linearGradient2"
+       id="linearGradient3"
+       x1="479.99997"
+       y1="-772.15588"
+       x2="480"
+       y2="92.566902"
+       gradientUnits="userSpaceOnUse" /></defs><path
+     d="m 241.04348,-178.6087 q -91.82609,0 -156.000002,-64.17391 -64.173913,-64.17391 -64.173913,-156 0,-81.3913 52.173913,-142.95652 52.173912,-61.56522 132.521742,-74.08696 20.86956,-101.21739 98.08695,-165.3913 77.2174,-64.17391 178.43479,-64.17391 116.86956,0 197.21739,85.04347 80.34782,85.04348 80.34782,204 v 25.04348 q 75.13044,-2.08695 127.30435,48.52174 52.17391,50.6087 52.17391,127.82609 0,72 -52.17391,124.17391 -52.17391,52.17391 -124.17391,52.17391 z"
+     id="path4"
+     style="fill:#6c97c3;fill-opacity:1;stroke:#284161;stroke-width:41.7391;stroke-dasharray:none;stroke-opacity:1" /><path
+     fill-rule="evenodd"
+     clip-rule="evenodd"
+     d="M 860,-383.45116 480,-28.279784 99.999999,-383.45116 H 335.37507 V -658.92857 H 624.6249 v 275.47741 z"
+     fill="#12fd1a"
+     id="path6"
+     style="fill:url(#linearGradient3);fill-opacity:1;stroke:#284161;stroke-width:41.3208;stroke-dasharray:none;stroke-opacity:1" /></svg>
