@@ -101,11 +101,14 @@ from nextgis_connect.features.resource_browser.domain import (
     ResourceTypeBinding,
 )
 from nextgis_connect.features.resource_browser.infrastructure import (
+    DemoProjectSelectionResolver,
     QgisLayerImportTarget,
     QgisMapCanvasExtentApplicator,
+    QgisResourceBatchImporter,
     QgisResourceLayerImporter,
 )
 from nextgis_connect.features.resource_browser.presentation import (
+    QgisResourceImportInteraction,
     ResourceContextMenuController,
     ResourceTreeBranchController,
 )
@@ -199,7 +202,6 @@ from nextgis_connect.legacy.ngw_connection.presentation.connection_switch_menu i
 from nextgis_connect.legacy.ngw_connection.presentation.diagnostics.dialog import (
     NgwConnectionDiagnosticsDialog,
 )
-from nextgis_connect.legacy.ngw_resources_adder import NgwResourcesAdder
 from nextgis_connect.legacy.plugin_update import (
     PluginUpdate,
     PluginUpdateCheckResult,
@@ -2910,6 +2912,18 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
         imported_layer.triggerRepaint()
         self.checkImportActionsAvailability()
 
+    def __create_resource_batch_importer(
+        self,
+        indices: List[QModelIndex],
+        insertion_point: QgsLayerTreeRegistryBridge.InsertionPoint,
+    ) -> QgisResourceBatchImporter:
+        return QgisResourceBatchImporter(
+            self.resource_model,
+            indices,
+            insertion_point,
+            QgisResourceImportInteraction(),
+        )
+
     def __download_selected(self):
         selection_model = self.resources_tree_view.selectionModel()
         selected_indexes = [
@@ -2932,13 +2946,12 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
                 )
             )
 
-        adder = NgwResourcesAdder(
-            self.resource_model,
+        importer = self.__create_resource_batch_importer(
             indices,
             self.iface.layerTreeInsertionPoint(),
         )
 
-        is_success, missing_ids = adder.missing_resources()
+        is_success, missing_ids = importer.missing_resources()
         if not is_success:
             return
 
@@ -2954,20 +2967,18 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
             save_command(job)
             return
 
-        resolved = self.__resolve_demo_project_indices(
-            indices, allow_demo_project_resolve
+        resolution = DemoProjectSelectionResolver(self.resource_model).resolve(
+            indices,
+            allow_demo_project_resolve,
         )
-        if resolved is None:
-            return
-
-        indices, allow_demo_project_resolve = resolved
-        adder = NgwResourcesAdder(
-            self.resource_model,
+        indices = list(resolution.indices)
+        allow_demo_project_resolve = resolution.allow_demo_project_resolution
+        importer = self.__create_resource_batch_importer(
             indices,
             self.iface.layerTreeInsertionPoint(),
         )
 
-        is_success, missing_ids = adder.missing_resources()
+        is_success, missing_ids = importer.missing_resources()
         if not is_success:
             return
 
@@ -2984,7 +2995,7 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
             return
 
         # Fetch styles
-        is_success, styles_id = adder.missing_styles()
+        is_success, styles_id = importer.missing_styles()
         if not is_success:
             return
 
@@ -3014,7 +3025,7 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
         QApplication.processEvents()
 
         try:
-            adder.run()
+            importer.execute()
         finally:
             self.unblock_gui()
             self.resources_tree_view.removeBlockedJob(
@@ -3025,48 +3036,6 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
 
             tree_rigistry_bridge.setLayerInsertionPoint(backup_point)
             plugin.enable_synchronization()
-
-    def __resolve_demo_project_indices(
-        self,
-        indices: List[QModelIndex],
-        allow_resolve: bool,
-    ) -> Optional[Tuple[List[QModelIndex], bool]]:
-        if not allow_resolve or len(indices) != 1:
-            return indices, allow_resolve
-
-        demo_project_index = indices[0]
-        demo_project = demo_project_index.data(
-            QNGWResourceItem.NGWResourceRole
-        )
-        if not self.__is_demo_project(demo_project):
-            return indices, allow_resolve
-
-        webmap_index = self.__demo_project_webmap_index(demo_project_index)
-        if webmap_index is not None:
-            return [webmap_index], False
-
-        return indices, False
-
-    def __is_demo_project(self, resource: Optional[NGWResource]) -> bool:
-        return (
-            isinstance(resource, NGWGroupResource)
-            and getattr(resource.common, "cls", None) == "demo_project"
-        )
-
-    def __demo_project_webmap_index(
-        self, parent_index: QModelIndex
-    ) -> Optional[QModelIndex]:
-        for row in range(self.resource_model.rowCount(parent_index)):
-            child_index = self.resource_model.index(row, 0, parent_index)
-            child = child_index.data(QNGWResourceItem.NGWResourceRole)
-            if isinstance(child, NGWWebMap):
-                return child_index
-            elif isinstance(child, NGWGroupResource):
-                webmap_index = self.__demo_project_webmap_index(child_index)
-                if webmap_index is not None:
-                    return webmap_index
-
-        return None
 
     @pyqtSlot()
     def create_group(self) -> None:
@@ -4392,11 +4361,12 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
 
         del self._queue_to_add[found_i]
 
-        adder = NgwResourcesAdder(
-            self.resource_model, command.ngw_indexes, command.insertion_point
+        importer = self.__create_resource_batch_importer(
+            command.ngw_indexes,
+            command.insertion_point,
         )
 
-        is_success, missing_ids = adder.missing_resources()
+        is_success, missing_ids = importer.missing_resources()
         if not is_success:
             return
 
@@ -4414,19 +4384,20 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
             self._queue_to_add.append(command)
             return
 
-        resolved = self.__resolve_demo_project_indices(
+        resolution = DemoProjectSelectionResolver(self.resource_model).resolve(
             command.ngw_indexes,
             command.allow_demo_project_resolve,
         )
-        if resolved is None:
-            return
-
-        command.ngw_indexes, command.allow_demo_project_resolve = resolved
-        adder = NgwResourcesAdder(
-            self.resource_model, command.ngw_indexes, command.insertion_point
+        command.ngw_indexes = list(resolution.indices)
+        command.allow_demo_project_resolve = (
+            resolution.allow_demo_project_resolution
+        )
+        importer = self.__create_resource_batch_importer(
+            command.ngw_indexes,
+            command.insertion_point,
         )
 
-        is_success, missing_ids = adder.missing_resources()
+        is_success, missing_ids = importer.missing_resources()
         if not is_success:
             return
 
@@ -4445,7 +4416,7 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
             return
 
         # Fetch styles
-        is_success, styles_id = adder.missing_styles()
+        is_success, styles_id = importer.missing_styles()
         if not is_success:
             return
         job = self.resource_model.fetch_missing_styles(styles_id)
@@ -4472,7 +4443,7 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
         QApplication.processEvents()
 
         try:
-            adder.run()
+            importer.execute()
         finally:
             self.unblock_gui()
             self.resources_tree_view.removeBlockedJob(

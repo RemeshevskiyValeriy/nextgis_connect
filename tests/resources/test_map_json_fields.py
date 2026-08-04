@@ -12,6 +12,9 @@ from qgis.core import (
     QgsWkbTypes,
 )
 
+from nextgis_connect.features.resource_browser.infrastructure.qgis_resource_batch_layer_metadata import (
+    QgisVectorLayerMetadataApplicator,
+)
 from nextgis_connect.legacy.ngw.core import NGWVectorLayer
 from nextgis_connect.legacy.ngw.qgis.ngw_resource_model_4qgis import (
     QGISResourceJob,
@@ -19,7 +22,6 @@ from nextgis_connect.legacy.ngw.qgis.ngw_resource_model_4qgis import (
 from nextgis_connect.legacy.ngw.qgis.qgis_ngw_connection import (
     NgwServerFeature,
 )
-from nextgis_connect.legacy.ngw_resources_adder import NgwResourcesAdder
 from tests.ng_connect_testcase import NgConnectTestCase, TestData
 
 
@@ -38,10 +40,10 @@ class TestMapJsonFields(NgConnectTestCase):
         )
         self.assertTrue(qgs_layer.isValid())
 
-        adder = NgwResourcesAdder.__new__(NgwResourcesAdder)
-        adder._NgwResourcesAdder__model = mock.Mock()
-
-        adder._NgwResourcesAdder__add_edit_widgets(ngw_layer, qgs_layer)
+        QgisVectorLayerMetadataApplicator(mock.Mock()).apply(
+            ngw_layer,
+            qgs_layer,
+        )
 
         field_index = qgs_layer.fields().indexOf("INTEGER")
         self.assertEqual(
@@ -59,10 +61,10 @@ class TestMapJsonFields(NgConnectTestCase):
         )
         self.assertTrue(qgs_layer.isValid())
 
-        adder = NgwResourcesAdder.__new__(NgwResourcesAdder)
-        adder._NgwResourcesAdder__model = mock.Mock()
-
-        adder._NgwResourcesAdder__add_edit_widgets(ngw_layer, qgs_layer)
+        QgisVectorLayerMetadataApplicator(mock.Mock()).apply(
+            ngw_layer,
+            qgs_layer,
+        )
 
         field_index = qgs_layer.fields().indexOf("INTEGER")
         self.assertEqual(

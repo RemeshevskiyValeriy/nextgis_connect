@@ -2999,66 +2999,66 @@ Are you sure you want to continue?</source>
     </message>
 </context>
 <context>
-    <name>NgwResourcesAdder</name>
+    <name>QgisResourceBatchImporter</name>
     <message>
-        <location filename="../legacy/ngw_resources_adder.py" line="335"/>
+        <location filename="../features/resource_browser/infrastructure/qgis_resource_batch_import.py" line="260"/>
         <source>Resources can&apos;t be added to the map</source>
         <translation>Невозможно добавить ресурсы на карту</translation>
     </message>
     <message>
-        <location filename="../legacy/ngw_resources_adder.py" line="341"/>
+        <location filename="../features/resource_browser/infrastructure/qgis_resource_batch_import.py" line="267"/>
         <source>Resource &quot;{}&quot; can&apos;t be added to the map</source>
         <translation>Ресурс &quot;{}&quot; не может быть добавлен на карту</translation>
     </message>
     <message>
-        <location filename="../legacy/ngw_resources_adder.py" line="633"/>
+        <location filename="../features/resource_browser/infrastructure/qgis_resource_batch_import.py" line="636"/>
         <source>Basemaps</source>
         <translation>Подложки</translation>
     </message>
     <message>
-        <location filename="../legacy/ngw_resources_adder.py" line="906"/>
+        <location filename="../features/resource_browser/infrastructure/qgis_resource_batch_import.py" line="973"/>
         <source>Select style</source>
         <translation>Выберите стиль</translation>
     </message>
     <message>
-        <location filename="../legacy/ngw_resources_adder.py" line="1355"/>
+        <location filename="../features/resource_browser/presentation/resource_import_interaction.py" line="65"/>
         <source>Warning</source>
         <translation>Предупреждение</translation>
     </message>
     <message>
-        <location filename="../legacy/ngw_resources_adder.py" line="1356"/>
+        <location filename="../features/resource_browser/presentation/resource_import_interaction.py" line="68"/>
         <source>You are trying to add a WFS service containing a layer with Z dimension. WFS in QGIS doesn&apos;t fully support editing such geometries. You won&apos;t be able to edit and create new features. You will only be able to delete features.
 To fix this, change geometry type of your layer(s) and recreate WFS service.</source>
         <translation>Вы собираетесь создать сервис WFS для слоя, содержащий измерение Z. Редактирование таких геометрий по протоколу WFS в QGIS не поддерживается.
 Чтобы исправить это, измените тип геометрии вашего слоя на двумерный и пересоздайте сервис WFS.</translation>
     </message>
     <message>
-        <location filename="../legacy/ngw_resources_adder.py" line="1372"/>
+        <location filename="../features/resource_browser/presentation/resource_import_interaction.py" line="83"/>
         <source>Add anyway</source>
         <translation>Добавить всё равно</translation>
     </message>
     <message>
-        <location filename="../legacy/ngw_resources_adder.py" line="1375"/>
+        <location filename="../features/resource_browser/presentation/resource_import_interaction.py" line="86"/>
         <source>Skip</source>
         <translation>Пропустить</translation>
     </message>
     <message>
-        <location filename="../legacy/ngw_resources_adder.py" line="276"/>
+        <location filename="../features/resource_browser/infrastructure/qgis_resource_batch_import.py" line="177"/>
         <source>An error occurred while fetching resources</source>
         <translation>Возникла ошибка при получении ресурсов</translation>
     </message>
     <message>
-        <location filename="../legacy/ngw_resources_adder.py" line="299"/>
+        <location filename="../features/resource_browser/infrastructure/qgis_resource_batch_import.py" line="198"/>
         <source>An error occurred while fetching styles</source>
         <translation>Возникла ошибка при получении стилей</translation>
     </message>
     <message>
-        <location filename="../legacy/ngw_resources_adder.py" line="1089"/>
+        <location filename="../features/resource_browser/infrastructure/qgis_resource_batch_import.py" line="1221"/>
         <source>Layer &quot;{raster_layer.display_name}&quot; was not added to the map</source>
         <translation>Слой &quot;{raster_layer.display_name}&quot; не был добавлен на карту</translation>
     </message>
     <message>
-        <location filename="../legacy/ngw_resources_adder.py" line="1092"/>
+        <location filename="../features/resource_browser/infrastructure/qgis_resource_batch_import.py" line="1224"/>
         <source>Currently adding raster layers is not available for OAuth connections. Please use Basic authentication.</source>
         <translation>На текущий момент добавление растровых слоёв не доступно для соединений OAuth. Пожалуйста, используйте аутентификацию Basic.</translation>
     </message>

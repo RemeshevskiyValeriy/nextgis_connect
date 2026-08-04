@@ -182,13 +182,17 @@ class QgisMapCanvasExtentApplicator:
         self,
         source_extent: QgsReferencedRectangle,
     ) -> bool:
-        """Schedule canvas extent update after layer-tree insertion events."""
+        """Buffer and schedule an extent after layer-tree insertion events."""
         if self._canvas is None:
             return False
 
+        buffered_extent = ExtentCalculator.buffered(source_extent)
+        if buffered_extent is None:
+            buffered_extent = source_extent
+
         QTimer.singleShot(
             0,
-            lambda: self._apply_on_canvas(source_extent),
+            lambda: self._apply_on_canvas(buffered_extent),
         )
         return True
 

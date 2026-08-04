@@ -4,6 +4,9 @@ from unittest.mock import MagicMock
 
 from qgis.core import QgsProject, QgsVectorLayer
 
+from nextgis_connect.features.resource_browser.infrastructure.qgis_resource_batch_import import (
+    QgisResourceBatchImporter,
+)
 from nextgis_connect.features.synchronization.infrastructure.storage.cache_maintenance_service import (
     CacheMaintenanceService,
 )
@@ -18,7 +21,6 @@ from nextgis_connect.legacy.ngw_connection import (
     NgwConnection,
     NgwConnectionsManager,
 )
-from nextgis_connect.legacy.ngw_resources_adder import NgwResourcesAdder
 from nextgis_connect.legacy.settings.ng_connect_settings import (
     NgConnectSettings,
 )
@@ -297,7 +299,7 @@ class TestCachedContainerLifecycle(NgConnectTestCase):
         return DetachedStorageService(self.cache_directory)
 
     def _collect_detached_layer_params(self, ngw_layer):
-        adder = NgwResourcesAdder.__new__(NgwResourcesAdder)
-        return adder._NgwResourcesAdder__collect_params_for_detached_layer(
-            ngw_layer
+        importer = QgisResourceBatchImporter.__new__(QgisResourceBatchImporter)
+        return importer._QgisResourceBatchImporter__collect_params_for_detached_layer(
+            ngw_layer,
         )

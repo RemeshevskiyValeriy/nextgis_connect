@@ -1,28 +1,55 @@
 import urllib.parse
-from dataclasses import dataclass
 from typing import TYPE_CHECKING, Dict, List, Optional, Set, Tuple, Union, cast
 
 from qgis.core import (
-    QgsApplication,
     QgsCoordinateReferenceSystem,
-    QgsEditorWidgetSetup,
     QgsLayerTreeGroup,
     QgsLayerTreeLayer,
     QgsLayerTreeRegistryBridge,
     QgsMapLayer,
-    QgsMapLayerStyle,
-    QgsMapLayerStyleManager,
     QgsProject,
-    QgsProviderRegistry,
-    QgsRasterLayer,
-    QgsReferencedRectangle,
     QgsVectorLayer,
 )
 from qgis.gui import QgisInterface
-from qgis.PyQt.QtCore import QEventLoop, QModelIndex, QObject, QTimer
-from qgis.PyQt.QtWidgets import QCheckBox, QMessageBox
+from qgis.PyQt.QtCore import QModelIndex, QObject
 from qgis.utils import iface
 
+from nextgis_connect.features.resource_browser.application import (
+    ResourceAddingErrorContext,
+    ResourceBatchImportInteraction,
+    ResourceImportCancelledError,
+)
+from nextgis_connect.features.resource_browser.domain import (
+    ResourceBatchImportResult,
+    ResourceBatchImportStatus,
+    ResourceImportWarning,
+)
+from nextgis_connect.features.resource_browser.infrastructure.legacy_resource_adapter import (
+    SERVICE_LAYER_RESOURCE_TYPES,
+    TMS_LAYER_RESOURCE_TYPES,
+    is_layer,
+    is_service,
+    is_style,
+    is_webmap,
+)
+from nextgis_connect.features.resource_browser.infrastructure.qgis_resource_batch_extent import (
+    QgisResourceBatchExtentCoordinator,
+    ResourceExtentSubjectFactory,
+)
+from nextgis_connect.features.resource_browser.infrastructure.qgis_resource_batch_layer import (
+    BatchLayerId,
+    QgisBatchLayerFactory,
+    QgisLayerCreationParameters,
+)
+from nextgis_connect.features.resource_browser.infrastructure.qgis_resource_batch_layer_metadata import (
+    QgisVectorLayerMetadataApplicator,
+)
+from nextgis_connect.features.resource_browser.infrastructure.qgis_resource_batch_style import (
+    QgisResourceBatchStyleApplicator,
+)
+from nextgis_connect.features.resource_browser.infrastructure.resource_dependency_analyzer import (
+    ResourceDependencyAnalyzer,
+)
 from nextgis_connect.legacy.detached_editing.container.cache_lifecycle import (
     CachedDetachedContainerLifecycle,
 )
@@ -33,46 +60,28 @@ from nextgis_connect.legacy.detached_editing.utils import (
     detached_layer_uri,
     is_ngw_container,
 )
-from nextgis_connect.legacy.dialog_choose_style import (
-    NGWLayerStyleChooserDialog,
-)
 from nextgis_connect.legacy.ngw.core import (
-    NGWBaseMap,
     NGWGroupResource,
     NGWOgcfService,
     NGWPostgisLayer,
-    NGWQGISStyle,
     NGWRasterLayer,
     NGWRasterMosaic,
     NGWResource,
-    NGWTileset,
     NGWVectorLayer,
     NGWWebMap,
     NGWWfsLayer,
     NGWWfsService,
-    NGWWmsConnection,
     NGWWmsLayer,
     NGWWmsService,
 )
 from nextgis_connect.legacy.ngw.core.ngw_abstract_vector_resource import (
     NGWAbstractVectorResource,
 )
-from nextgis_connect.legacy.ngw.core.ngw_resource import (
-    API_LAYER_EXTENT,
-    RESOURCE_URL,
-)
-from nextgis_connect.legacy.ngw.core.ngw_tms_resources import (
-    NGWTmsConnection,
-    NGWTmsLayer,
-)
+from nextgis_connect.legacy.ngw.core.ngw_resource import RESOURCE_URL
 from nextgis_connect.legacy.ngw.core.ngw_webmap import (
     NGWWebMapGroup,
     NGWWebMapLayer,
 )
-from nextgis_connect.legacy.ngw.qgis.qgis_ngw_connection import (
-    QgsNgwConnection,
-)
-from nextgis_connect.legacy.ngw.resources.ngw_data_type import NgwDataType
 from nextgis_connect.legacy.ngw_connection import NgwConnectionsManager
 from nextgis_connect.legacy.tree_widget.item import QNGWResourceItem
 from nextgis_connect.legacy.tree_widget.model import QNGWResourceTreeModel
@@ -84,170 +93,18 @@ from nextgis_connect.platform.qgis.errors import (
     NgwError,
     ResourcePermissionError,
 )
-from nextgis_connect.platform.qgis.extent_calculator import (
-    ExtentCalculator,
-)
-from nextgis_connect.platform.tasks import NgConnectTask
 from nextgis_connect.plugin.plugin_interface import NgConnectInterface
 
 if TYPE_CHECKING:
     assert isinstance(iface, QgisInterface)
 
-LayerObjectId = int
-InsertionId = Union[QModelIndex, LayerObjectId]
+InsertionId = BatchLayerId
 LayerParams = Tuple[str, str, str]
 
 InsertionPoint = QgsLayerTreeRegistryBridge.InsertionPoint
 
 
-class _AddingCanceledError(Exception):
-    """Stop batch resource adding after the user cancels an error dialog."""
-
-
-@dataclass(frozen=True)
-class _ResourceAddingErrorContext:
-    """Describe the item that failed while being added to QGIS."""
-
-    display_name: str
-    insertion_id: Optional[InsertionId] = None
-    resource_ids: Tuple[int, ...] = ()
-    resource_url: Optional[str] = None
-
-
-TmsLayerResources = (NGWTmsLayer, NGWTmsConnection, NGWBaseMap, NGWTileset)
-ServiceLayerResources = (NGWPostgisLayer, NGWWmsLayer, NGWWfsLayer)
-
-VectorResources = (NGWVectorLayer, NGWWfsLayer, NGWPostgisLayer)
-RasterResources = (NGWRasterLayer, *TmsLayerResources, NGWWmsLayer)
-
-VectorServices = (NGWWfsService, NGWOgcfService)
-ServiceResources = (*VectorServices, NGWWmsService)
-ConnectionResources = (NGWWmsConnection,)
-
-VectorProviders = ("ogr", "wfs", "oapif", "postgres")
-
-
-class LayerCreatorTask(NgConnectTask):
-    __layers_params: Dict[InsertionId, LayerParams]
-    __layers: Dict[InsertionId, QgsMapLayer]
-
-    def __init__(self, layers_params: Dict[InsertionId, LayerParams]) -> None:
-        super().__init__()
-        self.__layers_params = layers_params
-        self.__layers = {}
-
-    @property
-    def layers(self) -> Dict[InsertionId, QgsMapLayer]:
-        return self.__layers
-
-    def run(self) -> bool:
-        super().run()
-
-        main_thread = QgsApplication.instance().thread()
-
-        count = len(self.__layers_params)
-
-        for i, (insertion_id, layer_params) in enumerate(
-            self.__layers_params.items()
-        ):
-            provider = layer_params[-1]
-            layer_name = layer_params[1]
-            counter = f"[{i + 1}/{count}] " if count > 1 else ""
-
-            logger.debug(f'{counter}Creating {provider} layer "{layer_name}"')
-
-            if provider.lower() in VectorProviders:
-                layer = QgsVectorLayer(*layer_params)
-            else:
-                layer = QgsRasterLayer(*layer_params)
-
-            layer.setParent(None)
-            layer.moveToThread(main_thread)
-
-            if not layer.isValid():
-                error = layer.error().summary()
-                logger.warning(f'Layer "{layer_name}" is not valid: {error}')
-
-            self.__fix_crs(layer)
-
-            self.__layers[insertion_id] = layer
-
-        return True
-
-    def __fix_crs(self, layer: QgsMapLayer) -> None:
-        # Workaround for NGQ-202
-
-        provider = layer.dataProvider().name()
-
-        if provider == "wms":
-            provider_metadata = (
-                QgsProviderRegistry.instance().providerMetadata("wms")
-            )
-            params = provider_metadata.decodeUri(layer.source())
-            crs_id = params.get("crs")
-            if crs_id is None:
-                return
-
-            crs = QgsCoordinateReferenceSystem.fromOgcWmsCrs(crs_id)
-            if not crs.isValid():
-                return
-
-            layer.setCrs(crs)
-
-        elif (
-            provider == "ogr"
-            and not layer.crs().isValid()
-            and is_ngw_container(layer)
-        ):
-            crs = QgsCoordinateReferenceSystem.fromEpsgId(3857)
-            layer.setCrs(crs)
-
-
-def is_layer(resource: Union[Optional[NGWResource], QModelIndex]) -> bool:
-    if resource is None:
-        return False
-
-    if isinstance(resource, QModelIndex):
-        resource = resource.data(QNGWResourceItem.NGWResourceRole)
-
-    return isinstance(resource, (*VectorResources, *RasterResources))
-
-
-def is_style(resource: Union[Optional[NGWResource], QModelIndex]) -> bool:
-    if resource is None:
-        return False
-
-    if isinstance(resource, QModelIndex):
-        resource = resource.data(QNGWResourceItem.NGWResourceRole)
-
-    return isinstance(resource, NGWQGISStyle)
-
-
-def is_webmap(resource: Union[Optional[NGWResource], QModelIndex]) -> bool:
-    if resource is None:
-        return False
-
-    if isinstance(resource, QModelIndex):
-        resource = resource.data(QNGWResourceItem.NGWResourceRole)
-
-    return isinstance(resource, NGWWebMap)
-
-
-def is_service(
-    resource: Union[Optional[NGWResource], QModelIndex],
-) -> bool:
-    if resource is None:
-        return False
-
-    if isinstance(resource, QModelIndex):
-        resource = resource.data(QNGWResourceItem.NGWResourceRole)
-
-    return isinstance(
-        resource, (*VectorServices, NGWWmsService, NGWWmsConnection)
-    )
-
-
-class NgwResourcesAdder(QObject):
+class QgisResourceBatchImporter(QObject):
     __project: QgsProject
 
     __model: QNGWResourceTreeModel
@@ -255,24 +112,26 @@ class NgwResourcesAdder(QObject):
 
     __is_mass_adding: bool
 
-    __layers_params: Dict[InsertionId, LayerParams]
+    __layers_params: Dict[InsertionId, QgisLayerCreationParameters]
     __layers: Dict[InsertionId, QgsMapLayer]
     __default_styles: Dict[QModelIndex, int]
-    __skip_wfs_with_z: Optional[bool]
     __skipped_resources: Set[InsertionId]
-    __skip_future_adding_errors: bool
     __insertion_stack: List[InsertionPoint]
     __warnings: List[NgConnectWarning]
-    __extent_layers: List[QgsMapLayer]
-    __extent_resource_ids_by_layer_id: Dict[str, Tuple[str, int]]
-    __adding_error_contexts: Dict[InsertionId, _ResourceAddingErrorContext]
-    __is_single_webmap_adding: bool
+    __extent_coordinator: QgisResourceBatchExtentCoordinator
+    __adding_error_contexts: Dict[InsertionId, ResourceAddingErrorContext]
+    __last_status: ResourceBatchImportStatus
+    __vector_layer_metadata_applicator: QgisVectorLayerMetadataApplicator
+    __interaction: ResourceBatchImportInteraction
+    __dependency_analyzer: ResourceDependencyAnalyzer
+    __style_applicator: QgisResourceBatchStyleApplicator
 
     def __init__(
         self,
         model: QNGWResourceTreeModel,
         indices: Union[QModelIndex, List[QModelIndex]],
         insertion_point: InsertionPoint,
+        interaction: ResourceBatchImportInteraction,
     ) -> None:
         super().__init__(model)
         self.__project = cast(QgsProject, QgsProject.instance())
@@ -280,9 +139,6 @@ class NgwResourcesAdder(QObject):
         self.__model = model
         self.__indices = indices if isinstance(indices, list) else [indices]
         self.__process_indexes_list()
-        self.__is_single_webmap_adding = len(
-            self.__indices
-        ) == 1 and is_webmap(self.__indices[0])
         self.__is_mass_adding = len(self.__indices) > 1 or (
             len(self.__indices) == 1
             and not (
@@ -293,25 +149,30 @@ class NgwResourcesAdder(QObject):
         self.__layers = {}
         self.__layers_params = {}
         self.__default_styles = {}
-        self.__skip_wfs_with_z = None
         self.__skipped_resources = set()
-        self.__skip_future_adding_errors = False
         self.__insertion_stack = []
         self.__insertion_stack.append(insertion_point)
         self.__warnings = []
-        self.__extent_layers = []
-        self.__extent_resource_ids_by_layer_id = {}
+        self.__extent_coordinator = QgisResourceBatchExtentCoordinator(
+            model,
+            iface.mapCanvas() if iface is not None else None,
+            self.__project,
+        )
         self.__adding_error_contexts = {}
+        self.__last_status = ResourceBatchImportStatus.FAILED
+        self.__vector_layer_metadata_applicator = (
+            QgisVectorLayerMetadataApplicator(model)
+        )
+        self.__interaction = interaction
+        self.__dependency_analyzer = ResourceDependencyAnalyzer(model)
+        self.__style_applicator = QgisResourceBatchStyleApplicator(model)
 
     def missing_resources(self) -> Tuple[bool, List[int]]:
         """Extract resources needed for layers to add to QGIS"""
-        result = []
-
         try:
-            for index in self.__indices:
-                if is_style(index):
-                    index = index.parent()
-                result.extend(self.__missing_resources(index))
+            resource_ids = self.__dependency_analyzer.missing_resource_ids(
+                self.__indices
+            )
         except Exception as error:
             message = self.tr("An error occurred while fetching resources")
             ng_error = NgwError(user_message=message)
@@ -319,7 +180,7 @@ class NgwResourcesAdder(QObject):
             NgConnectInterface.instance().notifier.display_exception(ng_error)
             return False, []
 
-        result = list(set(result))
+        result = list(resource_ids)
         if len(result) > 0:
             logger.debug(
                 f"{len(result)} additional resources will be downloaded"
@@ -328,12 +189,10 @@ class NgwResourcesAdder(QObject):
         return (True, result)
 
     def missing_styles(self) -> Tuple[bool, List[int]]:
-        result = []
         try:
-            for index in self.__indices:
-                if is_style(index):
-                    index = index.parent()
-                result.extend(self.__missing_styles(index))
+            style_ids = self.__dependency_analyzer.missing_style_ids(
+                self.__indices
+            )
 
         except Exception as error:
             message = self.tr("An error occurred while fetching styles")
@@ -342,7 +201,7 @@ class NgwResourcesAdder(QObject):
             NgConnectInterface.instance().notifier.display_exception(ng_error)
             return False, []
 
-        result = list(set(result))
+        result = list(style_ids)
         if len(result) > 0:
             logger.debug(f"{len(result)} styles will be downloaded")
 
@@ -352,7 +211,26 @@ class NgwResourcesAdder(QObject):
     def warnings(self) -> List[NgConnectWarning]:
         return self.__warnings
 
-    def run(self) -> bool:
+    def execute(self) -> ResourceBatchImportResult:
+        """Run the import and return a structured application result."""
+        existing_layer_ids = set(self.__project.mapLayers())
+        self._run()
+        added_layer_ids = tuple(
+            layer_id
+            for layer_id in self.__project.mapLayers()
+            if layer_id not in existing_layer_ids
+        )
+        warnings = tuple(
+            ResourceImportWarning(warning.user_message, warning.detail)
+            for warning in self.__warnings
+        )
+        return ResourceBatchImportResult(
+            self.__last_status,
+            added_layer_ids,
+            warnings,
+        )
+
+    def _run(self) -> None:
         indices = self.__indices
 
         added_layers = 0
@@ -365,17 +243,19 @@ class NgwResourcesAdder(QObject):
                 self.__add_resource_with_error_handling(index)
 
             added_layers = len(self.__layers)
-            if not self.__is_single_webmap_adding:
-                self.__set_added_layers_extent()
+            self.__extent_coordinator.apply()
 
-        except _AddingCanceledError:
-            return False
+        except ResourceImportCancelledError:
+            self.__last_status = ResourceBatchImportStatus.CANCELLED
+            return
 
         except NgwError as error:
+            self.__last_status = ResourceBatchImportStatus.FAILED
             NgConnectInterface.instance().notifier.display_exception(error)
-            return False
+            return
 
         except Exception as error:
+            self.__last_status = ResourceBatchImportStatus.FAILED
             if self.__is_mass_adding:
                 user_message = self.tr("Resources can't be added to the map")
 
@@ -391,15 +271,14 @@ class NgwResourcesAdder(QObject):
             ng_error.__cause__ = error
 
             NgConnectInterface.instance().notifier.display_exception(ng_error)
-            return False
+            return
 
         finally:
             self.__insertion_stack.clear()
             self.__layers_params.clear()
             self.__layers.clear()
             self.__adding_error_contexts.clear()
-            self.__extent_layers.clear()
-            self.__extent_resource_ids_by_layer_id.clear()
+            self.__extent_coordinator.clear()
 
         if added_layers == 0:
             layer_label = "No layers"
@@ -410,12 +289,12 @@ class NgwResourcesAdder(QObject):
 
         logger.debug(f"{layer_label} has been added to the map")
 
-        return True
+        self.__last_status = ResourceBatchImportStatus.SUCCEEDED
 
     def __add_resource_with_error_handling(self, index: QModelIndex) -> None:
         try:
             self.__add_resource(index)
-        except _AddingCanceledError:
+        except ResourceImportCancelledError:
             raise
         except Exception as error:
             context = self.__adding_error_context_from_index(index)
@@ -504,13 +383,17 @@ class NgwResourcesAdder(QObject):
         layer.setName(layer_resource.display_name)
 
         # TODO: it's not obvious that default style attached to style_index
-        self.__add_all_styles_to_layer(index, layer)
+        self.__style_applicator.apply_all(
+            index,
+            layer,
+            self.__default_styles.get(index),
+        )
         if isinstance(layer_resource, NGWAbstractVectorResource):
             assert isinstance(layer, QgsVectorLayer)
-            self.__add_fields_aliases(layer_resource, layer)
-            self.__add_edit_widgets(layer_resource, layer)
-            layer_resource.fields.apply_required_constraints(layer)
-            self.__set_display_field(layer_resource, layer)
+            self.__vector_layer_metadata_applicator.apply(
+                layer_resource,
+                layer,
+            )
 
         self.__set_ngw_layer_properties(
             layer,
@@ -524,10 +407,8 @@ class NgwResourcesAdder(QObject):
         assert layer_node is not None
         layer_node.setExpanded(not self.__is_mass_adding)
         insertion_point.position += 1
-        self.__register_extent_layer(
-            layer,
-            layer_resource.connection_id,
-            layer_resource.resource_id,
+        self.__extent_coordinator.add(
+            ResourceExtentSubjectFactory.from_layer(layer_resource, layer)
         )
 
         return layer_node
@@ -569,7 +450,7 @@ class NgwResourcesAdder(QObject):
     ) -> None:
         try:
             self.__add_service_layer(ngw_resource, service_layer)
-        except _AddingCanceledError:
+        except ResourceImportCancelledError:
             raise
         except Exception as error:
             context = self.__adding_error_context_for_service_layer(
@@ -598,11 +479,11 @@ class NgwResourcesAdder(QObject):
         if isinstance(layer, QgsVectorLayer):
             layer_resource = self.__model.resource(service_layer.resource_id)
             assert isinstance(layer_resource, NGWAbstractVectorResource)
-            self.__add_all_styles_to_layer(layer_resource, layer)
-            self.__add_fields_aliases(layer_resource, layer)
-            self.__add_edit_widgets(layer_resource, layer)
-            layer_resource.fields.apply_required_constraints(layer)
-            self.__set_display_field(layer_resource, layer)
+            self.__style_applicator.apply_all(layer_resource, layer)
+            self.__vector_layer_metadata_applicator.apply(
+                layer_resource,
+                layer,
+            )
 
         self.__set_ngw_layer_properties(
             layer,
@@ -616,11 +497,19 @@ class NgwResourcesAdder(QObject):
         assert layer_node is not None
         layer_node.setExpanded(False)
         insertion_point.position += 1
-        self.__register_extent_layer(
-            layer,
-            ngw_resource.connection_id,
-            getattr(service_layer, "resource_id", ngw_resource.resource_id),
+        extent_resource_id = getattr(service_layer, "resource_id", None)
+        extent_resource = (
+            self.__model.resource(extent_resource_id)
+            if extent_resource_id is not None
+            else None
         )
+        if isinstance(extent_resource, NGWResource):
+            self.__extent_coordinator.add(
+                ResourceExtentSubjectFactory.from_layer(
+                    extent_resource,
+                    layer,
+                )
+            )
 
     def __add_webmap(self, webmap_index: QModelIndex) -> None:
         webmap_resource: NGWWebMap = webmap_index.data(
@@ -644,9 +533,9 @@ class NgwResourcesAdder(QObject):
         qgs_group.setExpanded(True)
 
         self.__insertion_stack.pop()
-
-        if self.__is_single_webmap_adding:
-            self.__set_webmap_extent(webmap_resource)
+        self.__extent_coordinator.add(
+            ResourceExtentSubjectFactory.from_webmap(webmap_resource)
+        )
 
     def __add_webmap_item(
         self,
@@ -658,7 +547,7 @@ class NgwResourcesAdder(QObject):
                 self.__add_webmap_group(webmap, webmap_item)
             elif isinstance(webmap_item, NGWWebMapLayer):
                 self.__add_webmap_layer(webmap, webmap_item)
-        except _AddingCanceledError:
+        except ResourceImportCancelledError:
             raise
         except Exception as error:
             context = self.__adding_error_context_for_webmap_item(
@@ -712,7 +601,10 @@ class NgwResourcesAdder(QObject):
 
         style_resource = self.__model.resource(webmap_layer.layer_style_id)
         if is_style(style_resource):
-            self.__replace_default_style(style_resource, layer)  # type: ignore
+            self.__style_applicator.replace_default(
+                style_resource,
+                layer,
+            )  # type: ignore
             layer_resource_id = webmap_layer.style_parent_id
             assert layer_resource_id is not None
         else:
@@ -733,11 +625,6 @@ class NgwResourcesAdder(QObject):
             webmap_layer.legend if webmap_layer.legend is not None else False
         )
         insertion_point.position += 1
-        self.__register_extent_layer(
-            layer,
-            webmap.connection_id,
-            layer_resource_id,
-        )
 
     def __add_webmap_basemaps(
         self,
@@ -801,105 +688,6 @@ class NgwResourcesAdder(QObject):
 
         self.__insertion_stack.pop()
 
-    def __set_webmap_extent(self, webmap: NGWWebMap) -> None:
-        extent = webmap.extent
-        if extent is None:
-            return
-
-        QTimer.singleShot(0, lambda: self.__update_extent(extent))
-
-    def __register_extent_layer(
-        self,
-        layer: QgsMapLayer,
-        connection_id: str,
-        resource_id: Optional[int],
-    ) -> None:
-        self.__extent_layers.append(layer)
-        if resource_id is None or isinstance(resource_id, bool):
-            return
-
-        try:
-            normalized_resource_id = int(resource_id)
-        except (TypeError, ValueError):
-            return
-
-        self.__extent_resource_ids_by_layer_id[layer.id()] = (
-            connection_id,
-            normalized_resource_id,
-        )
-
-    def __set_added_layers_extent(self) -> None:
-        try:
-            target_crs = self.__extent_target_crs()
-            if target_crs is None:
-                return
-
-            extent = ExtentCalculator.combine(
-                self.__added_layers_extents(),
-                target_crs,
-            )
-            if extent is None:
-                return
-
-            QTimer.singleShot(
-                0,
-                lambda: self.__update_calculated_extent(extent),
-            )
-        except Exception:
-            logger.exception("Could not calculate added layers extent")
-
-    def __added_layers_extents(self) -> List[QgsReferencedRectangle]:
-        result = []
-        for layer in self.__extent_layers:
-            extent = self.__ngw_extent_for_layer(layer)
-            if extent is None:
-                extent = ExtentCalculator.from_qgs_layer(layer)
-
-            if extent is not None:
-                result.append(extent)
-
-        return result
-
-    def __ngw_extent_for_layer(
-        self,
-        layer: QgsMapLayer,
-    ) -> Optional[QgsReferencedRectangle]:
-        resource_info = self.__extent_resource_ids_by_layer_id.get(layer.id())
-        if resource_info is None:
-            return None
-
-        connection_id, resource_id = resource_info
-        try:
-            resource = self.__model.resource(resource_id)
-            if resource is not None:
-                response = resource.connection.get(
-                    API_LAYER_EXTENT(resource_id)
-                )
-            else:
-                response = QgsNgwConnection(connection_id).get(
-                    API_LAYER_EXTENT(resource_id)
-                )
-        except Exception:
-            logger.exception(
-                f"Could not fetch extent for NGW resource {resource_id}"
-            )
-            return None
-
-        return ExtentCalculator.from_ngw_extent_dict(response)
-
-    def __extent_target_crs(
-        self,
-    ) -> Optional[QgsCoordinateReferenceSystem]:
-        canvas_crs = iface.mapCanvas().mapSettings().destinationCrs()
-        if canvas_crs.isValid():
-            return canvas_crs
-
-        project_crs = self.__project.crs()
-        if project_crs.isValid():
-            return project_crs
-
-        return None
-
     def __insert_group(self, name: str) -> QgsLayerTreeGroup:
         insertion_point = self.__insertion_stack.pop()
         qgs_group = insertion_point.group.insertGroup(
@@ -917,161 +705,21 @@ class NgwResourcesAdder(QObject):
 
         return qgs_group
 
-    def __missing_resources(self, index: QModelIndex) -> List[int]:
-        resource: NGWResource = index.data(QNGWResourceItem.NGWResourceRole)
-
-        result = []
-        if isinstance(resource, NGWGroupResource):
-            result = self.__missing_resources_from_group(index)
-        elif is_layer(resource):
-            result = self.__missing_resources_from_layer(index)
-        elif isinstance(resource, NGWWebMap):
-            result = self.__missing_resources_from_webmap(index)
-        elif isinstance(resource, VectorServices):
-            result = self.__missing_resources_from_vector_service(index)
-
-        return result
-
-    def __missing_resources_from_group(
-        self, group_index: QModelIndex
-    ) -> List[int]:
-        resource: NGWResource = group_index.data(
-            QNGWResourceItem.NGWResourceRole
-        )
-
-        result = []
-        if self.__model.canFetchMore(group_index):
-            result.append(resource.resource_id)
-        else:
-            for row in range(self.__model.rowCount(group_index)):
-                child_index = self.__model.index(row, 0, group_index)
-                result.extend(self.__missing_resources(child_index))
-
-        return result
-
-    def __missing_resources_from_webmap(self, index: QModelIndex) -> List[int]:
-        webmap: NGWWebMap = index.data(QNGWResourceItem.NGWResourceRole)
-
-        result = []
-
-        for resource_id in webmap.all_resources_id:
-            if self.__model.is_forbidden(resource_id):
-                continue
-
-            if self.__is_downloaded(resource_id):
-                resource = self.__model.resource(resource_id)
-                assert resource is not None
-                if not is_layer(resource):
-                    continue
-
-                # Download lookup tables
-                result.extend(
-                    self.__missing_lookup_tables_from_layer(resource)
-                )
-
-                # Download services
-                result.extend(self.__missing_services_from_layer(resource))
-
-            else:
-                result.append(resource_id)
-
-        return result
-
-    def __missing_resources_from_vector_service(
-        self, index: QModelIndex
-    ) -> List[int]:
-        service: Union[NGWWfsService, NGWOgcfService] = index.data(
-            QNGWResourceItem.NGWResourceRole
-        )
-
-        result = []
-        for layer in service.layers:
-            index = self.__model.index_from_id(layer.resource_id)
-            resource = self.__model.resource(layer.resource_id)
-
-            if self.__model.is_forbidden(layer.resource_id):
-                continue
-            elif resource is None:
-                result.append(layer.resource_id)
-            elif index is not None and index.isValid():
-                result.extend(self.__missing_resources_from_layer(index))
-            else:
-                # is dangling
-                styles = self.__model.children_resources(layer.resource_id)
-                if resource.common.children and len(styles) == 0:
-                    result.append(layer.resource_id)
-                result.extend(
-                    self.__missing_lookup_tables_from_layer(resource)
-                )
-
-        return result
-
-    def __missing_resources_from_layer(self, index: QModelIndex) -> List[int]:
-        resource: NGWResource = index.data(QNGWResourceItem.NGWResourceRole)
-
-        result = []
-
-        # Download styles
-        if self.__model.canFetchMore(index):
-            result.append(resource.resource_id)
-
-        # Download lookup tables
-        result.extend(self.__missing_lookup_tables_from_layer(index))
-
-        # Download services
-        result.extend(self.__missing_services_from_layer(index))
-
-        return result
-
-    def __missing_lookup_tables_from_layer(
-        self, resource: Union[QModelIndex, NGWResource]
-    ) -> List[int]:
-        if isinstance(resource, QModelIndex):
-            resource = resource.data(QNGWResourceItem.NGWResourceRole)
-
-        if not isinstance(resource, NGWAbstractVectorResource):
-            return []
-
-        result = []
-        for field in resource.fields:
-            table_id = field.lookup_table
-            if table_id is None or self.__is_downloaded(table_id):
-                continue
-            result.append(table_id)
-
-        return result
-
-    def __missing_services_from_layer(
-        self, resource: Union[QModelIndex, NGWResource]
-    ) -> List[int]:
-        if isinstance(resource, QModelIndex):
-            resource = resource.data(QNGWResourceItem.NGWResourceRole)
-
-        if not isinstance(resource, ServiceLayerResources):
-            return []
-
-        result = []
-        if not self.__is_downloaded(resource.service_resource_id):
-            result.append(resource.service_resource_id)
-        return result
-
-    def __is_downloaded(self, resource_id: int) -> bool:
-        resource = self.__model.resource(resource_id)
-        return resource is not None or self.__model.is_forbidden(resource_id)
-
     def __store_layer_params(
         self,
         insertion_id: InsertionId,
         params: LayerParams,
-        context: _ResourceAddingErrorContext,
+        context: ResourceAddingErrorContext,
     ) -> None:
-        self.__layers_params[insertion_id] = params
+        self.__layers_params[insertion_id] = QgisLayerCreationParameters(
+            *params
+        )
         self.__adding_error_contexts[insertion_id] = context
 
     def __adding_error_context_from_index(
         self,
         index: QModelIndex,
-    ) -> _ResourceAddingErrorContext:
+    ) -> ResourceAddingErrorContext:
         context = self.__adding_error_contexts.get(index)
         if context is not None:
             return context
@@ -1083,7 +731,7 @@ class NgwResourcesAdder(QObject):
                     resource, index
                 )
 
-        return _ResourceAddingErrorContext(
+        return ResourceAddingErrorContext(
             display_name=self.tr("Resource"),
             insertion_id=index,
         )
@@ -1092,8 +740,8 @@ class NgwResourcesAdder(QObject):
         self,
         resource: NGWResource,
         insertion_id: Optional[InsertionId] = None,
-    ) -> _ResourceAddingErrorContext:
-        return _ResourceAddingErrorContext(
+    ) -> ResourceAddingErrorContext:
+        return ResourceAddingErrorContext(
             display_name=resource.display_name,
             insertion_id=insertion_id,
             resource_ids=(resource.resource_id,),
@@ -1103,7 +751,7 @@ class NgwResourcesAdder(QObject):
     def __adding_error_context_for_service_layer(
         self,
         service_layer,
-    ) -> _ResourceAddingErrorContext:
+    ) -> ResourceAddingErrorContext:
         display_name = getattr(
             service_layer,
             "display_name",
@@ -1112,7 +760,7 @@ class NgwResourcesAdder(QObject):
         resource_ids = self.__normalized_resource_ids(
             getattr(service_layer, "resource_id", None)
         )
-        return _ResourceAddingErrorContext(
+        return ResourceAddingErrorContext(
             display_name=display_name,
             insertion_id=id(service_layer),
             resource_ids=resource_ids,
@@ -1122,13 +770,13 @@ class NgwResourcesAdder(QObject):
         self,
         webmap: NGWWebMap,
         webmap_item: Union[NGWWebMapGroup, NGWWebMapLayer],
-    ) -> _ResourceAddingErrorContext:
+    ) -> ResourceAddingErrorContext:
         if isinstance(webmap_item, NGWWebMapLayer):
             return self.__adding_error_context_for_webmap_layer(
                 webmap, webmap_item
             )
 
-        return _ResourceAddingErrorContext(
+        return ResourceAddingErrorContext(
             display_name=webmap_item.display_name,
         )
 
@@ -1136,13 +784,13 @@ class NgwResourcesAdder(QObject):
         self,
         webmap: NGWWebMap,
         webmap_layer: NGWWebMapLayer,
-    ) -> _ResourceAddingErrorContext:
+    ) -> ResourceAddingErrorContext:
         resource_ids = self.__normalized_resource_ids(
             webmap_layer.style_parent_id,
             webmap_layer.layer_style_id,
         )
         resource_url = self.__webmap_resource_url(webmap, resource_ids)
-        return _ResourceAddingErrorContext(
+        return ResourceAddingErrorContext(
             display_name=webmap_layer.display_name,
             insertion_id=id(webmap_layer),
             resource_ids=resource_ids,
@@ -1153,9 +801,9 @@ class NgwResourcesAdder(QObject):
         self,
         webmap: NGWWebMap,
         basemap,
-    ) -> _ResourceAddingErrorContext:
+    ) -> ResourceAddingErrorContext:
         resource_ids = self.__normalized_resource_ids(basemap.resource_id)
-        return _ResourceAddingErrorContext(
+        return ResourceAddingErrorContext(
             display_name=basemap.display_name,
             insertion_id=id(basemap),
             resource_ids=resource_ids,
@@ -1207,52 +855,16 @@ class NgwResourcesAdder(QObject):
     def __skip_after_adding_error(
         self,
         error: Exception,
-        context: _ResourceAddingErrorContext,
+        context: ResourceAddingErrorContext,
     ) -> bool:
-        if not self.__can_skip_adding_error():
+        if not self.__interaction.should_skip_after_error(
+            error,
+            context,
+            self.__can_skip_adding_error(),
+        ):
             return False
 
-        if self.__skip_future_adding_errors:
-            self.__mark_skipped_adding_context(context)
-            self.__log_skipped_adding_error(error, context)
-            return True
-
-        message_box = QMessageBox()
-        message_box.setWindowTitle(self.tr("Adding error"))
-        message_box.setIcon(QMessageBox.Icon.Warning)
-        message_box.setText(
-            self.tr('Resource "{}" can\'t be added to the map').format(
-                context.display_name
-            )
-        )
-        message_box.setInformativeText(
-            self.__adding_error_informative_text(error)
-        )
-        detail = self.__adding_error_detail(error, context)
-        if len(detail) > 0:
-            message_box.setDetailedText(detail)
-        message_box.setStandardButtons(
-            QMessageBox.StandardButtons()
-            | QMessageBox.StandardButton.Ignore
-            | QMessageBox.StandardButton.Cancel
-        )
-        message_box.button(QMessageBox.StandardButton.Ignore).setText(
-            self.tr("Skip")
-        )
-        message_box.button(QMessageBox.StandardButton.Cancel).setText(
-            self.tr("Cancel")
-        )
-        message_box.setDefaultButton(QMessageBox.StandardButton.Cancel)
-        apply_to_all_checkbox = QCheckBox(self.tr("Apply to all"))
-        message_box.setCheckBox(apply_to_all_checkbox)
-
-        result = message_box.exec()
-        if result != QMessageBox.StandardButton.Ignore:
-            raise _AddingCanceledError
-
-        self.__skip_future_adding_errors = apply_to_all_checkbox.isChecked()
         self.__mark_skipped_adding_context(context)
-        self.__log_skipped_adding_error(error, context)
         return True
 
     def __can_skip_adding_error(self) -> bool:
@@ -1260,75 +872,13 @@ class NgwResourcesAdder(QObject):
 
     def __mark_skipped_adding_context(
         self,
-        context: _ResourceAddingErrorContext,
+        context: ResourceAddingErrorContext,
     ) -> None:
         if context.insertion_id is not None:
             self.__skipped_resources.add(context.insertion_id)
 
         for resource_id in context.resource_ids:
             self.__skipped_resources.add(resource_id)
-
-    def __log_skipped_adding_error(
-        self,
-        error: Exception,
-        context: _ResourceAddingErrorContext,
-    ) -> None:
-        logger.warning(
-            f'Resource "{context.display_name}" was skipped during adding'
-        )
-        logger.warning(str(error))
-
-    def __adding_error_informative_text(self, error: Exception) -> str:
-        error_message = self.__error_user_message(error)
-        if len(error_message) == 0:
-            return self.tr("Do you want to skip this resource and continue?")
-
-        return (
-            error_message.rstrip(".")
-            + ".\n\n"
-            + self.tr("Do you want to skip this resource and continue?")
-        )
-
-    def __adding_error_detail(
-        self,
-        error: Exception,
-        context: _ResourceAddingErrorContext,
-    ) -> str:
-        lines: List[str] = []
-        if len(context.resource_ids) > 0:
-            resource_ids = ", ".join(
-                str(resource_id) for resource_id in context.resource_ids
-            )
-            lines.append(
-                self.tr("Resource ID(s): {resource_ids}").format(
-                    resource_ids=resource_ids
-                )
-            )
-
-        if context.resource_url is not None:
-            lines.append(
-                self.tr("Resource URL: {resource_url}").format(
-                    resource_url=context.resource_url
-                )
-            )
-
-        if isinstance(error, NgConnectError):
-            if error.detail is not None:
-                lines.append(error.detail)
-            lines.append(error.log_message)
-        else:
-            error_message = str(error)
-            if len(error_message) > 0:
-                lines.append(error_message)
-
-        return "\n".join(lines)
-
-    @staticmethod
-    def __error_user_message(error: Exception) -> str:
-        if isinstance(error, NgConnectError):
-            return error.user_message
-
-        return str(error)
 
     @staticmethod
     def __normalized_resource_ids(
@@ -1374,48 +924,6 @@ class NgwResourcesAdder(QObject):
 
         return urllib.parse.urljoin(server_url, RESOURCE_URL(resource_ids[0]))
 
-    def __missing_styles(self, index: QModelIndex) -> List[int]:
-        resource: NGWResource = index.data(QNGWResourceItem.NGWResourceRole)
-
-        result = []
-
-        if (
-            isinstance(resource, NGWQGISStyle)
-            and not resource.is_qml_populated
-        ):
-            result.append(resource.resource_id)
-
-        elif isinstance(resource, NGWWebMap):
-            for resource_id in resource.all_resources_id:
-                child = self.__model.resource(resource_id)
-                if (
-                    not isinstance(child, NGWQGISStyle)
-                    or child.is_qml_populated
-                ):
-                    continue
-
-                result.append(child.resource_id)
-
-        elif isinstance(resource, VectorServices):
-            for layer in resource.layers:
-                for child in self.__model.children_resources(
-                    layer.resource_id
-                ):
-                    if (
-                        not isinstance(child, NGWQGISStyle)
-                        or child.is_qml_populated
-                    ):
-                        continue
-
-                    result.append(child.resource_id)
-
-        else:
-            for row in range(self.__model.rowCount(index)):
-                child_index = self.__model.index(row, 0, index)
-                result.extend(self.__missing_styles(child_index))
-
-        return result
-
     def __collect_layers_params(self) -> None:
         for index in self.__indices:
             self.__collect_params_for_index_with_error_handling(index)
@@ -1423,7 +931,7 @@ class NgwResourcesAdder(QObject):
         self.__layers_params = {
             insertion_id: params
             for insertion_id, params in self.__layers_params.items()
-            if params[-1] != ""
+            if not params.is_empty
         }
 
     def __collect_params_for_index_with_error_handling(
@@ -1431,7 +939,7 @@ class NgwResourcesAdder(QObject):
     ) -> None:
         try:
             self.__collect_params_for_index(index)
-        except _AddingCanceledError:
+        except ResourceImportCancelledError:
             raise
         except Exception as error:
             context = self.__adding_error_context_from_index(index)
@@ -1459,19 +967,15 @@ class NgwResourcesAdder(QObject):
         resource: NGWVectorLayer = index.data(QNGWResourceItem.NGWResourceRole)
         params = self.__collect_params_for_layer_resource(resource)
 
-        styles = self.__extract_styles(index)
+        styles = self.__style_applicator.style_resources(index)
         if not self.__is_mass_adding and len(styles) > 1:
-            dialog = NGWLayerStyleChooserDialog(
-                self.tr("Select style"), index, self.__model
+            default_style_id = self.__interaction.select_default_style(
+                self.tr("Select style"),
+                index,
+                self.__model,
             )
-            result = dialog.exec()
-            if result == NGWLayerStyleChooserDialog.DialogCode.Accepted:
-                selected_index = dialog.selectedStyleIndex()
-                if selected_index is not None and selected_index.isValid():
-                    default_style = selected_index.data(
-                        QNGWResourceItem.NGWResourceRole
-                    )
-                    self.__default_styles[index] = default_style.resource_id
+            if default_style_id is not None:
+                self.__default_styles[index] = default_style_id
 
         self.__store_layer_params(
             index,
@@ -1496,11 +1000,11 @@ class NgwResourcesAdder(QObject):
     ) -> LayerParams:
         if isinstance(resource, NGWVectorLayer):
             return self.__collect_params_for_detached_layer(resource)
-        if isinstance(resource, ServiceLayerResources):
+        if isinstance(resource, SERVICE_LAYER_RESOURCE_TYPES):
             return self.__collect_params_for_service_layer(resource)
         if isinstance(resource, NGWRasterLayer):
             return self.__collect_params_for_cog_raster_layer(resource)
-        if isinstance(resource, TmsLayerResources):
+        if isinstance(resource, TMS_LAYER_RESOURCE_TYPES):
             return resource.layer_params
 
         raise NgConnectError(
@@ -1526,7 +1030,7 @@ class NgwResourcesAdder(QObject):
                 self.__collect_params_for_webmap_group(webmap, webmap_item)
             elif isinstance(webmap_item, NGWWebMapLayer):
                 self.__collect_params_for_webmap_layer(webmap, webmap_item)
-        except _AddingCanceledError:
+        except ResourceImportCancelledError:
             raise
         except Exception as error:
             context = self.__adding_error_context_for_webmap_item(
@@ -1608,7 +1112,7 @@ class NgwResourcesAdder(QObject):
                         webmap, basemap
                     ),
                 )
-            except _AddingCanceledError:
+            except ResourceImportCancelledError:
                 raise
             except Exception as error:
                 context = self.__adding_error_context_for_webmap_basemap(
@@ -1636,7 +1140,7 @@ class NgwResourcesAdder(QObject):
                     resource.params_for_layer(layer),
                     self.__adding_error_context_for_service_layer(layer),
                 )
-            except _AddingCanceledError:
+            except ResourceImportCancelledError:
                 raise
             except Exception as error:
                 context = self.__adding_error_context_for_service_layer(layer)
@@ -1732,15 +1236,13 @@ class NgwResourcesAdder(QObject):
         if len(self.__layers_params) == 0:
             return
 
-        task = LayerCreatorTask(self.__layers_params)
-
-        event_loop = QEventLoop()
-        task.taskCompleted.connect(event_loop.exit)
-        task.taskTerminated.connect(event_loop.exit)
-        NgConnectInterface.instance().task_manager.addTask(task)
-        event_loop.exec()
-
-        self.__layers = task.layers
+        layer_factory = QgisBatchLayerFactory(
+            NgConnectInterface.instance().task_manager
+        )
+        self.__layers = cast(
+            Dict[InsertionId, QgsMapLayer],
+            layer_factory.create(self.__layers_params),
+        )
         self.__remove_invalid_layers_after_user_choice()
 
         if len(self.__layers) == 0:
@@ -1765,7 +1267,7 @@ class NgwResourcesAdder(QObject):
             layer_name = layer.name()
             context = self.__adding_error_contexts.get(
                 insertion_id,
-                _ResourceAddingErrorContext(
+                ResourceAddingErrorContext(
                     display_name=layer_name,
                     insertion_id=insertion_id,
                 ),
@@ -1785,195 +1287,6 @@ class NgwResourcesAdder(QObject):
 
             self.__layers.pop(insertion_id, None)
             layer.deleteLater()
-
-    def __add_fields_aliases(
-        self,
-        ngw_vector_layer: NGWAbstractVectorResource,
-        qgs_vector_layer: QgsVectorLayer,
-    ) -> None:
-        qgs_fields = qgs_vector_layer.fields()
-        for ngw_field in ngw_vector_layer.fields:
-            if ngw_field.display_name is None:
-                continue
-
-            qgs_vector_layer.setFieldAlias(
-                qgs_fields.indexFromName(ngw_field.keyname),
-                ngw_field.display_name,
-            )
-
-    def __add_edit_widgets(
-        self,
-        ngw_vector_layer: NGWAbstractVectorResource,
-        qgs_vector_layer: QgsVectorLayer,
-    ) -> None:
-        qgs_fields = qgs_vector_layer.fields()
-
-        lookup_tables: Dict[int, List[Dict[str, str]]] = {}
-
-        if is_ngw_container(qgs_vector_layer):
-            # Fix for old QGIS versions. If widget is range data could be
-            # corrupted
-            fid_field = qgs_vector_layer.primaryKeyAttributes()[0]
-            setup = QgsEditorWidgetSetup("", {})
-            qgs_vector_layer.setEditorWidgetSetup(fid_field, setup)
-
-        for ngw_field in ngw_vector_layer.fields:
-            if ngw_field.datatype == NgwDataType.TIME:
-                setup = QgsEditorWidgetSetup(
-                    "DateTime",
-                    {
-                        "display_format": "HH:mm:ss",
-                        "field_format": "HH:mm:ss",
-                        "field_format_overwrite": True,
-                        "field_iso_format": False,
-                        "allow_null": True,
-                    },
-                )
-                field_index = qgs_fields.indexFromName(ngw_field.keyname)
-                qgs_vector_layer.setEditorWidgetSetup(field_index, setup)
-
-            elif ngw_field.datatype == NgwDataType.JSON:
-                setup = QgsEditorWidgetSetup("JsonView", {})
-                field_index = qgs_fields.indexFromName(ngw_field.keyname)
-                qgs_vector_layer.setEditorWidgetSetup(field_index, setup)
-
-            elif ngw_field.lookup_table is not None:
-                lookup_table_id = ngw_field.lookup_table
-
-                if lookup_table_id not in lookup_tables:
-                    lookup_table = self.__model.resource(
-                        ngw_field.lookup_table
-                    )
-                    lookup_tables[lookup_table_id] = [
-                        {description: value}
-                        for value, description in lookup_table._json[
-                            "lookup_table"
-                        ]["items"].items()
-                    ]
-
-                setup = QgsEditorWidgetSetup(
-                    "ValueMap", {"map": lookup_tables[lookup_table_id]}
-                )
-                field_index = qgs_fields.indexFromName(ngw_field.keyname)
-                qgs_vector_layer.setEditorWidgetSetup(field_index, setup)
-
-    def __extract_styles(
-        self, layer_index: Union[QModelIndex, NGWResource]
-    ) -> List[NGWQGISStyle]:
-        styles: List[NGWQGISStyle] = []
-        if isinstance(layer_index, QModelIndex):
-            if is_style(layer_index):
-                layer_index = layer_index.parent()
-
-            for row in range(self.__model.rowCount(layer_index)):
-                style_index = self.__model.index(row, 0, layer_index)
-                style_resource = style_index.data(
-                    QNGWResourceItem.NGWResourceRole
-                )
-                if isinstance(style_resource, NGWQGISStyle):
-                    styles.append(style_resource)
-        else:
-            styles = [
-                style
-                for style in self.__model.children_resources(
-                    layer_index.resource_id
-                )
-                if isinstance(style, NGWQGISStyle)
-            ]
-
-        return styles
-
-    def __add_all_styles_to_layer(
-        self,
-        index: Union[QModelIndex, NGWResource],
-        qgs_layer: QgsMapLayer,
-    ) -> None:
-        styles = self.__extract_styles(index)
-
-        if len(styles) == 0:
-            return
-
-        styles.sort(key=lambda resource: resource.display_name)
-
-        style_manager = qgs_layer.styleManager()
-        assert style_manager is not None
-
-        TEMP_NAME = "_TODELETE"
-        style_manager.renameStyle(style_manager.currentStyle(), TEMP_NAME)
-
-        # Add styles
-        for style_resource in styles:
-            style_resource = cast(NGWQGISStyle, style_resource)
-            self.__add_style_to_layer(style_manager, style_resource)
-
-        # Remove default style
-        style_manager.removeStyle(TEMP_NAME)
-
-        # Set default style
-        styles_name = style_manager.styles()
-        name_to_find = qgs_layer.name()
-        if index in self.__default_styles:
-            resource = self.__model.resource(self.__default_styles[index])
-            assert resource is not None
-            name_to_find = resource.display_name
-
-        default_style_index = (
-            0
-            if name_to_find not in styles_name
-            else styles_name.index(name_to_find)
-        )
-
-        style_manager.setCurrentStyle(styles_name[default_style_index])
-
-    def __replace_default_style(
-        self, style_resource: NGWQGISStyle, qgs_layer: QgsMapLayer
-    ):
-        style_manager = qgs_layer.styleManager()
-        assert style_manager is not None
-
-        TEMP_NAME = "_TODELETE"
-        style_manager.renameStyle(style_manager.currentStyle(), TEMP_NAME)
-
-        self.__add_style_to_layer(style_manager, style_resource)
-
-        # Remove default style
-        style_manager.removeStyle(TEMP_NAME)
-
-    def __add_style_to_layer(
-        self,
-        style_manager: QgsMapLayerStyleManager,
-        style_resource: NGWQGISStyle,
-    ):
-        if not style_resource.is_qml_populated:
-            message = (
-                f'QML for style "{style_resource.display_name}"'
-                " is not downloaded"
-            )
-            raise NgConnectError(
-                code=ErrorCode.AddingError, log_message=message
-            )
-
-        style = QgsMapLayerStyle(style_resource.qml)
-        if not style.isValid():
-            message = (
-                f'Unable apply style "{style_resource.display_name}"'
-                " to the layer"
-            )
-            raise NgConnectError(
-                code=ErrorCode.AddingError, log_message=message
-            )
-
-        style_manager.addStyle(style_resource.display_name, style)
-
-    def __set_display_field(
-        self,
-        ngw_vector_layer: NGWAbstractVectorResource,
-        qgs_vector_layer: QgsVectorLayer,
-    ) -> None:
-        for field in ngw_vector_layer.fields:
-            if field.is_label:
-                qgs_vector_layer.setDisplayExpression(f'"{field.keyname}"')
-                break
 
     def __process_indexes_list(self) -> None:
         def has_parent_in_list(index: QModelIndex) -> bool:
@@ -2011,38 +1324,7 @@ class NgwResourcesAdder(QObject):
         if not has_z:
             return
 
-        if self.__skip_wfs_with_z is None:
-            message_box = QMessageBox()
-            message_box.setWindowTitle(self.tr("Warning"))
-            message_box.setText(
-                self.tr(
-                    "You are trying to add a WFS service containing a layer"
-                    " with Z dimension. WFS in QGIS doesn't fully support"
-                    " editing such geometries. You won't be able to edit and"
-                    " create new features. You will only be able to delete"
-                    " features.\nTo fix this, change geometry type of your"
-                    " layer(s) and recreate WFS service."
-                )
-            )
-            message_box.setIcon(QMessageBox.Icon.Warning)
-            message_box.setStandardButtons(
-                QMessageBox.StandardButtons()
-                | QMessageBox.StandardButton.Ignore
-                | QMessageBox.StandardButton.Cancel
-            )
-            message_box.button(QMessageBox.StandardButton.Ignore).setText(
-                self.tr("Add anyway")
-            )
-            message_box.button(QMessageBox.StandardButton.Cancel).setText(
-                self.tr("Skip")
-            )
-            result = message_box.exec()
-
-            self.__skip_wfs_with_z = (
-                result == QMessageBox.StandardButton.Cancel
-            )
-
-        if not self.__skip_wfs_with_z:
+        if not self.__interaction.should_skip_wfs_with_z():
             return
 
         if has_only_z:
@@ -2055,16 +1337,3 @@ class NgwResourcesAdder(QObject):
             )
             if layer_resource.is_geom_with_z():
                 self.__skipped_resources.add(id(layer))
-
-    @staticmethod
-    def __update_extent(extent: QgsReferencedRectangle) -> None:
-        iface.mapCanvas().setReferencedExtent(extent)
-        iface.mapCanvas().refresh()
-
-    @staticmethod
-    def __update_calculated_extent(extent: QgsReferencedRectangle) -> None:
-        buffered_extent = ExtentCalculator.buffered(extent)
-        if buffered_extent is None:
-            buffered_extent = extent
-
-        NgwResourcesAdder.__update_extent(buffered_extent)

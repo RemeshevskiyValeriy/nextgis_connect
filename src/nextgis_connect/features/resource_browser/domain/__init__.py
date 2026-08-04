@@ -1,3 +1,8 @@
+from nextgis_connect.features.resource_browser.domain.resource_batch_import import (
+    ResourceBatchImportResult,
+    ResourceBatchImportStatus,
+    ResourceImportWarning,
+)
 from nextgis_connect.features.resource_browser.domain.resource_import import (
     ResourceImportExtent,
     ResourceImportMode,
@@ -26,11 +31,14 @@ from nextgis_connect.features.resource_browser.domain.resource_menu import (
 
 __all__ = [
     "LayerKind",
+    "ResourceBatchImportResult",
+    "ResourceBatchImportStatus",
     "ResourceImportExtent",
     "ResourceImportMode",
     "ResourceImportRequest",
     "ResourceImportSource",
     "ResourceImportStyle",
+    "ResourceImportWarning",
     "ResourceKind",
     "ResourceMenuAction",
     "ResourceMenuContext",

@@ -1761,7 +1761,7 @@ class QNGWResourceTreeModel(QNGWResourceTreeModelBase):
                     return [], []
 
                 container_path = storage_service.container_path(
-                    connection.domain_uuid, ngw_resource.resource_id
+                    connection.domain_uuid, parent_resource.resource_id
                 )
                 if container_path.exists():
                     return [parent, index], []
