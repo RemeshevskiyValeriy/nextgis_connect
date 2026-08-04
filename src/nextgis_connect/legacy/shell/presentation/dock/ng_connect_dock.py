@@ -311,6 +311,7 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
 
         self.setupUi(self)
         self.setObjectName("NGConnectDock")
+        self.setWindowIcon(plugin_icon("branding/connect_logo.svg"))
 
         self.__init_title()
 
