@@ -221,6 +221,7 @@ from nextgis_connect.legacy.search.connection_url import (
     SearchConnectionTarget,
     SearchConnectionTargetResolver,
 )
+from nextgis_connect.legacy.search.resource_url import SearchResourceUrlParser
 from nextgis_connect.legacy.search.search_panel import SearchPanel
 from nextgis_connect.legacy.search.search_settings import SearchSettings
 from nextgis_connect.legacy.search.utils import SearchType
@@ -336,6 +337,7 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
         self.__search_connection_target_resolver = (
             SearchConnectionTargetResolver()
         )
+        self.__search_resource_url_parser = SearchResourceUrlParser()
         self.__search_connection_target: Optional[SearchConnectionTarget] = (
             None
         )
@@ -4680,7 +4682,23 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
 
         self.__clear_search_connection_target()
         if len(search_string) > 0:
-            self.__start_search(search_string)
+            self.__start_search(
+                self.__search_string_for_connection(search_string, connection)
+            )
+
+    def __search_string_for_connection(
+        self,
+        search_string: str,
+        connection: NgwConnection,
+    ) -> str:
+        resource_id = self.__search_resource_url_parser.resource_id(
+            search_string,
+            connection,
+        )
+        if resource_id is None:
+            return search_string
+
+        return f"@id = {resource_id}"
 
     def __hide_search_after_connection_problem(self) -> None:
         self.resource_model.reset_search()

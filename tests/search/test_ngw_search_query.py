@@ -1,7 +1,35 @@
 import pytest
 
+from nextgis_connect.legacy.ngw.core.ngw_resource import NGWResource
 from nextgis_connect.legacy.tree_widget.model import NgwSearch
 from nextgis_connect.platform.qgis.errors import NgConnectError
+
+
+class ResourceFactoryStub:
+    connection = object()
+
+    def __init__(self) -> None:
+        self.requested_json = []
+
+    def get_resource_by_json(self, resource_json):
+        self.requested_json.append(resource_json)
+        return ResourceStub(
+            resource_id=resource_json["resource"]["id"],
+            parent_id=resource_json["resource"]["parent"]["id"],
+            grandparent_id=resource_json["resource"]["parent"]["parent"]["id"],
+        )
+
+
+class ResourceStub:
+    def __init__(
+        self,
+        resource_id: int,
+        parent_id: int,
+        grandparent_id,
+    ) -> None:
+        self.resource_id = resource_id
+        self.parent_id = parent_id
+        self.grandparent_id = grandparent_id
 
 
 def test_type_query_accepts_unquoted_value() -> None:
@@ -147,3 +175,39 @@ def test_canceled_search_raises_cancel_error() -> None:
 
     with pytest.raises(NgConnectError):
         search._NgwSearch__raise_if_canceled()
+
+
+def test_fetch_children_stops_on_root_parent(monkeypatch) -> None:
+    requested_parent_ids = []
+
+    def receive_resource_children(connection, parent_id, *, feedback=None):
+        del connection, feedback
+        requested_parent_ids.append(parent_id)
+        if parent_id == 12:
+            return [
+                {
+                    "resource": {
+                        "id": 34,
+                        "parent": {
+                            "id": 12,
+                            "parent": {"id": None},
+                        },
+                    },
+                }
+            ]
+
+        raise AssertionError(f"Unexpected parent id: {parent_id}")
+
+    monkeypatch.setattr(
+        NGWResource,
+        "receive_resource_children",
+        receive_resource_children,
+    )
+
+    search = NgwSearch("Roads", set())
+    resources_factory = ResourceFactoryStub()
+
+    search._NgwSearch__fetch_children(resources_factory, 12)
+
+    assert requested_parent_ids == [12]
+    assert search.result.added_resources[0].resource_id == 34

@@ -636,7 +636,10 @@ class NgwSearch(NGWResourceModelJob):
 
         self.result.added_resources = children + self.result.added_resources
         grandparent_id = children[0].grandparent_id
-        if grandparent_id not in self.populated_resources:
+        if (
+            grandparent_id is not None
+            and grandparent_id not in self.populated_resources
+        ):
             self.__fetch_children(resources_factory, grandparent_id)
 
 
