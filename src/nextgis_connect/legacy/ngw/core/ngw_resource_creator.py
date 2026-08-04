@@ -98,7 +98,11 @@ class ResourceCreator:
 
         ngw_resource = NGWGroupResource(
             parent_ngw_resource.res_factory,
-            NGWResource.receive_resource_obj(connection, result["id"]),
+            NGWResource.receive_resource_obj(
+                connection,
+                result["id"],
+                feedback=feedback,
+            ),
         )
         parent_ngw_resource.common.children = True
 
@@ -169,7 +173,9 @@ class ResourceCreator:
         )
 
         ngw_resource = NGWResource.receive_resource_obj(
-            connection, result["id"]
+            connection,
+            result["id"],
+            feedback=feedback,
         )
 
         parent_ngw_resource.common.children = True
@@ -217,7 +223,9 @@ class ResourceCreator:
         )
 
         ngw_resource = NGWResource.receive_resource_obj(
-            connection, result["id"]
+            connection,
+            result["id"],
+            feedback=feedback,
         )
         parent_ngw_resource.common.children = True
 

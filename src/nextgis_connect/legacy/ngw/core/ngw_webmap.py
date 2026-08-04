@@ -23,6 +23,7 @@ from typing import Any, Dict, List, Mapping, Optional, Tuple, Union
 
 from qgis.core import (
     QgsCoordinateReferenceSystem,
+    QgsFeedback,
     QgsRectangle,
     QgsReferencedRectangle,
 )
@@ -188,6 +189,7 @@ class NGWWebMap(NGWResource):
             Tuple[float, float, float, float],
             None,
         ] = None,
+        feedback: Optional[QgsFeedback] = None,
     ):
         if ngw_base_maps is None:
             ngw_base_maps = []
@@ -226,11 +228,15 @@ class NGWWebMap(NGWResource):
             basemap_webmap=web_map_base_maps,
         )
 
-        result = connection.post(url, params=params)
+        result = connection.post(url, params=params, feedback=feedback)
 
         ngw_resource = NGWWebMap(
             ngw_group_resource.res_factory,
-            NGWResource.receive_resource_obj(connection, result["id"]),
+            NGWResource.receive_resource_obj(
+                connection,
+                result["id"],
+                feedback=feedback,
+            ),
         )
 
         return ngw_resource

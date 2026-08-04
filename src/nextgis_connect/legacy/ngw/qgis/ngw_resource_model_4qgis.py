@@ -106,6 +106,7 @@ from qgis.core import (
     QgsPluginLayer,
     QgsProject,
     QgsProviderRegistry,
+    QgsRasterBlockFeedback,
     QgsRasterLayer,
     QgsValueRelationFieldFormatter,
     QgsVectorFileWriter,
@@ -232,7 +233,7 @@ class QGISResourceJob(NGWResourceModelJob):
         super().__init__()
 
         self.ngw_version = ngw_version
-        self._feedback = QgsFeedback()
+        self._feedback = QgsRasterBlockFeedback()
 
         self._value_relations = set()
         self._lookup_tables_id = {}
@@ -695,7 +696,7 @@ class QGISResourceJob(NGWResourceModelJob):
             QgsApplication.translate("QGISResourceJob", "preparing"),
         )
 
-        preparer = RasterUploadPreparer()
+        preparer = RasterUploadPreparer(feedback=self._feedback)
         prepared_file = preparer.prepare(qgs_raster_layer)
 
         logger.debug(
@@ -1805,6 +1806,7 @@ class QGISProjectUploader(QGISResourcesUploader):
             ngw_webmap_items_as_dicts,
             ngw_webmap_basemaps,
             bbox,
+            feedback=self._feedback,
         )
 
 
@@ -1854,6 +1856,7 @@ class MapForLayerCreater(QGISResourceJob):
             [item.toDict() for item in ngw_webmap_root_group.children],
             [],
             bbox=self.webmap_extent_from_ngw_resource(self.ngw_layer),
+            feedback=self._feedback,
         )
 
         self.putAddedResourceToResult(ngw_resource, is_main=True)
@@ -1883,6 +1886,7 @@ class MapForLayerCreater(QGISResourceJob):
             ngw_group,
             [item.toDict() for item in ngw_webmap_root_group.children],
             [],
+            feedback=self._feedback,
         )
 
         self.putAddedResourceToResult(ngw_resource, is_main=True)

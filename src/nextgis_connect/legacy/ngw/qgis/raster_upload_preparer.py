@@ -21,13 +21,18 @@ from nextgis_connect.legacy.ngw.qgis.qgis_ngw_connection import (
 )
 from nextgis_connect.platform.logging import logger
 from nextgis_connect.platform.qgis.compat import DataType
-from nextgis_connect.platform.qgis.errors import DataPreparationError
+from nextgis_connect.platform.qgis.errors import (
+    DataPreparationError,
+    NgConnectError,
+)
 from qgis.core import (
     Qgis,
     QgsCoordinateReferenceSystem,
+    QgsFeedback,
     QgsFileUtils,
     QgsProject,
     QgsProviderRegistry,
+    QgsRasterBlockFeedback,
     QgsRasterFileWriter,
     QgsRasterLayer,
     QgsRasterPipe,
@@ -51,6 +56,7 @@ WORLD_FILE_SUFFIXES = {
 NGW_CONNECTION_ID_PROPERTY = "ngw_connection_id"
 NGW_RESOURCE_ID_PROPERTY = "ngw_resource_id"
 TEMPORARY_FILE_PREFIX = "nextgis-connect-"
+ARCHIVE_WRITE_CHUNK_SIZE = 1024 * 1024
 
 
 @dataclass(frozen=True)
@@ -68,12 +74,16 @@ class RasterUploadPreparer:
     def __init__(
         self,
         work_dir: Optional[Path] = None,
+        feedback: Optional[QgsFeedback] = None,
     ) -> None:
         """Create a raster upload preparer."""
         self._work_dir = work_dir
+        self._feedback = feedback
 
     def prepare(self, layer: QgsRasterLayer) -> PreparedRasterFile:
         """Prepare a raster layer for upload."""
+        self._raise_if_canceled()
+
         if not layer.isValid():
             raise DataPreparationError("Raster layer is not valid")
 
@@ -95,6 +105,7 @@ class RasterUploadPreparer:
 
         elif self._is_ngw_layer(layer):
             main_path = self._download_ngw_layer(layer)
+            self._raise_if_canceled()
             if main_path is not None:
                 main_is_temporary = True
             else:
@@ -110,10 +121,13 @@ class RasterUploadPreparer:
                 layer.name(),
             )
             main_path = self._convert_to_geotiff(layer)
+            self._raise_if_canceled()
             main_is_temporary = True
 
         sidecar_paths = tuple(self._collect_sidecar_files(main_path))
+        self._raise_if_canceled()
         need_crs_sidecar = self._need_crs_sidecar(layer, main_path)
+        self._raise_if_canceled()
         need_archive = bool(sidecar_paths) or need_crs_sidecar
 
         if not need_archive:
@@ -128,6 +142,7 @@ class RasterUploadPreparer:
             sidecar_paths=sidecar_paths,
             crs=source_crs if need_crs_sidecar else None,
         )
+        self._raise_if_canceled()
 
         if main_is_temporary:
             self._remove_dataset(main_path, sidecar_paths)
@@ -216,23 +231,35 @@ class RasterUploadPreparer:
             output_path,
         )
 
-        transform_context = QgsProject.instance().transformContext()
-        result = raster_writer.writeRaster(
-            pipe,
-            provider.xSize(),
-            provider.ySize(),
-            layer.extent(),
-            layer.crs(),
-            transform_context,
-        )
-
-        if result != Qgis.RasterFileWriterResult.Success:
-            raise DataPreparationError(
-                f"Cannot write raster layer {layer.name()} to GeoTIFF: {result}"
+        try:
+            transform_context = QgsProject.instance().transformContext()
+            result = raster_writer.writeRaster(
+                pipe,
+                provider.xSize(),
+                provider.ySize(),
+                layer.extent(),
+                layer.crs(),
+                transform_context,
+                self._raster_block_feedback(),
             )
 
-        self._fix_converted_data_type_if_needed(layer, output_path)
-        self._restore_exported_crs_if_needed(layer, output_path)
+            if result == Qgis.RasterFileWriterResult.Canceled:
+                self._raise_if_canceled()
+
+            if result != Qgis.RasterFileWriterResult.Success:
+                raise DataPreparationError(
+                    f"Cannot write raster layer {layer.name()} to GeoTIFF: "
+                    f"{result}"
+                )
+
+            self._raise_if_canceled()
+            self._fix_converted_data_type_if_needed(layer, output_path)
+            self._raise_if_canceled()
+            self._restore_exported_crs_if_needed(layer, output_path)
+        except Exception:
+            if self._is_canceled():
+                self._unlink_if_exists(output_path)
+            raise
 
         return output_path
 
@@ -293,15 +320,25 @@ class RasterUploadPreparer:
         options = gdal.TranslateOptions(
             format="GTiff",
             outputType=source_gdal_type,
+            callback=self._gdal_progress_callback,
         )
-        fixed_dataset = gdal.Translate(
-            str(fixed_path),
-            dataset,
-            options=options,
-        )
+        try:
+            fixed_dataset = gdal.Translate(
+                str(fixed_path),
+                dataset,
+                options=options,
+            )
+        except Exception:
+            if self._is_canceled():
+                self._unlink_if_exists(fixed_path)
+            self._raise_if_canceled()
+            raise
 
         dataset = None
         del fixed_dataset
+        if self._is_canceled():
+            self._unlink_if_exists(fixed_path)
+        self._raise_if_canceled()
 
         if not fixed_path.exists():
             raise DataPreparationError(
@@ -403,17 +440,49 @@ class RasterUploadPreparer:
         )
 
         try:
-            with zipfile.ZipFile(
-                str(archive_path),
-                mode="w",
-                compression=zipfile.ZIP_DEFLATED,
-            ) as archive:
-                for archive_name, file_path in entries.items():
-                    archive.write(str(file_path), arcname=archive_name)
+            try:
+                with zipfile.ZipFile(
+                    str(archive_path),
+                    mode="w",
+                    compression=zipfile.ZIP_DEFLATED,
+                ) as archive:
+                    for archive_name, file_path in entries.items():
+                        self._write_archive_entry(
+                            archive,
+                            archive_name,
+                            file_path,
+                        )
+            except Exception:
+                self._unlink_if_exists(archive_path)
+                raise
         finally:
             self._unlink_if_exists(temporary_paths)
 
         return archive_path
+
+    def _write_archive_entry(
+        self,
+        archive: zipfile.ZipFile,
+        archive_name: str,
+        file_path: Path,
+    ) -> None:
+        """Write one archive entry in chunks so cancellation is responsive."""
+        self._raise_if_canceled()
+        zip_info = zipfile.ZipInfo.from_file(
+            str(file_path),
+            arcname=archive_name,
+        )
+        zip_info.compress_type = zipfile.ZIP_DEFLATED
+
+        with file_path.open("rb") as source:
+            with archive.open(zip_info, mode="w") as target:
+                while True:
+                    self._raise_if_canceled()
+                    chunk = source.read(ARCHIVE_WRITE_CHUNK_SIZE)
+                    if not chunk:
+                        break
+
+                    target.write(chunk)
 
     def _prepare_aux_xml_sidecar(
         self,
@@ -627,6 +696,7 @@ class RasterUploadPreparer:
             QgsNgwConnection(str(connection_id)).download(
                 f"/api/resource/{normalized_resource_id}/download",
                 str(output_path),
+                feedback=self._feedback,
             )
         except Exception:
             self._unlink_if_exists(output_path)
@@ -760,6 +830,33 @@ class RasterUploadPreparer:
     ) -> None:
         """Remove a temporary raster dataset and its known sidecars."""
         self._unlink_if_exists([path, *sidecar_paths])
+
+    def _is_canceled(self) -> bool:
+        return self._feedback is not None and self._feedback.isCanceled()
+
+    def _raise_if_canceled(self) -> None:
+        if not self._is_canceled():
+            return
+
+        raise NgConnectError("Request was canceled")
+
+    def _raster_block_feedback(self) -> Optional[QgsRasterBlockFeedback]:
+        if isinstance(self._feedback, QgsRasterBlockFeedback):
+            return self._feedback
+
+        return None
+
+    def _gdal_progress_callback(
+        self,
+        complete: float,
+        message: str,
+        unknown_data: object,
+    ) -> int:
+        del complete
+        del message
+        del unknown_data
+
+        return 0 if self._is_canceled() else 1
 
     def _unlink_if_exists(
         self,

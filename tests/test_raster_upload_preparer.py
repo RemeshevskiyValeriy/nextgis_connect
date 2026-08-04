@@ -10,6 +10,7 @@ from osgeo import gdal
 from qgis.core import (
     QgsCoordinateReferenceSystem,
     QgsProviderRegistry,
+    QgsRasterBlockFeedback,
     QgsRasterLayer,
 )
 
@@ -25,12 +26,14 @@ from nextgis_connect.legacy.ngw.qgis.qgis_ngw_connection import (
     QgsNgwConnection,
 )
 from nextgis_connect.legacy.ngw.qgis.raster_upload_preparer import (
+    ARCHIVE_WRITE_CHUNK_SIZE,
     AUX_XML_SUFFIX,
     GEOTIFF_SUFFIX,
     PreparedRasterFile,
     RasterUploadPreparer,
 )
 from nextgis_connect.platform.filesystem import rm
+from nextgis_connect.platform.qgis.errors import NgConnectError
 from tests.ng_connect_testcase import NgConnectTestCase, TestConnection
 
 LOCAL_PROJ = (
@@ -213,6 +216,37 @@ class TestRasterUploadPreparer(NgConnectTestCase):
     ) -> None:
         if prepared_file.is_temporary:
             self.addCleanup(rm, prepared_file.upload_path)
+
+    def test_prepare_stops_when_feedback_is_canceled(self) -> None:
+        work_dir = self.create_temp_dir("-raster-cancel")
+        raster_path = work_dir / "cancel.tif"
+        self._create_raster(raster_path, crs=self._epsg_3857())
+
+        feedback = QgsRasterBlockFeedback()
+        feedback.cancel()
+
+        with self.assertRaisesRegex(NgConnectError, "Request was canceled"):
+            RasterUploadPreparer(feedback=feedback).prepare(
+                self._raster_layer(raster_path)
+            )
+
+    def test_archive_build_removes_partial_file_when_canceled(self) -> None:
+        work_dir = self.create_temp_dir("-raster-archive-cancel")
+        raster_path = work_dir / "large.tif"
+        raster_path.write_bytes(b"x" * (ARCHIVE_WRITE_CHUNK_SIZE + 1))
+
+        feedback = QgsRasterBlockFeedback()
+        feedback.cancel()
+
+        preparer = RasterUploadPreparer(work_dir=work_dir, feedback=feedback)
+        with self.assertRaisesRegex(NgConnectError, "Request was canceled"):
+            preparer._build_archive(
+                main_path=raster_path,
+                sidecar_paths=(),
+                crs=None,
+            )
+
+        self.assertEqual(list(work_dir.glob("nextgis-connect-*.zip")), [])
 
     def _sandbox_factory(self) -> NGWResourceFactory:
         connection_id = self.connection_id(TestConnection.SandboxGuest)
