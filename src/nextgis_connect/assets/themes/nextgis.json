@@ -147,7 +147,7 @@
   },
   "radiusPx": {
     "field": 8,
-    "button": 6,
+    "button": 4,
     "card": 8,
     "panel": 18,
     "pill": 999
