@@ -165,6 +165,9 @@ class AttachmentDelegate(WidgetItemDelegate):
         painter.restore()
 
     def edit(self, index: QModelIndex) -> None:
+        if not self._has_valid_item_view():
+            return
+
         self.close_current_editor()
         self._item_view.selectionModel().select(
             index, QItemSelectionModel.SelectionFlag.ClearAndSelect
@@ -655,9 +658,16 @@ class AttachmentDelegate(WidgetItemDelegate):
             self._loading_angle
             + elapsed_seconds * self.LOADING_ROTATION_DEGREES_PER_SECOND
         ) % 360.0
+        if not self._has_valid_item_view():
+            return
+
         self._item_view.viewport().update()
 
     def _has_loading_items(self) -> bool:
+        if not self._has_valid_item_view():
+            self._loading_started_at_by_attachment_identity.clear()
+            return False
+
         model = self._item_view.model()
         if model is None:
             self._loading_started_at_by_attachment_identity.clear()
@@ -1058,6 +1068,7 @@ class AttachmentDelegate(WidgetItemDelegate):
         except Exception:
             pass
 
-        self.item_view().setFocus()
+        if self._has_valid_item_view():
+            self.item_view().setFocus()
 
         self._current_editor = None

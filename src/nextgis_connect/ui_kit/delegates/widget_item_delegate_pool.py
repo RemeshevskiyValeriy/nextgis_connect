@@ -69,8 +69,14 @@ class WidgetItemDelegateEventListener(QObject):
             # delete them manually they have been reparented to the view in
             # any case, so no leaking occurs
             self._pool._widget_in_index.pop(widget, None)
+            if not self._pool.delegate._has_valid_item_view():
+                return super().eventFilter(watched, event)
+
             viewport = self._pool.delegate.item_view().viewport()
             QApplication.sendEvent(viewport, event)
+            return super().eventFilter(watched, event)
+
+        if not self._pool.delegate._has_valid_item_view():
             return super().eventFilter(watched, event)
 
         # Forward input events to the viewport if the type is not blocked
@@ -246,6 +252,9 @@ class WidgetItemDelegatePool:
         """
         result: List[QWidget] = []
 
+        if not self._delegate._has_valid_item_view():
+            return result
+
         if not index or not index.isValid():
             return result
 
@@ -296,6 +305,9 @@ class WidgetItemDelegatePool:
         :return: Widgets bound to invalid or stale indexes.
         """
         result: List[QWidget] = []
+
+        if not self._delegate._has_valid_item_view():
+            return result
 
         # Delegate's model can be a proxy; map from source to proxy before validation
         delegate_model = self._delegate.item_view().model()

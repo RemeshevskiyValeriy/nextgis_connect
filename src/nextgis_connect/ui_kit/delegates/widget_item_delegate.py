@@ -1,5 +1,6 @@
 from typing import Dict, List, Optional
 
+from qgis.PyQt import sip
 from qgis.PyQt.QtCore import (
     QAbstractListModel,
     QEvent,
@@ -71,6 +72,7 @@ class WidgetItemDelegate(QAbstractItemDelegate):
         # Install event filters
         self._item_view.viewport().installEventFilter(self)  # mouse events
         self._item_view.installEventFilter(self)  # keyboard events
+        self._item_view.destroyed.connect(self._on_item_view_destroyed)
 
         # Tree view expansion/collapse re-initialization
         if isinstance(self._item_view, QTreeView):
@@ -82,11 +84,39 @@ class WidgetItemDelegate(QAbstractItemDelegate):
 
     def __del__(self) -> None:
         """Release widget resources if the view still exists."""
-        if not self._is_view_destroyed:
-            try:
+        try:
+            if self._has_valid_item_view():
                 self._pool.full_clear()
-            except Exception:
-                pass
+        except Exception:
+            pass
+
+    @staticmethod
+    def _is_qobject_deleted(qobject: Optional[QObject]) -> bool:
+        """Return whether a QObject wrapper no longer owns a C++ object.
+
+        :param qobject: QObject wrapper to check.
+        :return: ``True`` when the wrapper is missing or already deleted.
+        """
+        if qobject is None:
+            return True
+
+        try:
+            return sip.isdeleted(qobject)
+        except RuntimeError:
+            return True
+
+    def _has_valid_item_view(self) -> bool:
+        """Return whether the monitored item view can still be used."""
+        return not self._is_view_destroyed and not self._is_qobject_deleted(
+            self._item_view
+        )
+
+    @pyqtSlot()
+    def _on_item_view_destroyed(self) -> None:
+        """Mark the view as destroyed and drop external signal bindings."""
+        self._is_view_destroyed = True
+        self._disconnect_model_signals()
+        self._disconnect_selection_model_signals()
 
     def item_view(self) -> QAbstractItemView:
         """Return the monitored item view.
@@ -103,6 +133,9 @@ class WidgetItemDelegate(QAbstractItemDelegate):
 
         :return: Focused persistent model index or invalid index.
         """
+        if not self._has_valid_item_view():
+            return QPersistentModelIndex()
+
         focused_widget = QApplication.focusWidget()
         if focused_widget is not None:
             persistent = self._pool._widget_in_index.get(focused_widget)
@@ -188,6 +221,9 @@ class WidgetItemDelegate(QAbstractItemDelegate):
         :return: Style option describing the item view state.
         """
         option = QStyleOptionViewItem()
+        if not self._has_valid_item_view():
+            return option
+
         option.initFrom(self._item_view.viewport())
         option.rect = self._item_view.visualRect(index)
         option.decorationSize = self._item_view.iconSize()
@@ -198,6 +234,9 @@ class WidgetItemDelegate(QAbstractItemDelegate):
 
         :param parent: Parent index to start traversal or ``None``.
         """
+        if not self._has_valid_item_view():
+            return
+
         if parent is None:
             parent = QModelIndex()
 
@@ -244,6 +283,9 @@ class WidgetItemDelegate(QAbstractItemDelegate):
         :param end: End row (inclusive).
         :param is_removing: Whether rows are being removed.
         """
+        if not self._has_valid_item_view():
+            return
+
         model = self._item_view.model()
         if model is None:
             logger.warning(
@@ -291,6 +333,9 @@ class WidgetItemDelegate(QAbstractItemDelegate):
         :param end: Last inserted row (unused for update extent).
         """
         del end
+        if not self._has_valid_item_view():
+            return
+
         model = self._item_view.model()
         if model is None:
             logger.warning(
@@ -312,6 +357,9 @@ class WidgetItemDelegate(QAbstractItemDelegate):
         :param start: First row to remove.
         :param end: Last row to remove.
         """
+        if not self._has_valid_item_view():
+            return
+
         self._update_row_range(parent, start, end, True)
 
     @pyqtSlot(QModelIndex, int, int)
@@ -325,6 +373,9 @@ class WidgetItemDelegate(QAbstractItemDelegate):
         :param end: Last removed row (unused for update extent).
         """
         del end
+        if not self._has_valid_item_view():
+            return
+
         model = self._item_view.model()
         if model is None:
             logger.warning(
@@ -345,6 +396,9 @@ class WidgetItemDelegate(QAbstractItemDelegate):
         :param top_left: Top-left index of the changed region.
         :param bottom_right: Bottom-right index of the changed region.
         """
+        if not self._has_valid_item_view():
+            return
+
         model = self._item_view.model()
         if model is None:
             logger.warning(
@@ -362,6 +416,9 @@ class WidgetItemDelegate(QAbstractItemDelegate):
     @pyqtSlot()
     def _on_layout_changed(self) -> None:
         """Handle layout changes and re-initialize widgets."""
+        if not self._has_valid_item_view():
+            return
+
         invalid = self._pool.invalid_indexes_widgets()
         for widget in invalid:
             widget.setVisible(False)
@@ -370,6 +427,9 @@ class WidgetItemDelegate(QAbstractItemDelegate):
     @pyqtSlot()
     def _on_model_reset(self) -> None:
         """Reset internal state, clear pool, and re-initialize widgets."""
+        if not self._has_valid_item_view():
+            return
+
         self._pool.full_clear()
         QTimer.singleShot(0, self._initialize_model)
 
@@ -382,6 +442,9 @@ class WidgetItemDelegate(QAbstractItemDelegate):
         :param selected: Newly selected indexes.
         :param deselected: Newly deselected indexes.
         """
+        if not self._has_valid_item_view():
+            return
+
         for index in selected.indexes():
             self._pool.find_and_update_widgets(
                 QPersistentModelIndex(index), self._option_view(index)
@@ -391,6 +454,47 @@ class WidgetItemDelegate(QAbstractItemDelegate):
             self._pool.find_and_update_widgets(
                 QPersistentModelIndex(index), self._option_view(index)
             )
+
+    def _disconnect_model_signals(self) -> None:
+        """Disconnect from the tracked model, if it is still alive."""
+        if self._model is None:
+            return
+
+        if self._is_qobject_deleted(self._model):
+            self._model = None
+            return
+
+        try:
+            self._model.rowsInserted.disconnect(self._on_rows_inserted)
+            self._model.rowsAboutToBeRemoved.disconnect(
+                self._on_rows_about_to_be_removed
+            )
+            self._model.rowsRemoved.disconnect(self._on_rows_removed)
+            self._model.dataChanged.disconnect(self._on_data_changed)
+            self._model.layoutChanged.disconnect(self._on_layout_changed)
+            self._model.modelReset.disconnect(self._on_model_reset)
+        except Exception:
+            logger.exception("Failed to disconnect model signals")
+        finally:
+            self._model = None
+
+    def _disconnect_selection_model_signals(self) -> None:
+        """Disconnect from the tracked selection model, if it is alive."""
+        if self._selection_model is None:
+            return
+
+        if self._is_qobject_deleted(self._selection_model):
+            self._selection_model = None
+            return
+
+        try:
+            self._selection_model.selectionChanged.disconnect(
+                self._on_selection_changed
+            )
+        except Exception:
+            logger.exception("Failed to disconnect selection model signals")
+        finally:
+            self._selection_model = None
 
     def eventFilter(self, watched: QObject, event: QEvent) -> bool:  # type: ignore[override]
         """Filter events to maintain model/view wiring and widgets.
@@ -409,27 +513,17 @@ class WidgetItemDelegate(QAbstractItemDelegate):
             # if the view hasn't been deleted, it might be that just the
             # delegate is removed from it, in which case we need to remove the
             # widgets manually, otherwise they still get drawn.
-            if watched == self._item_view:
-                self._is_view_destroyed = True
+            if watched is self._item_view:
+                self._on_item_view_destroyed()
+            return False
+
+        if not self._has_valid_item_view():
             return False
 
         # Ensure model connections are up-to-date.
         current_model = self._item_view.model()
         if self._model is not current_model:
-            if self._model is not None:
-                try:
-                    self._model.rowsInserted.disconnect(self._on_rows_inserted)
-                    self._model.rowsAboutToBeRemoved.disconnect(
-                        self._on_rows_about_to_be_removed
-                    )
-                    self._model.rowsRemoved.disconnect(self._on_rows_removed)
-                    self._model.dataChanged.disconnect(self._on_data_changed)
-                    self._model.layoutChanged.disconnect(
-                        self._on_layout_changed
-                    )
-                    self._model.modelReset.disconnect(self._on_model_reset)
-                except Exception:
-                    logger.exception("Failed to disconnect model signals")
+            self._disconnect_model_signals()
 
             self._model = current_model
             if self._model is not None:
@@ -445,15 +539,7 @@ class WidgetItemDelegate(QAbstractItemDelegate):
 
         current_selection = self._item_view.selectionModel()
         if self._selection_model is not current_selection:
-            if self._selection_model is not None:
-                try:
-                    self._selection_model.selectionChanged.disconnect(
-                        self._on_selection_changed
-                    )
-                except Exception:
-                    logger.exception(
-                        "Failed to disconnect selection model signals"
-                    )
+            self._disconnect_selection_model_signals()
 
             self._selection_model = current_selection
             if self._selection_model is not None:
