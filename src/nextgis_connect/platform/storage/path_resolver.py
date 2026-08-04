@@ -1,4 +1,4 @@
-from pathlib import Path
+from pathlib import Path, PurePath
 
 from nextgis_connect.platform.storage.errors import StoragePathError
 from nextgis_connect.platform.storage.models import StorageKey
@@ -6,6 +6,9 @@ from nextgis_connect.platform.storage.models import StorageKey
 
 class StoragePathResolver:
     """Resolve stable cache paths for storage keys."""
+
+    DIGEST_DIRECTORY_LENGTH = 32
+    LEGACY_DIGEST_DIRECTORY_LENGTHS = (64,)
 
     def __init__(self, cache_root: Path) -> None:
         """Initialize resolver for a cache root."""
@@ -16,13 +19,9 @@ class StoragePathResolver:
         """Return the cache root path."""
         return self._cache_root
 
-    def instance_root(self, instance_uuid: str) -> Path:
-        """Return the root directory for an instance."""
-        return self._cache_root / instance_uuid
-
-    def index_path(self, instance_uuid: str) -> Path:
-        """Return the SQLite index path for an instance."""
-        return self.instance_root(instance_uuid) / "storage.sqlite"
+    def index_path(self) -> Path:
+        """Return the global SQLite index path."""
+        return self._cache_root / "storage.sqlite"
 
     def resolve(
         self,
@@ -33,37 +32,65 @@ class StoragePathResolver:
     ) -> Path:
         """Return an absolute path for a storage key."""
         self._validate_file_name(file_name)
-        digest = storage_key.digest
-        absolute_path = (
-            self.instance_root(storage_key.instance_uuid)
-            / digest[:2]
-            / digest
-            / file_name
-        )
+        digest = storage_key.digest[: self.DIGEST_DIRECTORY_LENGTH]
+        absolute_path = self._cache_root / digest[:2] / digest / file_name
         if create_parent:
             absolute_path.parent.mkdir(parents=True, exist_ok=True)
         return absolute_path
 
-    def relative_to_instance(self, path: Path, instance_uuid: str) -> Path:
-        """Return an instance-relative path."""
+    def relative_to_cache(self, path: Path) -> Path:
+        """Return a path relative to the global cache root."""
         absolute_path = Path(path).resolve()
-        instance_root = self.instance_root(instance_uuid).resolve()
+        cache_root = self._cache_root.resolve()
         try:
-            return absolute_path.relative_to(instance_root)
+            return absolute_path.relative_to(cache_root)
         except ValueError as error:
             raise StoragePathError(
-                "Path is outside instance storage root",
-                instance_uuid=instance_uuid,
+                "Path is outside storage root",
                 path=path,
             ) from error
 
     def absolute_from_entry(
         self,
-        instance_uuid: str,
         relative_path: Path,
     ) -> Path:
         """Return an absolute path from an indexed relative path."""
-        return self.instance_root(instance_uuid) / relative_path
+        cache_root = self._cache_root.resolve()
+        absolute_path = (cache_root / relative_path).resolve()
+        try:
+            absolute_path.relative_to(cache_root)
+        except ValueError as error:
+            raise StoragePathError(
+                "Indexed path is outside storage root",
+                path=relative_path,
+            ) from error
+        return absolute_path
+
+    @classmethod
+    def is_indexed_storage_path(
+        cls,
+        path: PurePath,
+        *,
+        include_legacy: bool = True,
+    ) -> bool:
+        """Return whether a path has a supported indexed hash layout."""
+        if len(path.parts) < 3:
+            return False
+
+        prefix = path.parts[-3]
+        digest = path.parts[-2]
+        supported_lengths = {cls.DIGEST_DIRECTORY_LENGTH}
+        if include_legacy:
+            supported_lengths.update(cls.LEGACY_DIGEST_DIRECTORY_LENGTHS)
+
+        if len(prefix) != 2 or len(digest) not in supported_lengths:
+            return False
+        if digest[:2] != prefix:
+            return False
+
+        return all(
+            character in "0123456789abcdefABCDEF" for character in digest
+        )
 
     def _validate_file_name(self, file_name: str) -> None:
         """Validate a stable storage file name."""

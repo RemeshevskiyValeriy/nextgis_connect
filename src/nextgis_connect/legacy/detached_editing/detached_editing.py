@@ -56,6 +56,7 @@ from nextgis_connect.legacy.ngw_connection.application.connections_manager impor
 from nextgis_connect.legacy.settings import NgConnectSettings
 from nextgis_connect.platform.logging import logger
 from nextgis_connect.platform.qgis.compat import QGIS_3_34
+from nextgis_connect.platform.storage.path_resolver import StoragePathResolver
 
 
 def _iface() -> QgisInterface:
@@ -667,7 +668,15 @@ class DetachedEditing(QObject):
         if container_path is not None:
             candidates = []
             if self.__looks_like_indexed_container_path(container_path):
-                candidates.append(container_path.parts[-4])
+                layer_key = (
+                    DetachedStorageServiceFactory.create().layer_key_for_path(
+                        container_path
+                    )
+                )
+                if layer_key is not None:
+                    candidates.append(layer_key.instance_uuid)
+                if len(container_path.parts) >= 4:
+                    candidates.append(container_path.parts[-4])
             candidates.append(container_path.parent.name)
             for candidate in candidates:
                 if self.__is_uuid(candidate):
@@ -796,17 +805,4 @@ class DetachedEditing(QObject):
         self,
         container_path: Path,
     ) -> bool:
-        if len(container_path.parts) < 4:
-            return False
-
-        instance_uuid = container_path.parts[-4]
-        prefix = container_path.parts[-3]
-        digest = container_path.parts[-2]
-        if not self.__is_uuid(instance_uuid):
-            return False
-        if len(prefix) != 2 or len(digest) != 64:
-            return False
-        if digest[:2] != prefix:
-            return False
-
-        return all(char in "0123456789abcdefABCDEF" for char in digest)
+        return StoragePathResolver.is_indexed_storage_path(container_path)

@@ -19,8 +19,8 @@ if TYPE_CHECKING:
 class AttachmentAddCommand(DetachedLayerBaseCommand):
     """Command to create and manage an attachment addition in the edit buffer.
 
-    This command creates an attachment in the edit buffer's temporary
-    storage for a given feature and file path. It supports undo/redo
+    This command stages an attachment file in managed storage for a given
+    feature and file path. It supports undo/redo
     operations and is intended to be pushed to a vector layer QUndoStack.
 
     :ivar _attachment: Metadata object describing the created attachment.
@@ -35,7 +35,7 @@ class AttachmentAddCommand(DetachedLayerBaseCommand):
         feature_id: QgsFeatureId,
         file_path: Path,
     ) -> None:
-        """Initialize the command and create attachment in temporary storage.
+        """Initialize the command and stage the attachment file.
 
         :param detached_layer: Detached layer the command will operate on.
         :type detached_layer: DetachedLayer
@@ -48,7 +48,7 @@ class AttachmentAddCommand(DetachedLayerBaseCommand):
         super().__init__(detached_layer)
 
         edit_buffer = self._detached_layer.edit_buffer
-        self._attachment = edit_buffer._create_attachment_in_temporary_storage(
+        self._attachment = edit_buffer._stage_new_attachment_file(
             feature_id, file_path
         )
 

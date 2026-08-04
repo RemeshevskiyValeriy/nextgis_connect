@@ -1,5 +1,5 @@
 import shutil
-from pathlib import Path
+from pathlib import Path, PurePath
 from typing import List, Optional, Tuple, Union
 
 from qgis.PyQt.QtCore import QMimeDatabase
@@ -55,6 +55,24 @@ class DetachedStorageService:
         """Return the canonical detached container path."""
         return self.detached_layers.container_path(
             LayerKey(instance_uuid, int(resource_id))
+        )
+
+    def layer_key_for_path(self, path: PurePath) -> Optional[LayerKey]:
+        """Return the indexed layer key encoded by a global storage path."""
+        if not StoragePathResolver.is_indexed_storage_path(path):
+            return None
+
+        relative_path = Path(*path.parts[-3:])
+        layer_entry = (
+            self.attachments.storage_index.layer_entry_by_relative_path(
+                relative_path
+            )
+        )
+        if layer_entry is None:
+            return None
+        return LayerKey(
+            instance_uuid=str(layer_entry["instance_uuid"]),
+            resource_id=int(layer_entry["resource_id"]),
         )
 
     def ensure_container_placeholder(
@@ -170,7 +188,7 @@ class DetachedStorageService:
         resource_id: Union[int, str],
         attachment_id: Union[int, str],
         *,
-        fileobj: Union[UnsetType, None, FileObjectId] = None,
+        fileobj: Union[UnsetType, FileObjectId, None] = None,
     ) -> Path:
         """Return the canonical attachment blob directory."""
         storage_key = self._attachment_blob_key(
@@ -189,7 +207,7 @@ class DetachedStorageService:
         *,
         file_name: Optional[str] = None,
         mime_type: Optional[str] = None,
-        fileobj: Union[UnsetType, None, FileObjectId] = None,
+        fileobj: Union[UnsetType, FileObjectId, None] = None,
     ) -> Path:
         """Return the canonical attachment blob path."""
         attachment_directory = self.attachment_directory(
@@ -213,7 +231,7 @@ class DetachedStorageService:
         *,
         file_name: Optional[str] = None,
         mime_type: Optional[str] = None,
-        fileobj: Union[UnsetType, None, FileObjectId] = None,
+        fileobj: Union[UnsetType, FileObjectId, None] = None,
         feature_local_id: Optional[int] = None,
         feature_ngw_fid: Optional[int] = None,
         ngw_aid: Optional[int] = None,
@@ -246,7 +264,7 @@ class DetachedStorageService:
         resource_id: Union[int, str],
         attachment_id: Union[int, str],
         *,
-        fileobj: Union[UnsetType, None, FileObjectId] = None,
+        fileobj: Union[UnsetType, FileObjectId, None] = None,
     ) -> Path:
         """Return the canonical attachment thumbnail directory."""
         blob_storage_key = self._attachment_blob_key(
@@ -263,7 +281,7 @@ class DetachedStorageService:
         resource_id: Union[int, str],
         attachment_id: Union[int, str],
         *,
-        fileobj: Union[UnsetType, None, FileObjectId] = None,
+        fileobj: Union[UnsetType, FileObjectId, None] = None,
     ) -> Path:
         """Return the canonical attachment thumbnail path."""
         return (
@@ -282,7 +300,7 @@ class DetachedStorageService:
         resource_id: Union[int, str],
         attachment_id: Union[int, str],
         *,
-        fileobj: Union[UnsetType, None, FileObjectId] = None,
+        fileobj: Union[UnsetType, FileObjectId, None] = None,
         feature_local_id: Optional[int] = None,
         feature_ngw_fid: Optional[int] = None,
         ngw_aid: Optional[int] = None,
@@ -315,7 +333,7 @@ class DetachedStorageService:
         *,
         file_name: Optional[str] = None,
         mime_type: Optional[str] = None,
-        fileobj: Union[UnsetType, None, FileObjectId] = None,
+        fileobj: Union[UnsetType, FileObjectId, None] = None,
         feature_local_id: Optional[int] = None,
         feature_ngw_fid: Optional[int] = None,
         ngw_aid: Optional[int] = None,
@@ -376,13 +394,67 @@ class DetachedStorageService:
         )
         return entry is not None
 
+    def stage_attachment_file(
+        self,
+        instance_uuid: str,
+        resource_id: Union[int, str],
+        attachment_id: Union[int, str],
+        source_path: Path,
+        *,
+        file_name: Optional[str] = None,
+        mime_type: Optional[str] = None,
+        feature_local_id: Optional[int] = None,
+        feature_ngw_fid: Optional[int] = None,
+        ngw_aid: Optional[int] = None,
+    ) -> Path:
+        """Stage a new local attachment file inside managed storage."""
+        extension = self._guess_extension(
+            file_name=file_name,
+            mime_type=mime_type,
+        )
+        blob_ref = self.attachments.stage_blob(
+            self._attachment_key(
+                instance_uuid,
+                resource_id,
+                attachment_id,
+                feature_local_id=feature_local_id,
+                feature_ngw_fid=feature_ngw_fid,
+                ngw_aid=ngw_aid,
+            ),
+            source_path,
+            extension=extension,
+        )
+        return blob_ref.path
+
+    def discard_staged_attachment_file(
+        self,
+        instance_uuid: str,
+        resource_id: Union[int, str],
+        attachment_id: Union[int, str],
+        *,
+        feature_local_id: Optional[int] = None,
+        feature_ngw_fid: Optional[int] = None,
+        ngw_aid: Optional[int] = None,
+    ) -> None:
+        """Discard one staged local attachment file after rollback."""
+        self.attachments.discard_staged_blob(
+            self._attachment_key(
+                instance_uuid,
+                resource_id,
+                attachment_id,
+                feature_local_id=feature_local_id,
+                feature_ngw_fid=feature_ngw_fid,
+                ngw_aid=ngw_aid,
+            )
+        )
+
     def register_attachment_thumbnail(
         self,
         instance_uuid: str,
         resource_id: Union[int, str],
         attachment_id: Union[int, str],
         *,
-        fileobj: Union[UnsetType, None, FileObjectId] = None,
+        fileobj: Union[UnsetType, FileObjectId, None] = None,
         feature_local_id: Optional[int] = None,
         feature_ngw_fid: Optional[int] = None,
         ngw_aid: Optional[int] = None,
@@ -422,7 +494,7 @@ class DetachedStorageService:
         resource_id: Union[int, str],
         attachment_id: Union[int, str],
         *,
-        fileobj: Union[UnsetType, None, FileObjectId] = None,
+        fileobj: Union[UnsetType, FileObjectId, None] = None,
     ) -> None:
         """Remove cached attachment blob and thumbnail files."""
         blob_storage_key = self._attachment_blob_key(
@@ -432,7 +504,7 @@ class DetachedStorageService:
             fileobj=fileobj,
         )
         preview_storage_key = self.attachments.preview_key(blob_storage_key)
-        storage_index = self.attachments.index_for_instance(instance_uuid)
+        storage_index = self.attachments.storage_index
 
         for storage_key in (blob_storage_key, preview_storage_key):
             entry = storage_index.find_entry(storage_key)
@@ -462,7 +534,7 @@ class DetachedStorageService:
         resource_id: Union[int, str],
         attachment_id: Union[int, str],
         *,
-        old_fileobj: Union[UnsetType, None, FileObjectId],
+        old_fileobj: Union[UnsetType, FileObjectId, None],
         new_fileobj: FileObjectId,
     ) -> None:
         """Move cached attachment files to a remote file object key."""
@@ -512,7 +584,7 @@ class DetachedStorageService:
             new_thumbnail_directory,
         )
 
-        storage_index = self.attachments.index_for_instance(instance_uuid)
+        storage_index = self.attachments.storage_index
         for storage_key in (
             old_blob_key,
             self.attachments.preview_key(old_blob_key),
@@ -583,7 +655,7 @@ class DetachedStorageService:
         ngw_aid: Optional[int],
     ) -> Optional[Path]:
         """Return an existing file path referenced by an attachment record."""
-        storage_index = self.attachments.index_for_instance(instance_uuid)
+        storage_index = self.attachments.storage_index
         records = (
             storage_index.attachment_record(attachment_key)
             for attachment_key in self._attachment_lookup_keys(
@@ -609,24 +681,11 @@ class DetachedStorageService:
             if entry is None:
                 continue
 
-            path = self._indexed_entry_path(
-                entry.instance_uuid, entry.relative_path
-            )
+            path = self._path_resolver.absolute_from_entry(entry.relative_path)
             if path.exists():
                 return path
 
         return None
-
-    def _indexed_entry_path(
-        self,
-        instance_uuid: str,
-        relative_path: Path,
-    ) -> Path:
-        """Return the exact path stored in the storage index."""
-        return self._path_resolver.absolute_from_entry(
-            instance_uuid,
-            relative_path,
-        )
 
     def _attachment_lookup_keys(
         self,
@@ -666,7 +725,7 @@ class DetachedStorageService:
         resource_id: Union[int, str],
         attachment_id: Union[int, str],
         *,
-        fileobj: Union[UnsetType, None, FileObjectId] = None,
+        fileobj: Union[UnsetType, FileObjectId, None] = None,
     ) -> StorageKey:
         """Return the physical attachment blob key."""
         if bool(fileobj) and fileobj != -1:

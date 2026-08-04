@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Optional
 
 from nextgis_connect.platform.storage.file_store import FileStore
 from nextgis_connect.platform.storage.models import (
@@ -22,7 +22,9 @@ class DetachedLayerStore:
     def __init__(self, cache_root: Path) -> None:
         """Initialize detached layer store."""
         self._path_resolver = StoragePathResolver(Path(cache_root))
-        self._indexes: Dict[str, SqliteStorageIndex] = {}
+        self._storage_index = SqliteStorageIndex(
+            self._path_resolver.index_path()
+        )
 
     def container_path(self, layer_key: LayerKey) -> Path:
         """Return the canonical detached container path."""
@@ -44,7 +46,7 @@ class DetachedLayerStore:
     ) -> StorageEntry:
         """Ensure a storage entry exists for a detached container."""
         storage_key = StorageKeyFactory.layer_container(layer_key)
-        storage_index = self._index_for_instance(layer_key.instance_uuid)
+        storage_index = self._storage_index
         file_store = FileStore(self._path_resolver, storage_index)
         protection = self._container_protection(
             has_local_changes=has_local_changes,
@@ -99,12 +101,9 @@ class DetachedLayerStore:
     ) -> StorageEntry:
         """Ensure an index placeholder exists for a detached container."""
         storage_key = StorageKeyFactory.layer_container(layer_key)
-        storage_index = self._index_for_instance(layer_key.instance_uuid)
+        storage_index = self._storage_index
         absolute_path = self.container_path(layer_key)
-        relative_path = self._path_resolver.relative_to_instance(
-            absolute_path,
-            layer_key.instance_uuid,
-        )
+        relative_path = self._path_resolver.relative_to_cache(absolute_path)
         entry = storage_index.upsert_entry(
             StorageEntry(
                 id=None,
@@ -155,8 +154,8 @@ class DetachedLayerStore:
         is_used_by_project: Optional[bool] = None,
     ) -> None:
         """Update layer index flags and entry protection."""
-        storage_index = self._index_for_instance(layer_key.instance_uuid)
-        layer_entry = storage_index.layer_entry(layer_key.resource_id)
+        storage_index = self._storage_index
+        layer_entry = storage_index.layer_entry(layer_key)
         if layer_entry is None:
             return
 
@@ -216,16 +215,3 @@ class DetachedLayerStore:
         if is_used_by_project:
             return StorageEntryProtection.USED_BY_PROJECT
         return StorageEntryProtection.NONE
-
-    def _index_for_instance(self, instance_uuid: str) -> SqliteStorageIndex:
-        """Return index for an instance."""
-        storage_index = self._indexes.get(instance_uuid)
-        if storage_index is not None:
-            return storage_index
-
-        storage_index = SqliteStorageIndex(
-            self._path_resolver.index_path(instance_uuid)
-        )
-        storage_index.initialize()
-        self._indexes[instance_uuid] = storage_index
-        return storage_index

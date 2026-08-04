@@ -82,7 +82,6 @@ class GarbageCollector:
                 continue
 
             absolute_path = self._path_resolver.absolute_from_entry(
-                entry.instance_uuid,
                 entry.relative_path,
             )
             try:

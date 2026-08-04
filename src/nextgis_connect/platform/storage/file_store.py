@@ -152,10 +152,7 @@ class FileStore:
     ) -> StorageEntry:
         """Create a storage entry from file data."""
         absolute_path = self._path_resolver.resolve(storage_key, file_name)
-        relative_path = self._path_resolver.relative_to_instance(
-            absolute_path,
-            storage_key.instance_uuid,
-        )
+        relative_path = self._path_resolver.relative_to_cache(absolute_path)
         return StorageEntry(
             id=None,
             storage_key=storage_key,

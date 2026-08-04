@@ -28,6 +28,7 @@ from nextgis_connect.legacy.ngw.qgis.qgis_ngw_connection import (
 )
 from nextgis_connect.legacy.ngw_connection import NgwConnectionsManager
 from nextgis_connect.platform.logging import logger
+from nextgis_connect.platform.storage.path_resolver import StoragePathResolver
 
 
 class DetachedEditingPathPreprocessor(QObject):
@@ -137,27 +138,23 @@ class DetachedEditingPathPreprocessor(QObject):
         if uuid_pattern.match(legacy_uuid):
             return legacy_uuid, int(source_path.stem)
 
-        if len(source_path.parts) < 4:
-            return None, None
-
-        indexed_uuid = source_path.parts[-4]
-        if not uuid_pattern.match(indexed_uuid):
-            return None, None
-
         if not self._is_indexed_storage_path(source_path):
             return None, None
 
-        return indexed_uuid, int(source_path.stem)
+        if len(source_path.parts) >= 4:
+            indexed_uuid = source_path.parts[-4]
+            if uuid_pattern.match(indexed_uuid):
+                return indexed_uuid, int(source_path.stem)
+
+        layer_key = DetachedStorageServiceFactory.create().layer_key_for_path(
+            source_path
+        )
+        if layer_key is None:
+            return None, None
+        return layer_key.instance_uuid, layer_key.resource_id
 
     def _is_indexed_storage_path(self, source_path: PurePath) -> bool:
-        prefix = source_path.parts[-3]
-        digest = source_path.parts[-2]
-        if len(prefix) != 2 or len(digest) != 64:
-            return False
-        if digest[:2] != prefix:
-            return False
-
-        return all(char in "0123456789abcdefABCDEF" for char in digest)
+        return StoragePathResolver.is_indexed_storage_path(source_path)
 
     def _cached_layer_path(self, domain_uuid: str, resource_id: int) -> Path:
         return DetachedStorageServiceFactory.create().container_path(

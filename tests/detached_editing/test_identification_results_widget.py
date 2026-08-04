@@ -24,13 +24,19 @@ from nextgis_connect.legacy.detached_editing.identification.types import (
 from nextgis_connect.legacy.detached_editing.identification.ui import (
     attachments_tab as attachments_tab_module,
 )
+from nextgis_connect.legacy.detached_editing.identification.ui import (
+    identification_results_widget as identification_results_widget_module,
+)
 from nextgis_connect.legacy.detached_editing.identification.ui.attachments_tab import (
     AttachmentsTab,
 )
 from nextgis_connect.legacy.detached_editing.identification.ui.identification_results_widget import (
     IdentificationResultsWidget,
 )
-from nextgis_connect.legacy.detached_editing.utils import AttachmentMetadata
+from nextgis_connect.legacy.detached_editing.utils import (
+    AttachmentMetadata,
+    DetachedLayerState,
+)
 from nextgis_connect.shared.constants import PACKAGE_NAME
 
 
@@ -70,6 +76,27 @@ class _IdentificationWidgetHarness:
             getattr(IdentificationResultsWidget, method_name),
         )
         method(self, selected_tab)
+
+
+class _FeatureRefreshHarness:
+    def __init__(self, current_index: int = 0) -> None:
+        self.features_combobox = Mock()
+        self.features_combobox.currentIndex.return_value = current_index
+        self.selected_result = Mock()
+        self.selected_result.mFeature.id.return_value = 7
+
+        refreshed_feature = Mock()
+        refreshed_feature.isValid.return_value = True
+        self.selected_result.mLayer.getFeature.return_value = refreshed_feature
+
+        self._IdentificationResultsWidget__current_feature_result = Mock(
+            return_value=self.selected_result
+        )
+        self._IdentificationResultsWidget__on_feature_changed = Mock()
+        self._IdentificationResultsWidget__current_feature_key = Mock(
+            return_value=("layer-id", 7)
+        )
+        self._IdentificationResultsWidget__remove_feature_keys = Mock()
 
 
 def _install_plugin_mock() -> Tuple[Mock, Optional[object]]:
@@ -544,6 +571,39 @@ class TestIdentificationResultsWidget:
             tab.deleteLater()
             _restore_plugin_mock(previous_plugin)
 
+    def test_open_attachment_opens_local_new_file_when_it_exists(
+        self,
+        qgis_app: QgsApplication,
+        tmp_path: Path,
+    ) -> None:
+        del qgis_app
+
+        _plugin, previous_plugin = _install_plugin_mock()
+        tab = AttachmentsTab()
+        attachment_path = tmp_path / "report.pdf"
+        attachment_path.write_bytes(b"PDF")
+        attachment = AttachmentMetadata(
+            fid=1,
+            aid=-1,
+            name="report.pdf",
+            mime_type="application/pdf",
+            file_path=attachment_path,
+        )
+        tab._attachments_model.set_attachments([attachment])
+        tab._start_attachment_download = Mock(return_value=True)
+        tab._open_attachment_path = Mock()
+
+        try:
+            tab._open_attachment(tab._attachments_proxy.index(0, 0))
+
+            tab._open_attachment_path.assert_called_once_with(attachment_path)
+            tab._start_attachment_download.assert_not_called()
+            assert tab._pending_open_attachment_ids == set()
+        finally:
+            tab.close()
+            tab.deleteLater()
+            _restore_plugin_mock(previous_plugin)
+
     def test_extra_actions_button_follows_attachment_count(
         self,
         qgis_app: QgsApplication,
@@ -666,6 +726,52 @@ class TestIdentificationResultsWidget:
         widget._form.setMode.assert_called_once_with(
             QgsAttributeEditorContext.Mode.IdentifyMode
         )
+
+    def test_refresh_current_feature_after_sync_reloads_tabs(
+        self,
+        qgis_app: QgsApplication,
+    ) -> None:
+        del qgis_app
+
+        widget = _FeatureRefreshHarness(current_index=3)
+
+        method_name = (
+            "_IdentificationResultsWidget__refresh_current_feature_after_sync"
+        )
+        getattr(IdentificationResultsWidget, method_name)(widget)
+
+        refresh_callback = (
+            widget._IdentificationResultsWidget__on_feature_changed
+        )
+        refresh_callback.assert_called_once_with(3)
+
+    def test_state_change_refreshes_feature_for_local_and_synced_states(
+        self,
+        qgis_app: QgsApplication,
+        monkeypatch,
+    ) -> None:
+        del qgis_app
+
+        widget = Mock()
+        refresh_callback = Mock()
+        refresh_method_name = (
+            "_IdentificationResultsWidget__refresh_current_feature_after_sync"
+        )
+        setattr(widget, refresh_method_name, refresh_callback)
+        monkeypatch.setattr(
+            identification_results_widget_module.QTimer,
+            "singleShot",
+            lambda _delay, callback: callback(),
+        )
+
+        method_name = "_IdentificationResultsWidget__on_state_changed"
+        on_state_changed = getattr(IdentificationResultsWidget, method_name)
+
+        on_state_changed(widget, DetachedLayerState.NotSynchronized)
+        on_state_changed(widget, DetachedLayerState.Synchronized)
+        on_state_changed(widget, DetachedLayerState.Synchronization)
+
+        assert refresh_callback.call_count == 2
 
     def test_feature_data_tabs_can_be_disabled_temporarily(
         self, qgis_app: QgsApplication

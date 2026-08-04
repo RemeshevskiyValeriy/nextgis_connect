@@ -1,6 +1,7 @@
 import uuid
+from dataclasses import replace
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Optional
 
 from nextgis_connect.platform.storage.file_store import FileStore
 from nextgis_connect.platform.storage.models import (
@@ -29,7 +30,9 @@ class AttachmentStore:
     def __init__(self, cache_root: Path) -> None:
         """Initialize attachment store."""
         self._path_resolver = StoragePathResolver(Path(cache_root))
-        self._indexes: Dict[str, SqliteStorageIndex] = {}
+        self._storage_index = SqliteStorageIndex(
+            self._path_resolver.index_path()
+        )
 
     def remote_blob_key(
         self,
@@ -99,13 +102,18 @@ class AttachmentStore:
         committed_blob_entry_id: Optional[int] = None,
     ) -> BlobRef:
         """Stage a new local attachment blob."""
+        storage_index = self._storage_index
+        previous_record = storage_index.attachment_record(attachment_key)
+        previous_staged_entry_id = self._record_entry_id(
+            previous_record,
+            "staged_blob_entry_id",
+        )
         blob_uuid = local_blob_uuid or str(uuid.uuid4())
         storage_key = self.local_blob_key(
             attachment_key.instance_uuid,
             attachment_key.resource_id,
             blob_uuid,
         )
-        storage_index = self._index_for_instance(attachment_key.instance_uuid)
         file_store = FileStore(self._path_resolver, storage_index)
         blob_ref = file_store.copy_from(
             storage_key,
@@ -125,7 +133,51 @@ class AttachmentStore:
             preview_entry_id=None,
             pending_operation=pending_operation,
         )
+        if previous_staged_entry_id != blob_ref.entry_id:
+            self._mark_entry_orphaned(
+                storage_index,
+                previous_staged_entry_id,
+            )
         return blob_ref
+
+    def discard_staged_blob(self, attachment_key: AttachmentKey) -> None:
+        """Delete a staged blob and restore the committed attachment."""
+        storage_index = self._storage_index
+        record = storage_index.attachment_record(attachment_key)
+        staged_entry_id = self._record_entry_id(
+            record,
+            "staged_blob_entry_id",
+        )
+        if staged_entry_id is None:
+            return
+
+        entry = storage_index.find_entry_by_id(staged_entry_id)
+        if entry is not None:
+            path = self._path_resolver.absolute_from_entry(
+                entry.relative_path,
+            )
+            path.unlink(missing_ok=True)
+            self._remove_empty_parents(path.parent)
+
+        committed_entry_id = self._record_entry_id(
+            record,
+            "committed_blob_entry_id",
+        )
+        if committed_entry_id is None:
+            storage_index.delete_attachment_record(attachment_key)
+        else:
+            storage_index.upsert_attachment_record(
+                attachment_key,
+                committed_blob_entry_id=committed_entry_id,
+                staged_blob_entry_id=None,
+                active_blob_entry_id=committed_entry_id,
+                preview_entry_id=self._record_entry_id(
+                    record,
+                    "preview_entry_id",
+                ),
+                pending_operation=AttachmentOperation.NONE,
+            )
+        storage_index.delete_entry(staged_entry_id)
 
     def register_remote_blob(
         self,
@@ -139,7 +191,7 @@ class AttachmentStore:
         protection: StorageEntryProtection = StorageEntryProtection.NONE,
     ) -> StorageEntry:
         """Register a committed remote blob."""
-        storage_index = self._index_for_instance(attachment_key.instance_uuid)
+        storage_index = self._storage_index
         file_store = FileStore(self._path_resolver, storage_index)
         entry = file_store.ensure_entry_for_existing_file(
             storage_key,
@@ -186,7 +238,7 @@ class AttachmentStore:
         if not path.exists():
             return None
 
-        storage_index = self._index_for_instance(attachment_key.instance_uuid)
+        storage_index = self._storage_index
         file_store = FileStore(self._path_resolver, storage_index)
         entry = file_store.ensure_entry_for_existing_file(
             storage_key,
@@ -248,7 +300,7 @@ class AttachmentStore:
         if not path.exists():
             return None
 
-        storage_index = self._index_for_instance(attachment_key.instance_uuid)
+        storage_index = self._storage_index
         file_store = FileStore(self._path_resolver, storage_index)
         entry = file_store.ensure_entry_for_existing_file(
             storage_key,
@@ -259,6 +311,15 @@ class AttachmentStore:
             protection=StorageEntryProtection.NONE,
         )
         record = storage_index.attachment_record(attachment_key)
+        pending_operation = AttachmentOperation.NONE
+        is_deleted_locally = False
+        is_deleted_remotely = False
+        if record is not None:
+            pending_operation = AttachmentOperation(
+                str(record["pending_operation"])
+            )
+            is_deleted_locally = bool(record["is_deleted_locally"])
+            is_deleted_remotely = bool(record["is_deleted_remotely"])
         storage_index.upsert_attachment_record(
             attachment_key,
             committed_blob_entry_id=self._record_entry_id(
@@ -274,13 +335,16 @@ class AttachmentStore:
                 "active_blob_entry_id",
             ),
             preview_entry_id=entry.id,
-            pending_operation=AttachmentOperation.NONE,
+            pending_operation=pending_operation,
+            is_deleted_locally=is_deleted_locally,
+            is_deleted_remotely=is_deleted_remotely,
         )
         return entry
 
-    def index_for_instance(self, instance_uuid: str) -> SqliteStorageIndex:
-        """Return storage index for an instance."""
-        return self._index_for_instance(instance_uuid)
+    @property
+    def storage_index(self) -> SqliteStorageIndex:
+        """Return the global storage index."""
+        return self._storage_index
 
     def _record_entry_id(
         self,
@@ -296,15 +360,46 @@ class AttachmentStore:
             return None
         return int(value)
 
-    def _index_for_instance(self, instance_uuid: str) -> SqliteStorageIndex:
-        """Return index for an instance."""
-        storage_index = self._indexes.get(instance_uuid)
-        if storage_index is not None:
-            return storage_index
+    def _mark_entry_orphaned(
+        self,
+        storage_index: SqliteStorageIndex,
+        entry_id: Optional[int],
+    ) -> None:
+        """Make a superseded staged blob eligible for cleanup."""
+        if entry_id is None:
+            return
 
-        storage_index = SqliteStorageIndex(
-            self._path_resolver.index_path(instance_uuid)
+        entry = storage_index.find_entry_by_id(entry_id)
+        superseded_states = {
+            StorageEntryState.STAGED,
+            StorageEntryState.UPLOADED_PENDING_COMMIT,
+        }
+        if entry is None or entry.state not in superseded_states:
+            return
+
+        storage_index.update_entry(
+            replace(
+                entry,
+                state=StorageEntryState.ORPHANED,
+                protection=StorageEntryProtection.NONE,
+            )
         )
-        storage_index.initialize()
-        self._indexes[instance_uuid] = storage_index
-        return storage_index
+
+    def _remove_empty_parents(
+        self,
+        directory: Path,
+    ) -> None:
+        """Remove empty blob directories below the cache root."""
+        cache_root = self._path_resolver.cache_root.resolve()
+        directory = directory.resolve()
+        try:
+            directory.relative_to(cache_root)
+        except ValueError:
+            return
+
+        while directory != cache_root:
+            try:
+                directory.rmdir()
+            except OSError:
+                return
+            directory = directory.parent

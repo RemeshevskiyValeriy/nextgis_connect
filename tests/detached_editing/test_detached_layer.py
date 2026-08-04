@@ -13,6 +13,9 @@ from qgis.PyQt.QtWidgets import QMessageBox
 from nextgis_connect.legacy.detached_editing.detached_layer import (
     DetachedLayer,
 )
+from nextgis_connect.legacy.detached_editing.storage_service_factory import (
+    DetachedStorageServiceFactory,
+)
 from nextgis_connect.legacy.detached_editing.sync.common.serialization import (
     deserialize_geometry,
     deserialize_value,
@@ -1920,6 +1923,66 @@ class TestDetachedLayerAttachments(NgConnectTestCase):
             local_file_path.name,
             {attachment.name for attachment in attachments},
         )
+
+    @mock_container(TestData.Points)
+    def test_new_attachment_is_staged_in_storage_cache(
+        self, container_mock: MagicMock, qgs_layer: QgsVectorLayer
+    ) -> None:
+        layer = DetachedLayer(container_mock, qgs_layer)
+        local_file_path = self.create_temp_file(".txt")
+        local_file_path.write_text("local attachment")
+
+        self.assertTrue(qgs_layer.startEditing())
+        storage_service = DetachedStorageServiceFactory.create()
+        try:
+            attachment = layer.add_attachment(self.FEATURE_1, local_file_path)
+
+            assert attachment.file_path is not None
+            assert attachment.file_path.exists()
+            attachment.file_path.resolve().relative_to(
+                storage_service.cache_root.resolve()
+            )
+        finally:
+            qgs_layer.rollBack()
+
+    @mock_container(TestData.Points)
+    def test_rollback_removes_new_attachment_from_storage_cache(
+        self, container_mock: MagicMock, qgs_layer: QgsVectorLayer
+    ) -> None:
+        layer = DetachedLayer(container_mock, qgs_layer)
+        local_file_path = self.create_temp_file(".txt")
+        local_file_path.write_text("local attachment")
+
+        self.assertTrue(qgs_layer.startEditing())
+        attachment = layer.add_attachment(self.FEATURE_1, local_file_path)
+
+        assert attachment.file_path is not None
+        assert attachment.file_path.exists()
+
+        self.assertTrue(qgs_layer.rollBack())
+
+        assert not attachment.file_path.exists()
+
+    @mock_container(TestData.Points)
+    def test_rollback_removes_undone_new_attachment_from_storage_cache(
+        self, container_mock: MagicMock, qgs_layer: QgsVectorLayer
+    ) -> None:
+        layer = DetachedLayer(container_mock, qgs_layer)
+        local_file_path = self.create_temp_file(".txt")
+        local_file_path.write_text("local attachment")
+
+        self.assertTrue(qgs_layer.startEditing())
+        attachment = layer.add_attachment(self.FEATURE_1, local_file_path)
+
+        assert attachment.file_path is not None
+        assert attachment.file_path.exists()
+
+        qgs_layer.undoStack().undo()
+
+        assert attachment.file_path.exists()
+        self.assertTrue(qgs_layer.rollBack())
+
+        assert not attachment.file_path.exists()
 
     @mock_container(
         TestData.Points,

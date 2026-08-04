@@ -21,8 +21,10 @@ from nextgis_connect.legacy.detached_editing.utils import (
 from nextgis_connect.legacy.settings.tasks.clear_ng_connect_cache_task import (
     ClearNgConnectCacheTask,
 )
+from nextgis_connect.platform.storage.file_store import FileStore
 from nextgis_connect.platform.storage.models import (
     AttachmentKey,
+    LayerKey,
     StorageEntryKind,
     StorageEntryProtection,
     StorageEntryState,
@@ -62,6 +64,13 @@ class TestCacheMaintenanceService(NgConnectTestCase):
         connection = self.connection(TestConnection.SandboxGuest)
         container_path = self.__copy_container_to_cache(container_mock)
         self.__mark_container_changed(container_path)
+        self.__register_container_in_index(container_path)
+        unindexed_container_path = (
+            self.cache_directory / connection.domain_uuid / "unindexed.gpkg"
+        )
+        unindexed_container_path.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(container_mock.path, unindexed_container_path)
+        self.__mark_container_changed(unindexed_container_path)
 
         changed_containers = self.cache_service.containers_with_changes(
             connection
@@ -228,8 +237,10 @@ class TestCacheMaintenanceService(NgConnectTestCase):
             container_path=container_path,
         )
 
-        storage_index = self.__storage_index(connection.domain_uuid)
-        layer_entry = storage_index.layer_entry(resource.resource_id)
+        storage_index = self.__storage_index()
+        layer_entry = storage_index.layer_entry(
+            LayerKey(connection.domain_uuid, resource.resource_id)
+        )
         self.assertTrue(is_registered)
         self.assertIsNotNone(layer_entry)
         assert layer_entry is not None
@@ -251,6 +262,45 @@ class TestCacheMaintenanceService(NgConnectTestCase):
             container_entry.size_bytes, container_path.stat().st_size
         )
         self.assertIsNotNone(container_entry.sha256)
+
+    @mock_container(TestData.Points)
+    def test_reassign_connection_updates_index_metadata(
+        self,
+        container_mock: MagicMock,
+        qgs_layer: QgsVectorLayer,
+    ) -> None:
+        del qgs_layer
+        connection = self.connection(TestConnection.SandboxGuest)
+        container_path = self.__copy_container_to_cache(container_mock)
+        metadata = container_metadata(container_path)
+        with closing(make_connection(container_path)) as database_connection:
+            database_connection.execute(
+                "UPDATE ngw_metadata SET connection_id = ?",
+                ("legacy-connection",),
+            )
+            database_connection.commit()
+        self.storage_service.register_detached_container(
+            connection.domain_uuid,
+            metadata.resource_id,
+            connection_id="legacy-connection",
+            container_path=container_path,
+        )
+
+        result = self.cache_service.reassign_container_connection_ids(
+            [connection]
+        )
+
+        layer_entry = self.__storage_index().layer_entry(
+            LayerKey(connection.domain_uuid, metadata.resource_id)
+        )
+        self.assertTrue(result)
+        self.assertIsNotNone(layer_entry)
+        assert layer_entry is not None
+        self.assertEqual(layer_entry["connection_id"], connection.id)
+        self.assertEqual(
+            container_metadata(container_path).connection_id,
+            connection.id,
+        )
 
     def test_register_attachment_file_and_thumbnail_updates_storage_index(
         self,
@@ -301,7 +351,7 @@ class TestCacheMaintenanceService(NgConnectTestCase):
             )
         )
 
-        storage_index = self.__storage_index(connection.domain_uuid)
+        storage_index = self.__storage_index()
         record = storage_index.attachment_record(
             AttachmentKey(
                 instance_uuid=connection.domain_uuid,
@@ -473,7 +523,7 @@ class TestCacheMaintenanceService(NgConnectTestCase):
             new_fileobj=new_fileobj,
         )
 
-        storage_index = self.__storage_index(connection.domain_uuid)
+        storage_index = self.__storage_index()
         local_storage_key = StorageKeyFactory.local_attachment_blob(
             connection.domain_uuid,
             resource.resource_id,
@@ -510,15 +560,31 @@ class TestCacheMaintenanceService(NgConnectTestCase):
 
     def test_cache_size_ignores_storage_metadata_files(self) -> None:
         connection = self.connection(TestConnection.SandboxGuest)
-        instance_directory = self.cache_directory / connection.domain_uuid
-        instance_directory.mkdir(parents=True, exist_ok=True)
-        (instance_directory / "storage.sqlite").write_bytes(b"x" * 2048)
-        (instance_directory / "storage.sqlite-wal").write_bytes(b"x" * 2048)
-        cache_file_path = instance_directory / "cache.bin"
-        cache_file_path.write_bytes(b"x" * 1024)
+        storage_index = self.__storage_index()
+        (self.cache_directory / "storage.sqlite-backup").write_bytes(
+            b"x" * 2048
+        )
+        storage_key = StorageKeyFactory.remote_attachment_blob(
+            connection.domain_uuid,
+            self.resource(TestData.Points).resource_id,
+            1,
+        )
+        blob_ref = FileStore(
+            StoragePathResolver(self.cache_directory),
+            storage_index,
+        ).write_bytes(
+            storage_key,
+            "blob",
+            b"x" * 1024,
+            kind=StorageEntryKind.ATTACHMENT_BLOB,
+            resource_id=self.resource(TestData.Points).resource_id,
+            state=StorageEntryState.COMMITTED,
+            protection=StorageEntryProtection.NONE,
+        )
 
         self.assertEqual(self.cache_service.cache_size, 1)
-        cache_file_path.unlink()
+        assert blob_ref.entry_id is not None
+        storage_index.delete_entry(blob_ref.entry_id)
         self.assertEqual(self.cache_service.cache_size, 0)
 
     def test_purge_cache_removes_stale_download_temporary_file(self) -> None:
@@ -556,6 +622,15 @@ class TestCacheMaintenanceService(NgConnectTestCase):
         shutil.copyfile(container_mock.path, container_path)
         return container_path
 
+    def __register_container_in_index(self, container_path: Path) -> None:
+        metadata = container_metadata(container_path)
+        self.storage_service.register_detached_container(
+            metadata.instance_id,
+            metadata.resource_id,
+            connection_id=metadata.connection_id,
+            container_path=container_path,
+        )
+
     def __add_container_to_project(self, container_path):
         metadata = container_metadata(container_path)
         layer = QgsVectorLayer(
@@ -581,10 +656,8 @@ class TestCacheMaintenanceService(NgConnectTestCase):
             )
             connection.commit()
 
-    def __storage_index(self, instance_uuid: str) -> SqliteStorageIndex:
+    def __storage_index(self) -> SqliteStorageIndex:
         path_resolver = StoragePathResolver(Path(self.cache_directory))
-        storage_index = SqliteStorageIndex(
-            path_resolver.index_path(instance_uuid)
-        )
+        storage_index = SqliteStorageIndex(path_resolver.index_path())
         storage_index.initialize()
         return storage_index

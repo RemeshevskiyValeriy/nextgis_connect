@@ -591,6 +591,7 @@ class DetachedContainer(QObject):
     def __update_state(self, is_full_update: bool = False) -> None:
         try:
             self.__metadata = utils.container_metadata(self.path)
+            self.__update_storage_index_state()
             if not self.metadata.is_versioning_enabled:
                 self.__versioning_state = (
                     VersioningSynchronizationState.NotVersionedLayer
@@ -669,6 +670,21 @@ class DetachedContainer(QObject):
         self.__reset_error()
 
         self.state_changed.emit(self.__state)
+
+    def __update_storage_index_state(self) -> None:
+        try:
+            DetachedStorageServiceFactory.create().register_detached_container(
+                self.__metadata.instance_id,
+                self.__metadata.resource_id,
+                connection_id=self.__metadata.connection_id,
+                container_path=self.path,
+                is_used_by_project=self.__is_project_container,
+            )
+        except Exception:
+            logger.debug(
+                "Could not update detached container storage index state",
+                exc_info=True,
+            )
 
     def __init_sync_task(self) -> Optional[DetachedEditingTask]:
         sync_task = None

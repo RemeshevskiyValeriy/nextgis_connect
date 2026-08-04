@@ -865,15 +865,8 @@ class IdentificationResultsWidget(QgsDockWidget, ResultsDialogBase):
                 )
             return
 
-        if self.__is_feature_changed(
-            selected_result.mFeature, refreshed_feature
-        ):
-            selected_result.mFeature = refreshed_feature
-            self.__on_feature_changed(self.features_combobox.currentIndex())
-            return
-
-        self.edit_button.setEnabled(not layer.readOnly())
-        self.__update_edit_mode(layer.isEditable())
+        selected_result.mFeature = refreshed_feature
+        self.__on_feature_changed(self.features_combobox.currentIndex())
 
     def __is_feature_changed(
         self, previous_feature: QgsFeature, current_feature: QgsFeature
@@ -1028,5 +1021,8 @@ class IdentificationResultsWidget(QgsDockWidget, ResultsDialogBase):
 
     @pyqtSlot(DetachedLayerState)
     def __on_state_changed(self, state: DetachedLayerState) -> None:
-        if state == DetachedLayerState.Synchronized:
+        if state in (
+            DetachedLayerState.NotSynchronized,
+            DetachedLayerState.Synchronized,
+        ):
             QTimer.singleShot(0, self.__refresh_current_feature_after_sync)

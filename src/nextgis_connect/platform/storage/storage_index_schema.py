@@ -37,13 +37,15 @@ def initialize_schema(connection: sqlite3.Connection) -> None:
         );
 
         CREATE TABLE IF NOT EXISTS layer_entries (
-            resource_id INTEGER PRIMARY KEY,
+            resource_id INTEGER NOT NULL,
             container_entry_id INTEGER NOT NULL,
             connection_id TEXT,
             instance_uuid TEXT NOT NULL,
             has_local_changes INTEGER NOT NULL DEFAULT 0,
             is_used_by_project INTEGER NOT NULL DEFAULT 0,
             last_sync_state TEXT,
+            PRIMARY KEY (instance_uuid, resource_id),
+            UNIQUE (container_entry_id),
             FOREIGN KEY (container_entry_id)
                 REFERENCES storage_entries(id)
                 ON DELETE CASCADE
@@ -108,6 +110,10 @@ def initialize_schema(connection: sqlite3.Connection) -> None:
             ON storage_entries(resource_id);
         CREATE INDEX IF NOT EXISTS idx_storage_entries_instance
             ON storage_entries(instance_uuid);
+        CREATE INDEX IF NOT EXISTS idx_storage_entries_instance_resource
+            ON storage_entries(instance_uuid, resource_id);
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_storage_entries_relative_path
+            ON storage_entries(relative_path);
         CREATE INDEX IF NOT EXISTS idx_storage_entries_gc
             ON storage_entries(state, protection);
         CREATE INDEX IF NOT EXISTS idx_attachment_records_resource
@@ -132,8 +138,7 @@ def initialize_schema(connection: sqlite3.Connection) -> None:
         )
         return
 
-    version = int(row[0])
-    if version != SCHEMA_VERSION:
+    if int(row[0]) != SCHEMA_VERSION:
         raise sqlite3.DatabaseError(
-            f"Unsupported storage schema version: {version}"
+            f"Unsupported storage schema version: {row[0]}"
         )

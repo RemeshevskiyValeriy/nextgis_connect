@@ -1,8 +1,8 @@
 import logging
-import re
 import shutil
 import tempfile
 import time
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Union
 
@@ -32,7 +32,32 @@ from nextgis_connect.legacy.ngw_connection.domain.connection import (
 from nextgis_connect.legacy.settings.ng_connect_settings import (
     NgConnectSettings,
 )
+from nextgis_connect.platform.storage.models import LayerKey
+from nextgis_connect.platform.storage.path_resolver import StoragePathResolver
+from nextgis_connect.platform.storage.sqlite_storage_index import (
+    SqliteStorageIndex,
+)
 from nextgis_connect.shared.constants import PLUGIN_NAME
+
+
+@dataclass(frozen=True)
+class _IndexedLayerContainer:
+    """Represent a detached layer container stored in the cache index."""
+
+    path: Path
+    resource_id: int
+    instance_uuid: str
+    connection_id: Optional[str]
+    has_local_changes: bool
+    is_used_by_project: bool
+
+
+@dataclass(frozen=True)
+class _ProjectLayerContainer:
+    """Represent a detached layer container currently used by the project."""
+
+    path: Path
+    label: str
 
 
 class CacheMaintenanceService:
@@ -43,12 +68,7 @@ class CacheMaintenanceService:
     TEMPORARY_DOWNLOAD_SUFFIX = ".download"
 
     __settings: NgConnectSettings
-    __project_containers: Optional[List[Path]]
-    __uuid_pattern = re.compile(
-        r"^[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-"
-        r"[89ab][a-f0-9]{3}-[a-f0-9]{12}$",
-        re.IGNORECASE,
-    )
+    __project_containers: Optional[List[_ProjectLayerContainer]]
 
     def __init__(self) -> None:
         self.__settings = NgConnectSettings()
@@ -94,15 +114,12 @@ class CacheMaintenanceService:
     @property
     def cache_size(self) -> float:
         """Current cache size in KB"""
-        cache_path = Path(self.cache_directory)
-        cache_size = 0.0
-        for file_path in cache_path.glob("**/*"):
-            if not file_path.is_file():
-                continue
-            if self.__is_storage_metadata_file(file_path):
-                continue
-            cache_size += file_path.stat().st_size / 1024
-        return cache_size
+        return (
+            StorageCleanupService(
+                Path(self.cache_directory)
+            ).cache_size_bytes()
+            / 1024
+        )
 
     @property
     def cache_max_size(self) -> int:
@@ -133,13 +150,6 @@ class CacheMaintenanceService:
             if LegacyCacheMigrator(cache_path).need_migration():
                 return True
 
-            for directory in cache_path.glob("*"):
-                if not self.__is_uuid(directory.name):
-                    continue
-
-                if any(True for _ in directory.glob("*.gpkg")):
-                    return True
-
         return False
 
     @property
@@ -157,15 +167,6 @@ class CacheMaintenanceService:
                 QgisProjectStorageUsage(),
             ).can_migrate():
                 return False
-
-            for directory in cache_path.glob("*"):
-                if not self.__is_uuid(directory.name):
-                    continue
-
-                gpkg_files = list(directory.glob("*.gpkg"))
-                for gpkg_file in gpkg_files:
-                    if self.__is_file_used_by_project(gpkg_file):
-                        return False
 
         return True
 
@@ -225,7 +226,7 @@ class CacheMaintenanceService:
                 continue
 
             connection = domain_connections[0]
-            container_file = self.__move_container_to_connection_cache(
+            container_file = self.__move_container_to_indexed_cache(
                 container_file,
                 metadata.resource_id,
                 connection,
@@ -247,7 +248,7 @@ class CacheMaintenanceService:
 
         return True
 
-    def __move_container_to_connection_cache(
+    def __move_container_to_indexed_cache(
         self,
         container_file: Path,
         resource_id: int,
@@ -259,22 +260,6 @@ class CacheMaintenanceService:
             connection_id=connection.id,
             source_container_path=container_file,
         )
-
-    def __move_detached_container_service_files(
-        self,
-        old_container_file: Path,
-        new_container_file: Path,
-    ) -> None:
-        for service_file in old_container_file.parent.glob(
-            f"{old_container_file.name}-*"
-        ):
-            suffix = service_file.name[len(old_container_file.name) :]
-            target_file = new_container_file.parent / (
-                new_container_file.name + suffix
-            )
-            if target_file.exists():
-                continue
-            service_file.replace(target_file)
 
     def __update_container_connection_metadata(
         self,
@@ -292,6 +277,18 @@ class CacheMaintenanceService:
                     (connection.id, connection.domain_uuid),
                 )
                 db_connection.commit()
+            metadata = container_metadata(container_file)
+            is_registered = self.__storage_service.register_detached_container(
+                connection.domain_uuid,
+                metadata.resource_id,
+                connection_id=connection.id,
+                container_path=container_file,
+                is_used_by_project=self.__is_project_container(container_file),
+            )
+            if not is_registered:
+                raise RuntimeError(
+                    "Could not register reassigned detached container"
+                )
         except Exception:
             logger = logging.getLogger(PLUGIN_NAME)
             logger.exception(
@@ -304,7 +301,7 @@ class CacheMaintenanceService:
     def clear_cache(self) -> bool:
         logger = logging.getLogger(PLUGIN_NAME)
 
-        self.__refresh_detached_storage_index()
+        self.__refresh_project_storage_usage_index()
         if self.has_files_used_by_project or self.has_containers_with_changes:
             logger.warning("Cache clearing was blocked by protected files")
             return False
@@ -319,7 +316,7 @@ class CacheMaintenanceService:
         return True
 
     def clear_connection_cache(self, connection) -> bool:
-        self.__refresh_detached_storage_index()
+        self.__refresh_project_storage_usage_index()
         if len(self.containers_used_by_project(connection)) > 0:
             return False
         if len(self.containers_with_changes(connection)) > 0:
@@ -336,29 +333,8 @@ class CacheMaintenanceService:
             )
             return False
 
-        has_errors = False
-        cache_paths = self.__connection_cache_paths(connection)
-
-        for cache_path in sorted(
-            cache_paths, key=lambda path: len(path.parts), reverse=True
-        ):
-            if not cache_path.exists():
-                continue
-
-            try:
-                if cache_path.is_dir():
-                    try:
-                        cache_path.rmdir()
-                    except OSError:
-                        continue
-                else:
-                    cache_path.unlink()
-            except Exception:
-                logger.exception(f"Could not delete cache path {cache_path}")
-                has_errors = True
-
         self.__remove_empty_dirs(self.cache_directory)
-        return not has_errors
+        return True
 
     def clear_resource_cache(
         self,
@@ -370,17 +346,7 @@ class CacheMaintenanceService:
         if resource_id_value is None:
             return False
 
-        self.__refresh_detached_storage_index()
-        if self.__has_resource_container(
-            self.containers_used_by_project(connection),
-            resource_id_value,
-        ):
-            return False
-        if self.__has_resource_container(
-            self.containers_with_changes(connection),
-            resource_id_value,
-        ):
-            return False
+        self.__refresh_project_storage_usage_index()
 
         logger = logging.getLogger(PLUGIN_NAME)
         cleanup_report = StorageCleanupService(
@@ -402,66 +368,49 @@ class CacheMaintenanceService:
     def containers_with_changes(
         self, connection=None
     ) -> List[Tuple[Path, str]]:
-        containers: List[Tuple[Path, str]] = []
-        for file_path in Path(self.cache_directory).glob("**/*.gpkg"):
-            try:
-                metadata = container_metadata(file_path)
-            except Exception:
-                continue
-
-            if not metadata.has_changes:
-                continue
-
-            if (
-                connection is not None
-                and not self.__is_container_for_connection(
-                    metadata,
-                    connection,
-                )
-            ):
-                continue
-
-            containers.append(
-                (
-                    file_path,
-                    f"{metadata.layer_name} (id={metadata.resource_id})",
-                )
+        return [
+            (container.path, self.__indexed_container_label(container))
+            for container in self.__indexed_layer_containers(
+                connection,
+                has_local_changes=True,
             )
-
-        return containers
+        ]
 
     def containers_used_by_project(
         self, connection=None
     ) -> List[Tuple[Path, str]]:
         containers: List[Tuple[Path, str]] = []
-        for file_path in self.__project_container_paths():
+        indexed_containers_by_path = self.__indexed_containers_by_path()
+        for project_container in self.__project_layer_containers():
+            file_path = project_container.path
             if not self.__is_cache_path(file_path):
                 continue
 
-            try:
-                metadata = container_metadata(file_path)
-            except Exception:
-                if connection is not None:
+            indexed_container = indexed_containers_by_path.get(
+                self.__normalized_path(file_path)
+            )
+            if indexed_container is None:
+                if not self.__is_legacy_project_container_for_connection(
+                    file_path,
+                    connection,
+                ):
                     continue
-
-                containers.append((file_path, file_path.name))
-                continue
 
             if (
                 connection is not None
-                and not self.__is_container_for_connection(
-                    metadata,
+                and indexed_container is not None
+                and not self.__is_indexed_container_for_connection(
+                    indexed_container,
                     connection,
                 )
             ):
                 continue
 
-            containers.append(
-                (
-                    file_path,
-                    f"{metadata.layer_name} (id={metadata.resource_id})",
-                )
-            )
+            label = project_container.label
+            if indexed_container is not None:
+                label = self.__indexed_container_label(indexed_container)
+
+            containers.append((file_path, label))
 
         return containers
 
@@ -476,7 +425,7 @@ class CacheMaintenanceService:
             logger.debug("Cache limits is disabled")
             return True
 
-        self.__refresh_detached_storage_index()
+        self.__refresh_project_storage_usage_index()
         report = StorageCleanupService(
             Path(self.cache_directory)
         ).purge_automatic(
@@ -544,32 +493,102 @@ class CacheMaintenanceService:
         if not any(path.iterdir()):
             path.rmdir()
 
-    def __connection_cache_paths(self, connection) -> List[Path]:
-        cache_root = Path(self.cache_directory)
-        connection_ids = {
-            connection_id
-            for connection_id in (
-                connection.domain_uuid,
-                connection.id,
-                *connection.old_connection_ids,
+    def __indexed_layer_containers(
+        self,
+        connection: Optional[NgwConnection] = None,
+        *,
+        has_local_changes: Optional[bool] = None,
+        is_used_by_project: Optional[bool] = None,
+    ) -> List[_IndexedLayerContainer]:
+        path_resolver = StoragePathResolver(Path(self.cache_directory))
+        containers: List[_IndexedLayerContainer] = []
+        for layer_entry in self.__storage_index().layer_entries(
+            has_local_changes=has_local_changes,
+            is_used_by_project=is_used_by_project,
+        ):
+            container = self.__indexed_layer_container(
+                layer_entry,
+                path_resolver,
             )
-            if connection_id
-        }
-        result = {
-            cache_root / connection_id for connection_id in connection_ids
+            if container is None:
+                continue
+            if (
+                connection is not None
+                and not self.__is_indexed_container_for_connection(
+                    container,
+                    connection,
+                )
+            ):
+                continue
+            containers.append(container)
+
+        return containers
+
+    def __indexed_layer_container(
+        self,
+        layer_entry: Dict[str, object],
+        path_resolver: StoragePathResolver,
+    ) -> Optional[_IndexedLayerContainer]:
+        relative_path = layer_entry.get("relative_path")
+        if relative_path is None:
+            return None
+
+        instance_uuid = str(layer_entry["instance_uuid"])
+        path = path_resolver.absolute_from_entry(
+            Path(str(relative_path)),
+        )
+        connection_id = layer_entry["connection_id"]
+        return _IndexedLayerContainer(
+            path=path,
+            resource_id=int(layer_entry["resource_id"]),
+            instance_uuid=instance_uuid,
+            connection_id=None
+            if connection_id is None
+            else str(connection_id),
+            has_local_changes=bool(layer_entry["has_local_changes"]),
+            is_used_by_project=bool(layer_entry["is_used_by_project"]),
+        )
+
+    def __indexed_containers_by_path(
+        self,
+    ) -> Dict[Path, _IndexedLayerContainer]:
+        return {
+            self.__normalized_path(container.path): container
+            for container in self.__indexed_layer_containers()
         }
 
-        for file_path in cache_root.glob("**/*.gpkg"):
-            try:
-                metadata = container_metadata(file_path)
-            except Exception:
+    def __storage_index(self) -> SqliteStorageIndex:
+        path_resolver = StoragePathResolver(Path(self.cache_directory))
+        return SqliteStorageIndex(path_resolver.index_path())
+
+    def __refresh_project_storage_usage_index(self) -> None:
+        project_paths = {
+            self.__normalized_path(project_container.path)
+            for project_container in self.__project_layer_containers()
+            if self.__is_cache_path(project_container.path)
+        }
+        for container in self.__indexed_layer_containers():
+            is_used_by_project = (
+                self.__normalized_path(container.path) in project_paths
+            )
+            if container.is_used_by_project == is_used_by_project:
                 continue
 
-            if self.__is_container_for_connection(metadata, connection):
-                result.add(file_path)
-                result.update(file_path.parent.glob(f"{file_path.name}-*"))
+            self.__storage_service.detached_layers.mark_used_by_project(
+                LayerKey(container.instance_uuid, container.resource_id),
+                is_used_by_project,
+            )
 
-        return list(result)
+    def __indexed_container_label(
+        self,
+        container: _IndexedLayerContainer,
+    ) -> str:
+        try:
+            metadata = container_metadata(container.path)
+        except Exception:
+            return f"Resource id={container.resource_id}"
+
+        return f"{metadata.layer_name} (id={metadata.resource_id})"
 
     def __is_container_for_connection(self, metadata, connection) -> bool:
         connection_ids = {
@@ -585,42 +604,62 @@ class CacheMaintenanceService:
             or metadata.instance_id == connection.domain_uuid
         )
 
-    def __has_resource_container(
+    def __is_indexed_container_for_connection(
         self,
-        containers: List[Tuple[Path, str]],
-        resource_id: int,
+        container: _IndexedLayerContainer,
+        connection: NgwConnection,
     ) -> bool:
-        for file_path, _label in containers:
-            try:
-                metadata = container_metadata(file_path)
-            except Exception:
-                continue
-
-            if metadata.resource_id == resource_id:
-                return True
-
-        return False
-
-    def __is_file_used_by_project(self, file_path: Path) -> bool:
-        return file_path in self.__project_container_paths()
-
-    def __is_storage_metadata_file(self, file_path: Path) -> bool:
-        file_name = file_path.name
+        connection_ids = {
+            connection_id
+            for connection_id in (
+                connection.id,
+                *connection.old_connection_ids,
+            )
+            if connection_id
+        }
         return (
-            file_name == "storage.sqlite"
-            or file_name.startswith("storage.sqlite-")
-            or file_name == ".storage_migration.lock"
+            container.instance_uuid == connection.domain_uuid
+            or container.connection_id in connection_ids
         )
 
-    def __project_container_paths(self) -> List[Path]:
+    def __is_legacy_project_container_for_connection(
+        self,
+        file_path: Path,
+        connection: Optional[NgwConnection],
+    ) -> bool:
+        if connection is None:
+            return True
+
+        try:
+            metadata = container_metadata(file_path)
+        except Exception:
+            return False
+
+        return self.__is_container_for_connection(metadata, connection)
+
+    def __project_layer_containers(self) -> List[_ProjectLayerContainer]:
         if self.__project_containers is None:
             self.__project_containers = [
-                container_path(layer)
+                _ProjectLayerContainer(container_path(layer), layer.name())
                 for layer in QgsProject().instance().mapLayers().values()
                 if is_ngw_container(layer)
             ]
 
         return self.__project_containers
+
+    def __normalized_path(self, path: Path) -> Path:
+        try:
+            return path.resolve()
+        except OSError:
+            return path
+
+    def __is_project_container(self, path: Path) -> bool:
+        """Return whether the current project uses a container path."""
+        normalized_path = self.__normalized_path(path)
+        return any(
+            self.__normalized_path(container.path) == normalized_path
+            for container in self.__project_layer_containers()
+        )
 
     def __is_cache_path(self, file_path: Path) -> bool:
         try:
@@ -636,124 +675,28 @@ class CacheMaintenanceService:
         if not old_base.exists():
             return True
 
-        if old_base == new_base:
-            migrator = LegacyCacheMigrator(new_base, QgisProjectStorageUsage())
-            try:
-                report = migrator.migrate()
-            except Exception:
-                logging.getLogger(PLUGIN_NAME).exception(
-                    "Could not migrate legacy cache"
-                )
-                return False
-            return len(report.errors) == 0
-
-        for directory in old_base.glob("*"):
-            if not self.__is_uuid(directory.name):
-                continue
-
-            for gpkg_file in self.__legacy_container_files(directory):
-                if not self.__migrate_legacy_container(
-                    gpkg_file,
-                    new_base,
-                    directory.name,
-                    gpkg_file.stem,
-                ):
-                    return False
-
-            if old_base != new_base:
-                self.__remove_empty_dirs(directory)
-
-        if not any(old_base.iterdir()):
-            old_base.rmdir()
-
-        return True
-
-    def __legacy_container_files(self, instance_directory: Path) -> List[Path]:
-        return list(instance_directory.glob("*.gpkg"))
-
-    def __migrate_legacy_container(
-        self,
-        container_file: Path,
-        new_base: Path,
-        fallback_instance_uuid: str,
-        fallback_resource_id: Union[int, str],
-    ) -> bool:
-        fallback_resource_id_value = self.__parse_int(fallback_resource_id)
         try:
-            metadata = container_metadata(container_file)
-            instance_uuid = metadata.instance_id or fallback_instance_uuid
-            resource_id = metadata.resource_id or fallback_resource_id_value
-            connection_id = metadata.connection_id
-        except Exception:
-            instance_uuid = fallback_instance_uuid
-            resource_id = fallback_resource_id_value
-            connection_id = None
-        if resource_id is None:
-            logging.getLogger(PLUGIN_NAME).warning(
-                "Could not determine resource id for legacy detached container: "
-                f"{container_file}"
-            )
-            return True
-
-        storage_service = DetachedStorageService(new_base)
-        target_path = storage_service.container_path(
-            instance_uuid, resource_id
-        )
-        if target_path.exists():
-            return True
-
-        try:
-            is_registered = storage_service.register_detached_container(
-                instance_uuid,
-                resource_id,
-                connection_id=connection_id,
-                container_path=container_file,
-                is_used_by_project=self.__is_file_used_by_project(
-                    container_file
-                ),
-            )
-            if not is_registered:
-                return True
-            self.__move_detached_container_service_files(
-                container_file,
-                target_path,
-            )
-            container_file.unlink(missing_ok=True)
+            report = LegacyCacheMigrator(
+                old_base,
+                QgisProjectStorageUsage(),
+                target_cache_root=new_base,
+            ).migrate()
         except Exception:
             logging.getLogger(PLUGIN_NAME).exception(
-                "Could not migrate legacy detached container"
+                "Could not migrate legacy cache"
             )
             return False
 
-        return True
-
-    def __refresh_detached_storage_index(self) -> None:
-        for file_path in Path(self.cache_directory).glob("**/*.gpkg"):
+        if old_base != new_base and old_base.exists():
             try:
-                metadata = container_metadata(file_path)
-            except Exception:
-                continue
+                old_base.rmdir()
+            except OSError:
+                pass
 
-            canonical_path = self.__storage_service.container_path(
-                metadata.instance_id,
-                metadata.resource_id,
-            )
-            if file_path != canonical_path:
-                continue
-
-            self.__storage_service.register_detached_container(
-                metadata.instance_id,
-                metadata.resource_id,
-                connection_id=metadata.connection_id,
-                container_path=file_path,
-                is_used_by_project=self.__is_file_used_by_project(file_path),
-            )
+        return len(report.errors) == 0
 
     def __parse_int(self, value: object) -> Optional[int]:
         try:
             return int(value)
         except (TypeError, ValueError):
             return None
-
-    def __is_uuid(self, name: str) -> bool:
-        return bool(self.__uuid_pattern.match(name))

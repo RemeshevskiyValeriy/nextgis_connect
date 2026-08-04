@@ -48,15 +48,7 @@ class AttachmentLifecycle:
         extension: Optional[str] = None,
     ) -> BlobRef:
         """Stage a replacement without overwriting committed blob."""
-        storage_index = self._attachment_store.index_for_instance(
-            attachment_key.instance_uuid
-        )
-        previous_record = storage_index.attachment_record(attachment_key)
-        previous_staged_entry_id = None
-        if previous_record is not None:
-            previous_staged_entry_id = previous_record["staged_blob_entry_id"]
-
-        blob_ref = self._attachment_store.stage_blob(
+        return self._attachment_store.stage_blob(
             attachment_key,
             source_path,
             local_blob_uuid=local_blob_uuid,
@@ -64,31 +56,6 @@ class AttachmentLifecycle:
             pending_operation=AttachmentOperation.UPDATE_FILE,
             committed_blob_entry_id=committed_blob_entry_id,
         )
-
-        if previous_staged_entry_id is not None:
-            previous_entry = storage_index.find_entry_by_id(
-                int(previous_staged_entry_id)
-            )
-            if (
-                previous_entry is not None
-                and previous_entry.state == StorageEntryState.STAGED
-            ):
-                storage_index.update_entry(
-                    StorageEntry(
-                        id=previous_entry.id,
-                        storage_key=previous_entry.storage_key,
-                        kind=previous_entry.kind,
-                        relative_path=previous_entry.relative_path,
-                        instance_uuid=previous_entry.instance_uuid,
-                        resource_id=previous_entry.resource_id,
-                        size_bytes=previous_entry.size_bytes,
-                        sha256=previous_entry.sha256,
-                        state=StorageEntryState.ORPHANED,
-                        protection=StorageEntryProtection.NONE,
-                    )
-                )
-
-        return blob_ref
 
     def mark_uploaded_pending_commit(
         self,
@@ -99,9 +66,7 @@ class AttachmentLifecycle:
         ngw_aid: Optional[int],
     ) -> None:
         """Mark a staged blob as uploaded but not server-committed."""
-        storage_index = self._attachment_store.index_for_instance(
-            attachment_key.instance_uuid
-        )
+        storage_index = self._attachment_store.storage_index
         entry = storage_index.find_entry_by_id(staged_blob_entry_id)
         if entry is None:
             return

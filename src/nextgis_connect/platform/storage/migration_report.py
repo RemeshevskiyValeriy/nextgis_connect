@@ -8,6 +8,7 @@ class MigrationReport:
 
     scanned_files: int = 0
     migrated_files: int = 0
+    deleted_files: int = 0
     skipped_files: int = 0
     quarantined_files: int = 0
     blocked_files: int = 0

@@ -65,7 +65,7 @@ class StorageKeyFactory:
         purpose: str,
     ) -> StorageKey:
         """Create a temporary file key."""
-        seed = f"temp:v1:{operation_uuid}:{purpose}"
+        seed = f"temp:v1:{instance_uuid}:{operation_uuid}:{purpose}"
         return StorageKeyFactory._from_seed(seed, instance_uuid)
 
     @staticmethod

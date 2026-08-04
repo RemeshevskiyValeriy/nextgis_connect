@@ -1,3 +1,4 @@
+import hashlib
 import sqlite3
 from contextlib import contextmanager
 from datetime import datetime
@@ -11,6 +12,7 @@ from nextgis_connect.platform.storage.errors import (
 from nextgis_connect.platform.storage.models import (
     AttachmentKey,
     AttachmentOperation,
+    LayerKey,
     StorageEntry,
     StorageEntryKind,
     StorageEntryProtection,
@@ -41,6 +43,7 @@ class SqliteStorageIndex:
         self._index_path.parent.mkdir(parents=True, exist_ok=True)
         try:
             with self._connect() as connection:
+                connection.execute("PRAGMA journal_mode = WAL")
                 initialize_schema(connection)
         except sqlite3.DatabaseError as error:
             raise StorageIndexError(
@@ -200,6 +203,23 @@ class SqliteStorageIndex:
                 ORDER BY id
                 """,
                 (resource_id,),
+            )
+            rows = cursor.fetchall()
+        return [self._entry_from_row(row) for row in rows]
+
+    def entries_for_layer(self, layer_key: LayerKey) -> List[StorageEntry]:
+        """Return storage entries for one resource in one Web GIS."""
+        self._ensure_initialized()
+        with self._connect() as connection:
+            cursor = connection.execute(
+                """
+                SELECT id, storage_key, kind, relative_path, instance_uuid,
+                       resource_id, size_bytes, sha256, state, protection
+                FROM storage_entries
+                WHERE instance_uuid = ? AND resource_id = ?
+                ORDER BY id
+                """,
+                (layer_key.instance_uuid, layer_key.resource_id),
             )
             rows = cursor.fetchall()
         return [self._entry_from_row(row) for row in rows]
@@ -413,7 +433,7 @@ class SqliteStorageIndex:
                         last_sync_state
                     )
                     VALUES (?, ?, ?, ?, ?, ?, ?)
-                    ON CONFLICT(resource_id) DO UPDATE SET
+                    ON CONFLICT(instance_uuid, resource_id) DO UPDATE SET
                         container_entry_id = excluded.container_entry_id,
                         connection_id = excluded.connection_id,
                         instance_uuid = excluded.instance_uuid,
@@ -438,7 +458,10 @@ class SqliteStorageIndex:
                 instance_uuid=instance_uuid,
             ) from error
 
-    def layer_entry(self, resource_id: int) -> Optional[Dict[str, object]]:
+    def layer_entry(
+        self,
+        layer_key: LayerKey,
+    ) -> Optional[Dict[str, object]]:
         """Return a detached layer entry."""
         self._ensure_initialized()
         with self._connect() as connection:
@@ -448,22 +471,83 @@ class SqliteStorageIndex:
                        instance_uuid, has_local_changes, is_used_by_project,
                        last_sync_state
                 FROM layer_entries
-                WHERE resource_id = ?
+                WHERE instance_uuid = ? AND resource_id = ?
                 """,
-                (resource_id,),
+                (layer_key.instance_uuid, layer_key.resource_id),
             )
             row = cursor.fetchone()
         if row is None:
             return None
-        return {
-            "resource_id": row[0],
-            "container_entry_id": row[1],
-            "connection_id": row[2],
-            "instance_uuid": row[3],
-            "has_local_changes": bool(row[4]),
-            "is_used_by_project": bool(row[5]),
-            "last_sync_state": row[6],
-        }
+        return self._layer_entry_from_row(row)
+
+    def layer_entries(
+        self,
+        *,
+        instance_uuid: Optional[str] = None,
+        has_local_changes: Optional[bool] = None,
+        is_used_by_project: Optional[bool] = None,
+    ) -> List[Dict[str, object]]:
+        """Return detached layer entries filtered by stored flags."""
+        self._ensure_initialized()
+        clauses: List[str] = []
+        params: List[object] = []
+        if instance_uuid is not None:
+            clauses.append("layers.instance_uuid = ?")
+            params.append(instance_uuid)
+        if has_local_changes is not None:
+            clauses.append("layers.has_local_changes = ?")
+            params.append(int(has_local_changes))
+        if is_used_by_project is not None:
+            clauses.append("layers.is_used_by_project = ?")
+            params.append(int(is_used_by_project))
+
+        where_clause = ""
+        if clauses:
+            where_clause = f"WHERE {' AND '.join(clauses)}"
+
+        with self._connect() as connection:
+            cursor = connection.execute(
+                f"""
+                SELECT layers.resource_id, layers.container_entry_id,
+                       layers.connection_id, layers.instance_uuid,
+                       layers.has_local_changes, layers.is_used_by_project,
+                       layers.last_sync_state, entries.relative_path
+                FROM layer_entries AS layers
+                JOIN storage_entries AS entries
+                    ON entries.id = layers.container_entry_id
+                {where_clause}
+                ORDER BY layers.resource_id
+                """,
+                params,
+            )
+            rows = cursor.fetchall()
+        return [self._layer_entry_from_row(row) for row in rows]
+
+    def layer_entry_by_relative_path(
+        self,
+        relative_path: Path,
+    ) -> Optional[Dict[str, object]]:
+        """Return a detached layer entry for an indexed relative path."""
+        self._ensure_initialized()
+        with self._connect() as connection:
+            cursor = connection.execute(
+                """
+                SELECT layers.resource_id, layers.container_entry_id,
+                       layers.connection_id, layers.instance_uuid,
+                       layers.has_local_changes, layers.is_used_by_project,
+                       layers.last_sync_state, entries.relative_path
+                FROM layer_entries AS layers
+                JOIN storage_entries AS entries
+                    ON entries.id = layers.container_entry_id
+                WHERE entries.relative_path = ?
+                LIMIT 1
+                """,
+                (relative_path.as_posix(),),
+            )
+            row = cursor.fetchone()
+        if row is None:
+            return None
+        return self._layer_entry_from_row(row)
 
     def upsert_attachment_record(
         self,
@@ -605,6 +689,13 @@ class SqliteStorageIndex:
             row = cursor.fetchone()
         if row is None:
             return None
+        return self._attachment_record_from_row(row)
+
+    def _attachment_record_from_row(
+        self,
+        row: Sequence[object],
+    ) -> Dict[str, object]:
+        """Create an attachment record mapping from a SQLite row."""
         keys = (
             "id",
             "instance_uuid",
@@ -625,6 +716,28 @@ class SqliteStorageIndex:
         result["is_deleted_locally"] = bool(result["is_deleted_locally"])
         result["is_deleted_remotely"] = bool(result["is_deleted_remotely"])
         return result
+
+    def delete_attachment_record(
+        self,
+        attachment_key: AttachmentKey,
+    ) -> None:
+        """Delete one logical attachment record."""
+        existing_record = self.attachment_record(attachment_key)
+        if existing_record is None:
+            return
+
+        try:
+            with self._transaction() as connection:
+                connection.execute(
+                    "DELETE FROM attachment_records WHERE id = ?",
+                    (int(existing_record["id"]),),
+                )
+        except sqlite3.DatabaseError as error:
+            raise StorageIndexError(
+                "Could not delete attachment record",
+                instance_uuid=attachment_key.instance_uuid,
+                resource_id=attachment_key.resource_id,
+            ) from error
 
     def upsert_blob_remote_map(
         self,
@@ -744,6 +857,7 @@ class SqliteStorageIndex:
     def _connect(self) -> sqlite3.Connection:
         """Open a SQLite connection."""
         connection = sqlite3.connect(str(self._index_path))
+        connection.execute("PRAGMA busy_timeout = 5000")
         connection.execute("PRAGMA foreign_keys = ON")
         return connection
 
@@ -769,10 +883,13 @@ class SqliteStorageIndex:
 
     def _entry_from_row(self, row: Sequence[object]) -> StorageEntry:
         """Create a storage entry from a SQLite row."""
+        storage_key_seed = str(row[1])
         storage_key = StorageKey(
-            seed=str(row[1]),
+            seed=storage_key_seed,
             instance_uuid=str(row[4]),
-            digest=self._digest_from_relative_path(Path(str(row[3]))),
+            digest=hashlib.sha256(
+                storage_key_seed.encode("utf-8")
+            ).hexdigest(),
         )
         return StorageEntry(
             id=int(row[0]),
@@ -787,9 +904,20 @@ class SqliteStorageIndex:
             protection=StorageEntryProtection(str(row[9])),
         )
 
-    def _digest_from_relative_path(self, relative_path: Path) -> str:
-        """Return digest from an indexed relative path."""
-        parts = relative_path.parts
-        if len(parts) >= 2:
-            return parts[1]
-        return ""
+    def _layer_entry_from_row(
+        self,
+        row: Sequence[object],
+    ) -> Dict[str, object]:
+        """Create a layer entry mapping from a SQLite row."""
+        result = {
+            "resource_id": int(row[0]),
+            "container_entry_id": int(row[1]),
+            "connection_id": row[2],
+            "instance_uuid": str(row[3]),
+            "has_local_changes": bool(row[4]),
+            "is_used_by_project": bool(row[5]),
+            "last_sync_state": row[6],
+        }
+        if len(row) > 7:
+            result["relative_path"] = Path(str(row[7]))
+        return result

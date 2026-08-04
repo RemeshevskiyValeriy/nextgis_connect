@@ -1,5 +1,3 @@
-import shutil
-import tempfile
 from collections import defaultdict
 from dataclasses import replace
 from pathlib import Path
@@ -46,8 +44,6 @@ class DetachedLayerEditBuffer(QObject):
     attachment_updated = pyqtSignal(QgsFeatureId, AttachmentId)
     attachment_removed = pyqtSignal(QgsFeatureId, AttachmentId)
 
-    TEMPORARY_STORAGE_PREFIX = "nextgis-connect-attachments-"
-
     def __init__(self, layer: "DetachedLayer") -> None:
         super().__init__(layer)
         self._detached_layer = layer
@@ -86,10 +82,10 @@ class DetachedLayerEditBuffer(QObject):
         ] = defaultdict(set)
 
         self._next_attachment_id: AttachmentId = -1
+        self._staged_attachments: Dict[AttachmentId, AttachmentMetadata] = {}
 
         self.__added_features: List[QgsFeatureId] = []
         self.__deleted_features: Set[QgsFeatureId] = set()
-        self.__temporary_storage_path: Optional[Path] = None
 
     @property
     def layer(self) -> "DetachedLayer":
@@ -191,22 +187,23 @@ class DetachedLayerEditBuffer(QObject):
     @pyqtSlot()
     def clear(self) -> None:
         """Clear all changes."""
+        for attachment in self._staged_attachments.values():
+            self._remove_staged_attachment_file(attachment)
+
         self._updated_descriptions.clear()
         self._added_attachments.clear()
         self._updated_attachments.clear()
         self._removed_attachments.clear()
+        self._staged_attachments.clear()
         self.__added_features.clear()
         self.__deleted_features.clear()
-        if self.__temporary_storage_path is not None:
-            shutil.rmtree(self.__temporary_storage_path)
-            self.__temporary_storage_path = None
 
-    def _create_attachment_in_temporary_storage(
+    def _stage_new_attachment_file(
         self, feature_id: QgsFeatureId, file_path: Path
     ) -> AttachmentMetadata:
-        """Create an attachment metadata for a new file in temporary storage.
+        """Create attachment metadata for a new staged cache file.
 
-        :param file_path: Path to the file in temporary storage.
+        :param file_path: Source file path selected by the user.
         :return: AttachmentMetadata instance for the new attachment.
         """
         file = QFile(str(file_path))
@@ -215,37 +212,44 @@ class DetachedLayerEditBuffer(QObject):
             str(file_path), file
         )
 
-        if self.__temporary_storage_path is None:
-            self.__temporary_storage_path = Path(
-                tempfile.mkdtemp(prefix=self.TEMPORARY_STORAGE_PREFIX)
-            )
-
         storage_service = DetachedStorageServiceFactory.create()
-        temp_file_path = storage_service.attachment_path(
+        attachment_id = self._next_attachment_id
+        temp_file_path = storage_service.stage_attachment_file(
             self._detached_layer.container.metadata.instance_id,
             self._detached_layer.container.metadata.resource_id,
-            self._next_attachment_id,
+            attachment_id,
+            file_path,
             file_name=file_path.name,
             mime_type=mime_type.name(),
+            feature_local_id=int(feature_id),
         )
-        temp_file_path = (
-            self.__temporary_storage_path
-            / temp_file_path.relative_to(storage_service.cache_root)
-        )
-        temp_file_path.parent.mkdir(parents=True, exist_ok=True)
-
-        shutil.copy2(file_path, temp_file_path)
 
         attachment = AttachmentMetadata(
             fid=feature_id,
-            aid=self._next_attachment_id,
+            aid=attachment_id,
             name=file_path.name,
             file_path=temp_file_path,
             mime_type=mime_type.name(),
             size=temp_file_path.stat().st_size,
         )
+        self._staged_attachments[attachment_id] = attachment
         self._next_attachment_id -= 1
         return attachment
+
+    def _remove_staged_attachment_file(
+        self,
+        attachment: AttachmentMetadata,
+    ) -> None:
+        if attachment.file_path is None:
+            return
+
+        storage_service = DetachedStorageServiceFactory.create()
+        storage_service.discard_staged_attachment_file(
+            self._detached_layer.container.metadata.instance_id,
+            self._detached_layer.container.metadata.resource_id,
+            attachment.aid,
+            feature_local_id=int(attachment.fid),
+        )
 
     @pyqtSlot()
     def __log_added_features(self) -> None:
