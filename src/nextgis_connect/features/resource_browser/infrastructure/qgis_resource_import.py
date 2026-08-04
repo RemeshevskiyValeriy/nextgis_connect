@@ -394,7 +394,9 @@ class QgisResourceLayerImporter(QObject):
                     "Could not import a Web GIS resource layer: "
                     f"{error_message}"
                 )
-            self.import_failed.emit(error_message)
+            self.import_failed.emit(
+                self._resource_error_message(error_message, request.source)
+            )
 
     @staticmethod
     def _safe_error_message(
@@ -409,6 +411,19 @@ class QgisResourceLayerImporter(QObject):
             source.provider_connection_url,
             source.connection_url,
         )
+
+    @staticmethod
+    def _resource_error_message(
+        error_message: str,
+        source: ResourceImportSource,
+    ) -> str:
+        resource_message = (
+            f'Resource "{source.display_name}" (id={source.resource_id})'
+        )
+        if len(error_message) == 0:
+            return resource_message
+
+        return f"{resource_message}: {error_message}"
 
     def _insert_layer(
         self,

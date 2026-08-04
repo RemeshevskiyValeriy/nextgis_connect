@@ -351,6 +351,7 @@ class TestQgisResourceLayerImporter:
         )
 
         assert len(failed_spy) == 1
+        assert 'Resource "Test layer" (id=7155)' in failed_spy[0][0]
         assert "no longer exists" in failed_spy[0][0]
         assert project.count() == 0
 

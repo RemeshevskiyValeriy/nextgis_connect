@@ -1,3 +1,5 @@
+import urllib.parse
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Dict, List, Optional, Set, Tuple, Union, cast
 
 from qgis.core import (
@@ -18,7 +20,7 @@ from qgis.core import (
 )
 from qgis.gui import QgisInterface
 from qgis.PyQt.QtCore import QEventLoop, QModelIndex, QObject, QTimer
-from qgis.PyQt.QtWidgets import QMessageBox
+from qgis.PyQt.QtWidgets import QCheckBox, QMessageBox
 from qgis.utils import iface
 
 from nextgis_connect.legacy.detached_editing.container.cache_lifecycle import (
@@ -55,7 +57,10 @@ from nextgis_connect.legacy.ngw.core import (
 from nextgis_connect.legacy.ngw.core.ngw_abstract_vector_resource import (
     NGWAbstractVectorResource,
 )
-from nextgis_connect.legacy.ngw.core.ngw_resource import API_LAYER_EXTENT
+from nextgis_connect.legacy.ngw.core.ngw_resource import (
+    API_LAYER_EXTENT,
+    RESOURCE_URL,
+)
 from nextgis_connect.legacy.ngw.core.ngw_tms_resources import (
     NGWTmsConnection,
     NGWTmsLayer,
@@ -77,6 +82,7 @@ from nextgis_connect.platform.qgis.errors import (
     NgConnectError,
     NgConnectWarning,
     NgwError,
+    ResourcePermissionError,
 )
 from nextgis_connect.platform.qgis.extent_calculator import (
     ExtentCalculator,
@@ -92,6 +98,21 @@ InsertionId = Union[QModelIndex, LayerObjectId]
 LayerParams = Tuple[str, str, str]
 
 InsertionPoint = QgsLayerTreeRegistryBridge.InsertionPoint
+
+
+class _AddingCanceledError(Exception):
+    """Stop batch resource adding after the user cancels an error dialog."""
+
+
+@dataclass(frozen=True)
+class _ResourceAddingErrorContext:
+    """Describe the item that failed while being added to QGIS."""
+
+    display_name: str
+    insertion_id: Optional[InsertionId] = None
+    resource_ids: Tuple[int, ...] = ()
+    resource_url: Optional[str] = None
+
 
 TmsLayerResources = (NGWTmsLayer, NGWTmsConnection, NGWBaseMap, NGWTileset)
 ServiceLayerResources = (NGWPostgisLayer, NGWWmsLayer, NGWWfsLayer)
@@ -239,10 +260,12 @@ class NgwResourcesAdder(QObject):
     __default_styles: Dict[QModelIndex, int]
     __skip_wfs_with_z: Optional[bool]
     __skipped_resources: Set[InsertionId]
+    __skip_future_adding_errors: bool
     __insertion_stack: List[InsertionPoint]
     __warnings: List[NgConnectWarning]
     __extent_layers: List[QgsMapLayer]
     __extent_resource_ids_by_layer_id: Dict[str, Tuple[str, int]]
+    __adding_error_contexts: Dict[InsertionId, _ResourceAddingErrorContext]
     __is_single_webmap_adding: bool
 
     def __init__(
@@ -272,11 +295,13 @@ class NgwResourcesAdder(QObject):
         self.__default_styles = {}
         self.__skip_wfs_with_z = None
         self.__skipped_resources = set()
+        self.__skip_future_adding_errors = False
         self.__insertion_stack = []
         self.__insertion_stack.append(insertion_point)
         self.__warnings = []
         self.__extent_layers = []
         self.__extent_resource_ids_by_layer_id = {}
+        self.__adding_error_contexts = {}
 
     def missing_resources(self) -> Tuple[bool, List[int]]:
         """Extract resources needed for layers to add to QGIS"""
@@ -337,11 +362,14 @@ class NgwResourcesAdder(QObject):
             self.__create_layers()
 
             for index in indices:
-                self.__add_resource(index)
+                self.__add_resource_with_error_handling(index)
 
             added_layers = len(self.__layers)
             if not self.__is_single_webmap_adding:
                 self.__set_added_layers_extent()
+
+        except _AddingCanceledError:
+            return False
 
         except NgwError as error:
             NgConnectInterface.instance().notifier.display_exception(error)
@@ -369,6 +397,7 @@ class NgwResourcesAdder(QObject):
             self.__insertion_stack.clear()
             self.__layers_params.clear()
             self.__layers.clear()
+            self.__adding_error_contexts.clear()
             self.__extent_layers.clear()
             self.__extent_resource_ids_by_layer_id.clear()
 
@@ -382,6 +411,17 @@ class NgwResourcesAdder(QObject):
         logger.debug(f"{layer_label} has been added to the map")
 
         return True
+
+    def __add_resource_with_error_handling(self, index: QModelIndex) -> None:
+        try:
+            self.__add_resource(index)
+        except _AddingCanceledError:
+            raise
+        except Exception as error:
+            context = self.__adding_error_context_from_index(index)
+            if self.__skip_after_adding_error(error, context):
+                return
+            raise
 
     def __add_resource(self, index: QModelIndex) -> None:
         ngw_resource: NGWResource = index.data(
@@ -420,7 +460,7 @@ class NgwResourcesAdder(QObject):
         # Add children
         for row in range(self.__model.rowCount(group_index)):
             child_index = self.__model.index(row, 0, group_index)
-            self.__add_resource(child_index)
+            self.__add_resource_with_error_handling(child_index)
 
         self.__insertion_stack.pop()
 
@@ -509,16 +549,35 @@ class NgwResourcesAdder(QObject):
             return
 
         if len(layers) == 1:
-            self.__add_service_layer(service_resource, layers[0])
+            self.__add_service_layer_with_error_handling(
+                service_resource, layers[0]
+            )
             return
 
         self.__insert_group(service_resource.display_name)
 
         # Add children
         for layer in layers:
-            self.__add_service_layer(service_resource, layer)
+            self.__add_service_layer_with_error_handling(
+                service_resource, layer
+            )
 
         self.__insertion_stack.pop()
+
+    def __add_service_layer_with_error_handling(
+        self, ngw_resource: NGWResource, service_layer
+    ) -> None:
+        try:
+            self.__add_service_layer(ngw_resource, service_layer)
+        except _AddingCanceledError:
+            raise
+        except Exception as error:
+            context = self.__adding_error_context_for_service_layer(
+                service_layer
+            )
+            if self.__skip_after_adding_error(error, context):
+                return
+            raise
 
     def __add_service_layer(
         self, ngw_resource: NGWResource, service_layer
@@ -578,10 +637,7 @@ class NgwResourcesAdder(QObject):
         qgs_group = self.__insert_group(webmap_resource.display_name)
 
         for child in webmap_resource.root.children:
-            if isinstance(child, NGWWebMapGroup):
-                self.__add_webmap_group(webmap_resource, child)
-            elif isinstance(child, NGWWebMapLayer):
-                self.__add_webmap_layer(webmap_resource, child)
+            self.__add_webmap_item(webmap_resource, child)
 
         self.__add_webmap_basemaps(webmap_resource)
 
@@ -592,6 +648,26 @@ class NgwResourcesAdder(QObject):
         if self.__is_single_webmap_adding:
             self.__set_webmap_extent(webmap_resource)
 
+    def __add_webmap_item(
+        self,
+        webmap: NGWWebMap,
+        webmap_item: Union[NGWWebMapGroup, NGWWebMapLayer],
+    ) -> None:
+        try:
+            if isinstance(webmap_item, NGWWebMapGroup):
+                self.__add_webmap_group(webmap, webmap_item)
+            elif isinstance(webmap_item, NGWWebMapLayer):
+                self.__add_webmap_layer(webmap, webmap_item)
+        except _AddingCanceledError:
+            raise
+        except Exception as error:
+            context = self.__adding_error_context_for_webmap_item(
+                webmap, webmap_item
+            )
+            if self.__skip_after_adding_error(error, context):
+                return
+            raise
+
     def __add_webmap_group(
         self, webmap: NGWWebMap, webmap_group: NGWWebMapGroup
     ) -> None:
@@ -599,10 +675,7 @@ class NgwResourcesAdder(QObject):
         qgs_group = self.__insert_group(webmap_group.display_name)
 
         for child in webmap_group.children:
-            if isinstance(child, NGWWebMapGroup):
-                self.__add_webmap_group(webmap, child)
-            elif isinstance(child, NGWWebMapLayer):
-                self.__add_webmap_layer(webmap, child)
+            self.__add_webmap_item(webmap, child)
 
         qgs_group.setExpanded(webmap_group.expanded)
         qgs_group.setIsMutuallyExclusive(webmap_group.exclusive)
@@ -680,8 +753,25 @@ class NgwResourcesAdder(QObject):
         enabled_basemap_index = 0
 
         for i, basemap in enumerate(webmap.basemaps):
-            if basemap.resource_id in self.__skipped_resources:
+            if (
+                id(basemap) in self.__skipped_resources
+                or basemap.resource_id in self.__skipped_resources
+            ):
                 continue
+
+            if id(basemap) not in self.__layers:
+                message = (
+                    f'Basemap "{basemap.display_name}" was not added to QGIS'
+                )
+                error = NgConnectError(
+                    code=ErrorCode.AddingError, log_message=message
+                )
+                context = self.__adding_error_context_for_webmap_basemap(
+                    webmap, basemap
+                )
+                if self.__skip_after_adding_error(error, context):
+                    continue
+                raise error
 
             basemap_layer = self.__layers[id(basemap)]
             basemap_layer.setName(basemap.display_name)
@@ -865,6 +955,9 @@ class NgwResourcesAdder(QObject):
         result = []
 
         for resource_id in webmap.all_resources_id:
+            if self.__model.is_forbidden(resource_id):
+                continue
+
             if self.__is_downloaded(resource_id):
                 resource = self.__model.resource(resource_id)
                 assert resource is not None
@@ -966,6 +1059,321 @@ class NgwResourcesAdder(QObject):
         resource = self.__model.resource(resource_id)
         return resource is not None or self.__model.is_forbidden(resource_id)
 
+    def __store_layer_params(
+        self,
+        insertion_id: InsertionId,
+        params: LayerParams,
+        context: _ResourceAddingErrorContext,
+    ) -> None:
+        self.__layers_params[insertion_id] = params
+        self.__adding_error_contexts[insertion_id] = context
+
+    def __adding_error_context_from_index(
+        self,
+        index: QModelIndex,
+    ) -> _ResourceAddingErrorContext:
+        context = self.__adding_error_contexts.get(index)
+        if context is not None:
+            return context
+
+        if index.isValid():
+            resource = index.data(QNGWResourceItem.NGWResourceRole)
+            if isinstance(resource, NGWResource):
+                return self.__adding_error_context_for_resource(
+                    resource, index
+                )
+
+        return _ResourceAddingErrorContext(
+            display_name=self.tr("Resource"),
+            insertion_id=index,
+        )
+
+    def __adding_error_context_for_resource(
+        self,
+        resource: NGWResource,
+        insertion_id: Optional[InsertionId] = None,
+    ) -> _ResourceAddingErrorContext:
+        return _ResourceAddingErrorContext(
+            display_name=resource.display_name,
+            insertion_id=insertion_id,
+            resource_ids=(resource.resource_id,),
+            resource_url=self.__resource_url(resource),
+        )
+
+    def __adding_error_context_for_service_layer(
+        self,
+        service_layer,
+    ) -> _ResourceAddingErrorContext:
+        display_name = getattr(
+            service_layer,
+            "display_name",
+            self.tr("Service layer"),
+        )
+        resource_ids = self.__normalized_resource_ids(
+            getattr(service_layer, "resource_id", None)
+        )
+        return _ResourceAddingErrorContext(
+            display_name=display_name,
+            insertion_id=id(service_layer),
+            resource_ids=resource_ids,
+        )
+
+    def __adding_error_context_for_webmap_item(
+        self,
+        webmap: NGWWebMap,
+        webmap_item: Union[NGWWebMapGroup, NGWWebMapLayer],
+    ) -> _ResourceAddingErrorContext:
+        if isinstance(webmap_item, NGWWebMapLayer):
+            return self.__adding_error_context_for_webmap_layer(
+                webmap, webmap_item
+            )
+
+        return _ResourceAddingErrorContext(
+            display_name=webmap_item.display_name,
+        )
+
+    def __adding_error_context_for_webmap_layer(
+        self,
+        webmap: NGWWebMap,
+        webmap_layer: NGWWebMapLayer,
+    ) -> _ResourceAddingErrorContext:
+        resource_ids = self.__normalized_resource_ids(
+            webmap_layer.style_parent_id,
+            webmap_layer.layer_style_id,
+        )
+        resource_url = self.__webmap_resource_url(webmap, resource_ids)
+        return _ResourceAddingErrorContext(
+            display_name=webmap_layer.display_name,
+            insertion_id=id(webmap_layer),
+            resource_ids=resource_ids,
+            resource_url=resource_url,
+        )
+
+    def __adding_error_context_for_webmap_basemap(
+        self,
+        webmap: NGWWebMap,
+        basemap,
+    ) -> _ResourceAddingErrorContext:
+        resource_ids = self.__normalized_resource_ids(basemap.resource_id)
+        return _ResourceAddingErrorContext(
+            display_name=basemap.display_name,
+            insertion_id=id(basemap),
+            resource_ids=resource_ids,
+            resource_url=self.__webmap_resource_url(webmap, resource_ids),
+        )
+
+    def __raise_if_webmap_layer_forbidden(
+        self,
+        webmap: NGWWebMap,
+        webmap_layer: NGWWebMapLayer,
+    ) -> None:
+        for resource_id in self.__normalized_resource_ids(
+            webmap_layer.style_parent_id,
+            webmap_layer.layer_style_id,
+        ):
+            if not self.__model.is_forbidden(resource_id):
+                continue
+
+            raise self.__resource_permission_error(
+                webmap,
+                webmap_layer.display_name,
+                resource_id,
+            )
+
+    def __resource_permission_error(
+        self,
+        webmap: NGWWebMap,
+        display_name: str,
+        resource_id: int,
+    ) -> ResourcePermissionError:
+        resource_url = self.__webmap_resource_url(webmap, (resource_id,))
+        user_message = self.tr(
+            'Resource "{}" is not accessible because you do not have the '
+            "necessary permissions"
+        ).format(display_name)
+        detail = self.tr("Resource ID: {resource_id}").format(
+            resource_id=resource_id
+        )
+        return ResourcePermissionError(
+            log_message=(
+                f'No permissions to access resource "{display_name}" '
+                f"(id={resource_id})"
+            ),
+            user_message=user_message,
+            detail=detail,
+            resource_url=resource_url,
+        )
+
+    def __skip_after_adding_error(
+        self,
+        error: Exception,
+        context: _ResourceAddingErrorContext,
+    ) -> bool:
+        if not self.__can_skip_adding_error():
+            return False
+
+        if self.__skip_future_adding_errors:
+            self.__mark_skipped_adding_context(context)
+            self.__log_skipped_adding_error(error, context)
+            return True
+
+        message_box = QMessageBox()
+        message_box.setWindowTitle(self.tr("Adding error"))
+        message_box.setIcon(QMessageBox.Icon.Warning)
+        message_box.setText(
+            self.tr('Resource "{}" can\'t be added to the map').format(
+                context.display_name
+            )
+        )
+        message_box.setInformativeText(
+            self.__adding_error_informative_text(error)
+        )
+        detail = self.__adding_error_detail(error, context)
+        if len(detail) > 0:
+            message_box.setDetailedText(detail)
+        message_box.setStandardButtons(
+            QMessageBox.StandardButtons()
+            | QMessageBox.StandardButton.Ignore
+            | QMessageBox.StandardButton.Cancel
+        )
+        message_box.button(QMessageBox.StandardButton.Ignore).setText(
+            self.tr("Skip")
+        )
+        message_box.button(QMessageBox.StandardButton.Cancel).setText(
+            self.tr("Cancel")
+        )
+        message_box.setDefaultButton(QMessageBox.StandardButton.Cancel)
+        apply_to_all_checkbox = QCheckBox(self.tr("Apply to all"))
+        message_box.setCheckBox(apply_to_all_checkbox)
+
+        result = message_box.exec()
+        if result != QMessageBox.StandardButton.Ignore:
+            raise _AddingCanceledError
+
+        self.__skip_future_adding_errors = apply_to_all_checkbox.isChecked()
+        self.__mark_skipped_adding_context(context)
+        self.__log_skipped_adding_error(error, context)
+        return True
+
+    def __can_skip_adding_error(self) -> bool:
+        return self.__is_mass_adding
+
+    def __mark_skipped_adding_context(
+        self,
+        context: _ResourceAddingErrorContext,
+    ) -> None:
+        if context.insertion_id is not None:
+            self.__skipped_resources.add(context.insertion_id)
+
+        for resource_id in context.resource_ids:
+            self.__skipped_resources.add(resource_id)
+
+    def __log_skipped_adding_error(
+        self,
+        error: Exception,
+        context: _ResourceAddingErrorContext,
+    ) -> None:
+        logger.warning(
+            f'Resource "{context.display_name}" was skipped during adding'
+        )
+        logger.warning(str(error))
+
+    def __adding_error_informative_text(self, error: Exception) -> str:
+        error_message = self.__error_user_message(error)
+        if len(error_message) == 0:
+            return self.tr("Do you want to skip this resource and continue?")
+
+        return (
+            error_message.rstrip(".")
+            + ".\n\n"
+            + self.tr("Do you want to skip this resource and continue?")
+        )
+
+    def __adding_error_detail(
+        self,
+        error: Exception,
+        context: _ResourceAddingErrorContext,
+    ) -> str:
+        lines: List[str] = []
+        if len(context.resource_ids) > 0:
+            resource_ids = ", ".join(
+                str(resource_id) for resource_id in context.resource_ids
+            )
+            lines.append(
+                self.tr("Resource ID(s): {resource_ids}").format(
+                    resource_ids=resource_ids
+                )
+            )
+
+        if context.resource_url is not None:
+            lines.append(
+                self.tr("Resource URL: {resource_url}").format(
+                    resource_url=context.resource_url
+                )
+            )
+
+        if isinstance(error, NgConnectError):
+            if error.detail is not None:
+                lines.append(error.detail)
+            lines.append(error.log_message)
+        else:
+            error_message = str(error)
+            if len(error_message) > 0:
+                lines.append(error_message)
+
+        return "\n".join(lines)
+
+    @staticmethod
+    def __error_user_message(error: Exception) -> str:
+        if isinstance(error, NgConnectError):
+            return error.user_message
+
+        return str(error)
+
+    @staticmethod
+    def __normalized_resource_ids(
+        *resource_ids: Optional[int],
+    ) -> Tuple[int, ...]:
+        result: List[int] = []
+        for resource_id in resource_ids:
+            if resource_id is None or isinstance(resource_id, bool):
+                continue
+
+            try:
+                normalized_resource_id = int(resource_id)
+            except (TypeError, ValueError):
+                continue
+
+            if normalized_resource_id <= 0:
+                continue
+
+            if normalized_resource_id not in result:
+                result.append(normalized_resource_id)
+
+        return tuple(result)
+
+    @staticmethod
+    def __resource_url(resource: NGWResource) -> Optional[str]:
+        try:
+            return resource.get_absolute_url()
+        except Exception:
+            return None
+
+    @staticmethod
+    def __webmap_resource_url(
+        webmap: NGWWebMap,
+        resource_ids: Tuple[int, ...],
+    ) -> Optional[str]:
+        if len(resource_ids) == 0:
+            return None
+
+        try:
+            server_url = webmap.res_factory.connection.server_url
+        except Exception:
+            return None
+
+        return urllib.parse.urljoin(server_url, RESOURCE_URL(resource_ids[0]))
+
     def __missing_styles(self, index: QModelIndex) -> List[int]:
         resource: NGWResource = index.data(QNGWResourceItem.NGWResourceRole)
 
@@ -1010,13 +1418,26 @@ class NgwResourcesAdder(QObject):
 
     def __collect_layers_params(self) -> None:
         for index in self.__indices:
-            self.__collect_params_for_index(index)
+            self.__collect_params_for_index_with_error_handling(index)
 
         self.__layers_params = {
             insertion_id: params
             for insertion_id, params in self.__layers_params.items()
             if params[-1] != ""
         }
+
+    def __collect_params_for_index_with_error_handling(
+        self, index: QModelIndex
+    ) -> None:
+        try:
+            self.__collect_params_for_index(index)
+        except _AddingCanceledError:
+            raise
+        except Exception as error:
+            context = self.__adding_error_context_from_index(index)
+            if self.__skip_after_adding_error(error, context):
+                return
+            raise
 
     def __collect_params_for_index(self, index: QModelIndex) -> None:
         if is_layer(index):
@@ -1030,7 +1451,9 @@ class NgwResourcesAdder(QObject):
         else:
             for row in range(self.__model.rowCount(index)):
                 child_index = self.__model.index(row, 0, index)
-                self.__collect_params_for_index(child_index)
+                self.__collect_params_for_index_with_error_handling(
+                    child_index
+                )
 
     def __collect_params_for_layer_index(self, index: QModelIndex) -> None:
         resource: NGWVectorLayer = index.data(QNGWResourceItem.NGWResourceRole)
@@ -1050,7 +1473,11 @@ class NgwResourcesAdder(QObject):
                     )
                     self.__default_styles[index] = default_style.resource_id
 
-        self.__layers_params[index] = params
+        self.__store_layer_params(
+            index,
+            params,
+            self.__adding_error_context_for_resource(resource, index),
+        )
 
     def __collect_params_for_style_index(self, index: QModelIndex) -> None:
         resource: NGWVectorLayer = index.parent().data(
@@ -1058,7 +1485,11 @@ class NgwResourcesAdder(QObject):
         )
         params = self.__collect_params_for_layer_resource(resource)
 
-        self.__layers_params[index] = params
+        self.__store_layer_params(
+            index,
+            params,
+            self.__adding_error_context_for_resource(resource, index),
+        )
 
     def __collect_params_for_layer_resource(
         self, resource: NGWResource
@@ -1081,16 +1512,35 @@ class NgwResourcesAdder(QObject):
         webmap: NGWWebMap = index.data(QNGWResourceItem.NGWResourceRole)
 
         for child in webmap.root.children:
-            if isinstance(child, NGWWebMapGroup):
-                self.__collect_params_for_webmap_group(child)
-            elif isinstance(child, NGWWebMapLayer):
-                self.__collect_params_for_webmap_layer(child)
+            self.__collect_params_for_webmap_item(webmap, child)
 
         self.__collect_params_for_webmap_basemaps(webmap)
 
-    def __collect_params_for_webmap_layer(
-        self, webmap_layer: NGWWebMapLayer
+    def __collect_params_for_webmap_item(
+        self,
+        webmap: NGWWebMap,
+        webmap_item: Union[NGWWebMapGroup, NGWWebMapLayer],
     ) -> None:
+        try:
+            if isinstance(webmap_item, NGWWebMapGroup):
+                self.__collect_params_for_webmap_group(webmap, webmap_item)
+            elif isinstance(webmap_item, NGWWebMapLayer):
+                self.__collect_params_for_webmap_layer(webmap, webmap_item)
+        except _AddingCanceledError:
+            raise
+        except Exception as error:
+            context = self.__adding_error_context_for_webmap_item(
+                webmap, webmap_item
+            )
+            if self.__skip_after_adding_error(error, context):
+                return
+            raise
+
+    def __collect_params_for_webmap_layer(
+        self, webmap: NGWWebMap, webmap_layer: NGWWebMapLayer
+    ) -> None:
+        self.__raise_if_webmap_layer_forbidden(webmap, webmap_layer)
+
         layer_resource = self.__model.resource(webmap_layer.style_parent_id)
         style_resource = self.__model.resource(webmap_layer.layer_style_id)
 
@@ -1109,35 +1559,64 @@ class NgwResourcesAdder(QObject):
 
         else:
             error = NgConnectError(
-                "Unsupported resources", code=ErrorCode.AddingError
+                "Unsupported resources",
+                user_message=self.tr(
+                    'Layer "{}" can\'t be added to the map'
+                ).format(webmap_layer.display_name),
+                detail=self.tr(
+                    "The linked layer or style resource is not available."
+                ),
+                code=ErrorCode.AddingError,
             )
             error.add_note(escape_html(f"Style parent: {layer_resource!r}"))
             error.add_note(escape_html(f"Style: {style_resource!r}"))
             raise error
 
-        self.__layers_params[id(webmap_layer)] = params
+        self.__store_layer_params(
+            id(webmap_layer),
+            params,
+            self.__adding_error_context_for_webmap_layer(webmap, webmap_layer),
+        )
 
     def __collect_params_for_webmap_group(
-        self, webmap_group: NGWWebMapGroup
+        self, webmap: NGWWebMap, webmap_group: NGWWebMapGroup
     ) -> None:
         for child in webmap_group.children:
-            if isinstance(child, NGWWebMapGroup):
-                self.__collect_params_for_webmap_group(child)
-            elif isinstance(child, NGWWebMapLayer):
-                self.__collect_params_for_webmap_layer(child)
+            self.__collect_params_for_webmap_item(webmap, child)
 
     def __collect_params_for_webmap_basemaps(self, webmap: NGWWebMap) -> None:
         for basemap in webmap.basemaps:
-            basemap_resource = self.__model.resource(basemap.resource_id)
-            if basemap_resource is None:
-                message = f"Can't find basemap (id={basemap.resource_id})"
-                raise NgConnectError(
-                    code=ErrorCode.AddingError, log_message=message
-                )
+            try:
+                if self.__model.is_forbidden(basemap.resource_id):
+                    raise self.__resource_permission_error(
+                        webmap,
+                        basemap.display_name,
+                        basemap.resource_id,
+                    )
 
-            self.__layers_params[id(basemap)] = (
-                self.__collect_params_for_layer_resource(basemap_resource)
-            )
+                basemap_resource = self.__model.resource(basemap.resource_id)
+                if basemap_resource is None:
+                    message = f"Can't find basemap (id={basemap.resource_id})"
+                    raise NgConnectError(
+                        code=ErrorCode.AddingError, log_message=message
+                    )
+
+                self.__store_layer_params(
+                    id(basemap),
+                    self.__collect_params_for_layer_resource(basemap_resource),
+                    self.__adding_error_context_for_webmap_basemap(
+                        webmap, basemap
+                    ),
+                )
+            except _AddingCanceledError:
+                raise
+            except Exception as error:
+                context = self.__adding_error_context_for_webmap_basemap(
+                    webmap, basemap
+                )
+                if self.__skip_after_adding_error(error, context):
+                    continue
+                raise
 
     def __collect_params_for_service(self, index: QModelIndex) -> None:
         resource = index.data(QNGWResourceItem.NGWResourceRole)
@@ -1151,7 +1630,19 @@ class NgwResourcesAdder(QObject):
             if id(layer) in self.__skipped_resources:
                 continue
 
-            self.__layers_params[id(layer)] = resource.params_for_layer(layer)
+            try:
+                self.__store_layer_params(
+                    id(layer),
+                    resource.params_for_layer(layer),
+                    self.__adding_error_context_for_service_layer(layer),
+                )
+            except _AddingCanceledError:
+                raise
+            except Exception as error:
+                context = self.__adding_error_context_for_service_layer(layer)
+                if self.__skip_after_adding_error(error, context):
+                    continue
+                raise
 
     def __collect_params_for_detached_layer(
         self, vector_layer: NGWVectorLayer
@@ -1250,6 +1741,10 @@ class NgwResourcesAdder(QObject):
         event_loop.exec()
 
         self.__layers = task.layers
+        self.__remove_invalid_layers_after_user_choice()
+
+        if len(self.__layers) == 0:
+            return
 
         if all(not layer.isValid() for layer in self.__layers.values()):
             message = "All layers are invalid"
@@ -1260,6 +1755,36 @@ class NgwResourcesAdder(QObject):
         QgsProject.instance().addMapLayers(
             self.__layers.values(), addToLegend=False
         )
+
+    def __remove_invalid_layers_after_user_choice(self) -> None:
+        for insertion_id, layer in list(self.__layers.items()):
+            if layer.isValid():
+                continue
+
+            error_summary = layer.error().summary()
+            layer_name = layer.name()
+            context = self.__adding_error_contexts.get(
+                insertion_id,
+                _ResourceAddingErrorContext(
+                    display_name=layer_name,
+                    insertion_id=insertion_id,
+                ),
+            )
+            error = NgConnectError(
+                log_message=(
+                    f'Layer "{layer_name}" is not valid: {error_summary}'
+                ),
+                user_message=self.tr(
+                    'Layer "{}" can\'t be added to the map'
+                ).format(layer_name),
+                detail=error_summary,
+                code=ErrorCode.AddingError,
+            )
+            if not self.__skip_after_adding_error(error, context):
+                raise error
+
+            self.__layers.pop(insertion_id, None)
+            layer.deleteLater()
 
     def __add_fields_aliases(
         self,
