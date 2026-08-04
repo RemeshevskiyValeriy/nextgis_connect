@@ -1,4 +1,4 @@
-# NextGIS Toolbox
+# NextGIS Connect
 # Copyright (C) 2026  NextGIS
 #
 # This program is free software; you can redistribute it and/or modify

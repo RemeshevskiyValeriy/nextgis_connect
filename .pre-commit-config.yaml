@@ -1,4 +1,11 @@
 repos:
+  - repo: https://github.com/google/addlicense
+    rev: v1.2.0
+    hooks:
+    - id: addlicense
+      args: [ "-f", "assets/license-header.txt"]
+      types: [python]
+
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v6.0.0
     hooks:
@@ -6,7 +13,7 @@ repos:
       - id: check-toml
 
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.15.15
+    rev: v0.16.1
     hooks:
       - id: ruff
         args: [--fix]
