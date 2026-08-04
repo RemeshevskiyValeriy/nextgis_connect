@@ -125,6 +125,10 @@ class FetchDeltaTask(DetachedEditingTask):
             self._error = error
             return False
 
+        except NgwError as error:
+            self._error = error
+            return False
+
         except Exception as error:
             message = (
                 f"An error occurred while downloading layer {self._metadata}"

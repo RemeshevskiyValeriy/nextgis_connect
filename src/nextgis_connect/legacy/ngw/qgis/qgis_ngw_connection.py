@@ -315,6 +315,40 @@ class QgsNgwConnection(QObject):
         feedback: Optional[QgsFeedback] = None,
         **kwargs,
     ):
+        request_url = self.__absolute_url(sub_url)
+        try:
+            return self.__execute_request(
+                sub_url,
+                method,
+                params,
+                is_lunkwill=is_lunkwill,
+                feedback=feedback,
+                **kwargs,
+            )
+        except NgConnectError as error:
+            error.add_diagnostic_context("request_url", f"URL: {request_url}")
+            raise
+        except Exception as error:
+            request_error = NgwError(
+                "Network request failed",
+                is_network_problem=True,
+            )
+            request_error.add_diagnostic_context(
+                "request_url",
+                f"URL: {request_url}",
+            )
+            raise request_error from error
+
+    def __execute_request(
+        self,
+        sub_url: str,
+        method: str,
+        params: Optional[Any] = None,
+        *,
+        is_lunkwill: bool = False,
+        feedback: Optional[QgsFeedback] = None,
+        **kwargs,
+    ) -> Any:
         headers = None
         if is_lunkwill:
             headers = {"X-Lunkwill": "suggest"}
@@ -342,6 +376,13 @@ class QgsNgwConnection(QObject):
             logger.debug(f"\nReply:\n{escaped_result}\n")
 
         return result
+
+    def __absolute_url(self, sub_url: str) -> str:
+        parsed_url = urllib.parse.urlparse(sub_url)
+        if parsed_url.scheme and parsed_url.netloc:
+            return sub_url
+
+        return urllib.parse.urljoin(self.server_url, sub_url)
 
     def __request_rep(
         self,
@@ -379,10 +420,7 @@ class QgsNgwConnection(QObject):
 
         filename = kwargs.get("file")
 
-        parsed_url = urllib.parse.urlparse(sub_url)
-        url = sub_url
-        if not parsed_url.scheme or not parsed_url.netloc:
-            url = urllib.parse.urljoin(self.server_url, sub_url)
+        url = self.__absolute_url(sub_url)
 
         if self.__log_network:
             logger.debug(
@@ -517,8 +555,12 @@ class QgsNgwConnection(QObject):
                     " connection or increase timeout"
                     " (Settings -> Options -> Network) and retry."
                 ),
+                is_network_problem=True,
             )
-            error.add_note(f"URL: {request.url().toString()}")
+            error.add_diagnostic_context(
+                "request_url",
+                f"URL: {request.url().toString()}",
+            )
             qt_error_info.add_exception_notes(error)
             raise error
 
@@ -534,8 +576,12 @@ class QgsNgwConnection(QObject):
                 ),
                 detail=qt_error_info.description,
                 code=ErrorCode.SslHandshakeError,
+                is_network_problem=True,
             )
-            error.add_note(f"URL: {request.url().toString()}")
+            error.add_diagnostic_context(
+                "request_url",
+                f"URL: {request.url().toString()}",
+            )
             qt_error_info.add_exception_notes(error)
             raise error
 
@@ -544,8 +590,14 @@ class QgsNgwConnection(QObject):
 
         elif reply.error() != QNetworkReply.NetworkError.NoError:
             qt_error_info = QtNetworkError.from_qt(reply.error()).value
-            error = NgwError("Connection error", code=ErrorCode.NetworkError)
-            error.add_note(f"URL: {request.url().toString()}")
+            error = NgwError(
+                "Connection error",
+                is_network_problem=True,
+            )
+            error.add_diagnostic_context(
+                "request_url",
+                f"URL: {request.url().toString()}",
+            )
             qt_error_info.add_exception_notes(error)
             raise error
 
@@ -598,8 +650,18 @@ class QgsNgwConnection(QObject):
                 HTTPStatus.FORBIDDEN: ErrorCode.PermissionsError,
                 HTTPStatus.NOT_FOUND: ErrorCode.NotFound,
             }
-            error = NgwError(code=codes.get(status_code, ErrorCode.NgwError))
-            error.add_note(f"URL: {request.url().toString()}")
+            is_server_unavailable = (
+                status_code is not None and status_code // 100 == 5
+            )
+            error = NgwError(
+                code=codes.get(status_code, ErrorCode.NgwError),
+                status_code=status_code,
+                is_server_unavailable=is_server_unavailable,
+            )
+            error.add_diagnostic_context(
+                "request_url",
+                f"URL: {request.url().toString()}",
+            )
             error.add_note(f"HTTP status code: {status_code}")
             raise error
 

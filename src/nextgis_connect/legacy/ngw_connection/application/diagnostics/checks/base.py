@@ -179,6 +179,9 @@ class BaseConnectionCheck(ABC):
             raise CheckCancelledError from error
 
     def _is_network_error(self, error: NgConnectException) -> bool:
+        if error.is_network_problem:
+            return True
+
         return error.code in (
             ErrorCode.NetworkError,
             ErrorCode.QgisTimeoutError,
@@ -194,7 +197,10 @@ class BaseConnectionCheck(ABC):
         resolution: str,
     ) -> ConnectionIssue:
         details = error.user_message or error.log_message
-        if error.code == ErrorCode.NetworkError:
+        if (
+            error.is_network_problem
+            and error.code != ErrorCode.QgisTimeoutError
+        ):
             details = self.tr("Unable to reach the Web GIS.")
         if error.code == ErrorCode.QgisTimeoutError:
             details = self.tr(

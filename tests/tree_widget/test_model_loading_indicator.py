@@ -1,3 +1,4 @@
+from pathlib import Path
 from types import SimpleNamespace
 
 from qgis.PyQt.QtCore import QModelIndex, Qt
@@ -8,6 +9,10 @@ from nextgis_connect.legacy.tree_widget.model import (
     QNGWResourceTreeModelBase,
     ResourceTreeLoadingIndicatorRenderer,
 )
+from nextgis_connect.legacy.tree_widget.proxy_model import NgConnectProxyModel
+from nextgis_connect.legacy.tree_widget.view import QNGWResourceTreeView
+from nextgis_connect.platform.qgis.errors import NgwError
+from nextgis_connect.plugin.plugin_interface import NgConnectInterface
 from nextgis_connect.ui_kit.graphics import (
     NextgisDecorator,
     mix_colors,
@@ -17,6 +22,17 @@ from nextgis_connect.ui_kit.graphics import (
 class _Job:
     def error(self):
         return None
+
+
+class _FailedFetchJob:
+    def __init__(self, error: NgwError) -> None:
+        self._error = error
+
+    def error(self) -> NgwError:
+        return self._error
+
+    def getJobId(self) -> str:
+        return "NGWResourceUpdater"
 
 
 def _resource(resource_id: int = 1):
@@ -53,6 +69,108 @@ def test_locked_resource_item_uses_loading_indicator_icon(qgis_app) -> None:
 
     restored_icon = model.data(index, Qt.ItemDataRole.DecorationRole)
     assert restored_icon.cacheKey() == default_icon_cache_key
+
+
+def test_failed_group_fetch_can_be_retried(
+    qgis_app,
+    monkeypatch,
+) -> None:
+    del qgis_app
+
+    model = QNGWResourceTreeModelBase()
+    item = QNGWResourceItem(_resource())
+    model.root_item.addChild(item)
+    index = model.index(0, 0, QModelIndex())
+    error = NgwError("Connection error", is_network_problem=True)
+    job = _FailedFetchJob(error)
+    fetched_indexes = []
+
+    model._lockIndexByJob([index], job)
+    prepare_error = model._QNGWResourceTreeModelBase__add_fetch_retry_action
+    prepare_error(job, error)
+    model._unlockIndexesByJob(job)
+
+    assert error.try_again is not None
+    assert not model._isIndexLockedByJobError(index)
+
+    monkeypatch.setattr(model, "canFetchMore", lambda parent: True)
+    monkeypatch.setattr(model, "fetchMore", fetched_indexes.append)
+    error.try_again()
+
+    assert fetched_indexes == [index]
+    assert not model._isIndexLockedByJobError(index)
+
+
+def test_failed_group_fetch_is_unlocked_for_manual_expansion(
+    qgis_app,
+) -> None:
+    del qgis_app
+
+    model = QNGWResourceTreeModelBase()
+    item = QNGWResourceItem(_resource())
+    model.root_item.addChild(item)
+    index = model.index(0, 0, QModelIndex())
+    error = NgwError("Connection error", is_network_problem=True)
+    job = _FailedFetchJob(error)
+
+    model._lockIndexByJob([index], job)
+    model._unlockIndexesByJob(job)
+    assert not model._isIndexLockedByJobError(index)
+
+    was_cleared = model.clear_fetch_error(index)
+
+    assert not was_cleared
+    assert not model._isIndexLockedByJobError(index)
+
+
+def test_failed_group_fetch_collapses_expanded_item_for_retry(
+    qgis_app,
+    monkeypatch,
+) -> None:
+    del qgis_app
+    monkeypatch.setattr(
+        NgConnectInterface,
+        "instance",
+        classmethod(
+            lambda cls: SimpleNamespace(path=Path("src/nextgis_connect"))
+        ),
+    )
+
+    model = QNGWResourceTreeModelBase()
+    resource = _resource()
+    resource.common.children = True
+    resource.children_count = None
+    item = QNGWResourceItem(resource)
+    model.root_item.addChild(item)
+    index = model.index(0, 0, QModelIndex())
+    error = NgwError("Connection error", is_network_problem=True)
+    job = _FailedFetchJob(error)
+
+    proxy_model = NgConnectProxyModel(None)
+    proxy_model.setSourceModel(model)
+    view = QNGWResourceTreeView(None)
+    view.setModel(proxy_model)
+    view.expand(proxy_model.mapFromSource(index))
+
+    assert view.isExpanded(proxy_model.mapFromSource(index))
+
+    model._lockIndexByJob([index], job)
+    model._unlockIndexesByJob(job)
+
+    assert not view.isExpanded(proxy_model.mapFromSource(index))
+
+    fetched_indexes = []
+    monkeypatch.setattr(model, "canFetchMore", lambda parent: True)
+    monkeypatch.setattr(model, "fetchMore", fetched_indexes.append)
+
+    retry_failed_fetch = view._QNGWResourceTreeView__retry_failed_fetch
+    retry_failed_fetch(proxy_model.mapFromSource(index))
+
+    assert len(fetched_indexes) == 1
+    assert fetched_indexes[0].internalPointer() is item
+
+    view.deleteLater()
+    proxy_model.deleteLater()
 
 
 def test_resource_tree_loading_indicator_uses_readable_colors(

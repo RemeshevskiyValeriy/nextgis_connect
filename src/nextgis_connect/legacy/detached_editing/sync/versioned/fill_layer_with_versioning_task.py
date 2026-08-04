@@ -18,7 +18,7 @@ from nextgis_connect.legacy.ngw.qgis.qgis_ngw_connection import (
     QgsNgwConnection,
 )
 from nextgis_connect.platform.logging import logger
-from nextgis_connect.platform.qgis.errors import SynchronizationError
+from nextgis_connect.platform.qgis.errors import NgwError, SynchronizationError
 
 
 class FillLayerWithVersioningTask(DetachedEditingTask):
@@ -79,6 +79,10 @@ class FillLayerWithVersioningTask(DetachedEditingTask):
                 connection.commit()
 
         except SynchronizationError as error:
+            self._error = error
+            return False
+
+        except NgwError as error:
             self._error = error
             return False
 

@@ -16,6 +16,7 @@ from nextgis_connect.legacy.ngw.qgis.qgis_ngw_connection import (
 from nextgis_connect.legacy.ngw.resources.ngw_field import FieldId
 from nextgis_connect.platform.logging import logger
 from nextgis_connect.platform.qgis.errors import (
+    NgwError,
     SynchronizationError,
 )
 
@@ -72,6 +73,10 @@ class FetchAdditionalDataTask(DetachedEditingTask):
             self.__get_lookup_tables(ngw_connection)
 
         except SynchronizationError as error:
+            self._error = error
+            return False
+
+        except NgwError as error:
             self._error = error
             return False
 

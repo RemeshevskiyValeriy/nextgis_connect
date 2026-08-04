@@ -33,6 +33,7 @@ from nextgis_connect.legacy.ngw.qgis.qgis_ngw_connection import (
 )
 from nextgis_connect.platform.logging import logger
 from nextgis_connect.platform.qgis.errors import (
+    NgwError,
     SynchronizationError,
 )
 
@@ -68,6 +69,11 @@ class FillLayerWithoutVersioningTask(DetachedEditingTask):
             self.__copy_features(ngw_connection)
 
         except SynchronizationError as error:
+            self._error = error
+            self.__temp_path.unlink(missing_ok=True)
+            return False
+
+        except NgwError as error:
             self._error = error
             self.__temp_path.unlink(missing_ok=True)
             return False

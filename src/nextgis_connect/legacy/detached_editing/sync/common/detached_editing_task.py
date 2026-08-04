@@ -26,6 +26,7 @@ from nextgis_connect.platform.qgis.compat import parse_version
 from nextgis_connect.platform.qgis.errors import (
     ContainerError,
     ErrorCode,
+    NgConnectError,
     NgwError,
     SynchronizationError,
     default_user_message,
@@ -84,6 +85,56 @@ class DetachedEditingTask(NgConnectTask):
             return False
 
         return True
+
+    def _prepare_error(self, error: Exception) -> Exception:
+        """Add detached layer context to task errors.
+
+        :param error: Original task error.
+        :return: Error containing layer diagnostics when available.
+        """
+        error = super()._prepare_error(error)
+        if not isinstance(error, NgConnectError):
+            return error
+
+        error.add_diagnostic_context(
+            "detached_container_path",
+            f"Container path: {self._container_path}",
+        )
+        if not hasattr(self, "_metadata"):
+            return error
+
+        layer_name = self._metadata.layer_name
+        if error.is_network_problem:
+            user_message = QgsApplication.translate(
+                "DetachedEditingTask",
+                'Could not synchronize layer "{layer_name}" because of a network problem. Check your internet connection and try again.',
+            ).format(layer_name=layer_name)
+            error.set_user_message(user_message)
+        elif error.is_server_unavailable:
+            user_message = QgsApplication.translate(
+                "DetachedEditingTask",
+                'The server is temporarily unavailable. Layer "{layer_name}" could not be synchronized. Please try again later.',
+            ).format(layer_name=layer_name)
+            error.set_user_message(user_message)
+        elif isinstance(error, SynchronizationError):
+            user_message = QgsApplication.translate(
+                "DetachedEditingTask",
+                'Could not synchronize layer "{layer_name}".',
+            ).format(layer_name=layer_name)
+            error.set_user_message(user_message)
+        else:
+            layer_context = QgsApplication.translate(
+                "DetachedEditingTask",
+                'Affected layer: "{layer_name}".',
+            ).format(layer_name=layer_name)
+            error.add_user_context(layer_context, key="detached_layer")
+
+        error.mark_user_context("detached_layer")
+        error.add_diagnostic_context(
+            "detached_layer",
+            f"Layer: {self._metadata}",
+        )
+        return error
 
     def _get_layer(self, ngw_connection: QgsNgwConnection) -> NGWVectorLayer:
         resource_id = self._metadata.resource_id

@@ -1,6 +1,7 @@
 import unittest
 from unittest.mock import patch
 
+from nextgis_connect.platform.qgis.errors import NgwError
 from tests.ng_connect_testcase import NgConnectTestCase, TestConnection
 
 
@@ -65,6 +66,31 @@ class TestQgsNgwConnection(NgConnectTestCase):
             )
 
         self.assertEqual(mock_get.call_count, 2)
+
+    def test_request_error_contains_absolute_url(self) -> None:
+        connection_id = self.connection_id(TestConnection.SandboxGuest)
+        connection = self.qgs_ngw_connection_class(connection_id)
+        request_path = "/api/resource/42"
+        request_url = f"{connection.server_url.rstrip('/')}{request_path}"
+        network_error = NgwError(
+            "Connection error",
+            is_network_problem=True,
+        )
+
+        method_name = "_QgsNgwConnection__request_and_decode"
+        with patch.object(
+            connection,
+            method_name,
+            side_effect=network_error,
+        ), self.assertRaises(NgwError) as error_context:
+            connection.get(request_path)
+
+        error = error_context.exception
+        error_notes = getattr(error, "__notes__", ())
+        self.assertTrue(
+            f"URL: {request_url}" in error_notes
+            or f"URL: {request_url}" in str(error)
+        )
 
     def test_reset_model_invalidates_cached_versions(self) -> None:
         connection_id = self.connection_id(TestConnection.SandboxGuest)

@@ -45,11 +45,20 @@ class NgConnectTask(QgsTask):
 
     @_error.setter
     def _error(self, error: Exception) -> None:
+        error = self._prepare_error(error)
         if isinstance(error, NgConnectError):
             self.__error = deepcopy(error)
         else:
             self.__error = NgConnectError()
             self.__error.__cause__ = deepcopy(error)
+
+    def _prepare_error(self, error: Exception) -> Exception:
+        """Add task-specific context before storing an error.
+
+        :param error: Original task error.
+        :return: Error prepared for storage.
+        """
+        return error
 
     def run(self) -> bool:
         """Run the task preflight logic.

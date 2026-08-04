@@ -3,7 +3,7 @@ import uuid
 from enum import IntEnum, auto
 from functools import lru_cache
 from http import HTTPStatus
-from typing import Any, Callable, Dict, List, Optional, Tuple, Type
+from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Type
 
 from qgis.core import QgsApplication, QgsEditError
 from qgis.PyQt.QtCore import QUrl
@@ -160,6 +160,8 @@ class NgConnectExceptionInfoMixin:
     _try_again: Optional[Callable[[], Any]]
     _actions: List[Tuple[str, Callable[[], Any]]]
     _need_logs: bool
+    _diagnostic_context_keys: Set[str]
+    _user_context_keys: Set[str]
 
     def __init__(
         self,
@@ -214,6 +216,8 @@ class NgConnectExceptionInfoMixin:
 
         self._actions = []
         self._need_logs = True
+        self._diagnostic_context_keys = set()
+        self._user_context_keys = set()
 
     @property
     def error_id(self) -> str:
@@ -286,6 +290,75 @@ class NgConnectExceptionInfoMixin:
         :param callback: Action callback.
         """
         self._actions.append((name, callback))
+
+    def add_diagnostic_context(self, key: str, note: str) -> None:
+        """Add a diagnostic note identified by a stable context key.
+
+        :param key: Context key, e.g. ``request_url``.
+        :param note: Note text to add.
+        """
+        if key in self._diagnostic_context_keys:
+            return
+
+        self._diagnostic_context_keys.add(key)
+        self.add_note(note)
+
+    def add_user_context(
+        self, context: str, *, key: Optional[str] = None
+    ) -> None:
+        """Append context to the user-facing message.
+
+        :param context: Additional user-facing context.
+        :param key: Optional stable context key.
+        """
+        if key is not None and self.has_user_context(key):
+            return
+
+        context = context.strip()
+        if len(context) == 0:
+            return
+
+        user_message = f"{self._user_message.rstrip('.')}. {context}"
+        self.set_user_message(user_message)
+        if key is not None:
+            self.mark_user_context(key)
+
+    def has_user_context(self, key: str) -> bool:
+        """Return whether a user-facing context was already added."""
+        return key in self._user_context_keys
+
+    def mark_user_context(self, key: str) -> None:
+        """Mark a user-facing context as already represented."""
+        self._user_context_keys.add(key)
+
+    def set_user_message(self, message: str) -> None:
+        """Replace the user-facing message.
+
+        :param message: New user-facing message.
+        """
+        message = message.strip()
+        if len(message) == 0:
+            return
+
+        old_note = "User message: " + self._user_message
+        new_note = "User message: " + message
+        notes = getattr(self, "__notes__", None)
+        if notes is not None and old_note in notes:
+            notes[notes.index(old_note)] = new_note
+        elif len(self.args) > 0 and isinstance(self.args[0], str):
+            self.args = (self.args[0].replace(old_note, new_note),)
+
+        self._user_message = message
+
+    @property
+    def is_network_problem(self) -> bool:
+        """Return whether the error was caused by network transport."""
+        return False
+
+    @property
+    def is_server_unavailable(self) -> bool:
+        """Return whether the server is temporarily unavailable."""
+        return False
 
     @property
     def need_logs(self) -> bool:
@@ -452,6 +525,9 @@ class NgwError(NgConnectError):
 
     _try_reconnect: bool
     _ngw_exception_class: Optional[str]
+    _status_code: Optional[int]
+    _is_network_problem: bool
+    _is_server_unavailable: bool
 
     def __init__(
         self,
@@ -461,6 +537,9 @@ class NgwError(NgConnectError):
         detail: Optional[str] = None,
         try_reconnect: bool = False,
         ngw_exception_class: Optional[str] = None,
+        status_code: Optional[int] = None,
+        is_network_problem: Optional[bool] = None,
+        is_server_unavailable: Optional[bool] = None,
         code: ErrorCode = ErrorCode.NgwError,
     ) -> None:
         """Initialize the NGW communication error.
@@ -470,8 +549,37 @@ class NgwError(NgConnectError):
         :param detail: Additional diagnostic detail.
         :param try_reconnect: Whether reconnecting can be attempted.
         :param ngw_exception_class: Original NGW exception class name.
+        :param status_code: HTTP status code returned by server.
+        :param is_network_problem: Whether transport failed before a response.
+        :param is_server_unavailable: Whether server returned a temporary
+            failure.
         :param code: Internal error code.
         """
+        network_problem = (
+            is_network_problem
+            if is_network_problem is not None
+            else code
+            in (
+                ErrorCode.NetworkError,
+                ErrorCode.NgwConnectionError,
+                ErrorCode.QgisTimeoutError,
+                ErrorCode.SslHandshakeError,
+            )
+        )
+        server_unavailable = (
+            is_server_unavailable
+            if is_server_unavailable is not None
+            else (
+                (status_code is not None and status_code // 100 == 5)
+                or code == ErrorCode.ServerError
+            )
+        )
+
+        if user_message is None and server_unavailable:
+            user_message = default_user_message(ErrorCode.ServerError)
+        elif user_message is None and network_problem:
+            user_message = default_user_message(ErrorCode.NetworkError)
+
         super().__init__(
             log_message,
             user_message=user_message,
@@ -481,9 +589,20 @@ class NgwError(NgConnectError):
 
         self._try_reconnect = try_reconnect
         self._ngw_exception_class = ngw_exception_class
+        self._status_code = status_code
+        self._is_network_problem = network_problem
+        self._is_server_unavailable = server_unavailable
 
         if ngw_exception_class is not None:
             self.add_note(f"NGW exception: {ngw_exception_class}")
+
+        if self._is_server_unavailable:
+            button_label = QgsApplication.translate("Errors", "Contact us")
+            contact_url = QUrl(f"{nextgis_domain()}/contact/")
+            self.add_action(
+                button_label,
+                lambda: QDesktopServices.openUrl(contact_url),
+            )
 
     @property
     def try_reconnect(self) -> bool:
@@ -501,6 +620,21 @@ class NgwError(NgConnectError):
         """
         return self._ngw_exception_class
 
+    @property
+    def status_code(self) -> Optional[int]:
+        """Return the HTTP status code returned by server."""
+        return self._status_code
+
+    @property
+    def is_network_problem(self) -> bool:
+        """Return whether the error was caused by network transport."""
+        return self._is_network_problem
+
+    @property
+    def is_server_unavailable(self) -> bool:
+        """Return whether the server is temporarily unavailable."""
+        return self._is_server_unavailable
+
     @staticmethod
     def from_json(json: Dict[str, Any]) -> "NgwError":
         """Create an NGW error from a server error payload.
@@ -516,19 +650,25 @@ class NgwError(NgConnectError):
             code = ErrorCode.PermissionsError
         elif status_code == HTTPStatus.NOT_FOUND:
             code = ErrorCode.NotFound
-        elif status_code == HTTPStatus.INTERNAL_SERVER_ERROR:
-            code = ErrorCode.ServerError
         else:
             code = ErrorCode.NgwError
 
         server_error_prefix = 5
         try_reconnect = status_code // 100 == server_error_prefix
+        is_server_unavailable = status_code // 100 == server_error_prefix
 
-        user_message = json.get("title")
-        if user_message is not None:
-            user_message += "."
+        user_message = None
+        if not is_server_unavailable:
+            user_message = json.get("title")
+            if user_message is not None:
+                user_message += "."
 
         detail = json.get("detail")
+        server_detail = None
+        if is_server_unavailable:
+            server_detail = detail
+            detail = None
+
         ngw_exception_class = json.get("exception")
         if (
             detail is None
@@ -545,10 +685,14 @@ class NgwError(NgConnectError):
             detail=detail,
             try_reconnect=try_reconnect,
             ngw_exception_class=ngw_exception_class,
+            status_code=status_code,
+            is_server_unavailable=is_server_unavailable,
             code=code,
         )
 
         error.add_note(f"Http status code: {status_code}")
+        if server_detail is not None:
+            error.add_note(f"Server detail: {server_detail}")
         if "guru_meditation" in json:
             error.add_note(f"Guru meditation: {json.get('guru_meditation')}")
 
@@ -838,6 +982,7 @@ def _default_log_message(code: ErrorCode) -> str:
         ErrorCode.BigUpdateWarning: "Big update error",
         ErrorCode.NgStdError: "NgStd library error",
         ErrorCode.NgwError: "NGW communication error",
+        ErrorCode.NetworkError: "Network error",
         ErrorCode.NgwConnectionError: "Connection error",
         ErrorCode.AuthorizationError: "Authorization error",
         ErrorCode.PermissionsError: "Permissions error",
@@ -899,6 +1044,14 @@ def default_user_message(code: ErrorCode) -> str:
         ),
         ErrorCode.NgwError: QgsApplication.translate(
             "Errors", "Error occurred while communicating with Web GIS."
+        ),
+        ErrorCode.NetworkError: QgsApplication.translate(
+            "Errors",
+            "A network error occurred. Check your internet connection and try again."
+        ),
+        ErrorCode.ServerError: QgsApplication.translate(
+            "Errors",
+            "The server is temporarily unavailable. Please try again later."
         ),
         ErrorCode.QuotaExceeded: QgsApplication.translate(
             "Errors", "You have reached the limit of layers allowed."

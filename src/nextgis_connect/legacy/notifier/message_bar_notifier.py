@@ -8,6 +8,10 @@ from qgis.PyQt.QtCore import QObject, QUrl
 from qgis.PyQt.QtGui import QDesktopServices
 from qgis.PyQt.QtWidgets import QMessageBox, QPushButton, QWidget
 
+from nextgis_connect.legacy.ngw_connection import NgwConnectionsManager
+from nextgis_connect.legacy.ngw_connection.presentation.diagnostics import (
+    NgwConnectionDiagnosticsDialog,
+)
 from nextgis_connect.legacy.notifier.notifier_interface import (
     NotifierInterface,
 )
@@ -41,6 +45,18 @@ def upgrade_plan():
     """Open the upgrade plan URL in the default web browser."""
     utm = utm_tags("quota")
     QDesktopServices.openUrl(QUrl(f"{nextgis_domain()}/pricing-base/?{utm}"))
+
+
+def run_connection_diagnostics() -> None:
+    """Open diagnostics for the current Web GIS connection."""
+    iface = _iface()
+    connection = NgwConnectionsManager().current_connection
+    if connection is None:
+        iface.showOptionsDialog(iface.mainWindow(), "NextGIS Connect")
+        return
+
+    dialog = NgwConnectionDiagnosticsDialog(connection, iface.mainWindow())
+    dialog.exec()
 
 
 class MessageBarNotifier(NotifierInterface):
@@ -192,13 +208,9 @@ class MessageBarNotifier(NotifierInterface):
             button.pressed.connect(upgrade_plan)
             widget.layout().addWidget(button)
 
-        elif error.code.is_connection_error:
-            button = QPushButton(self.tr("Open settings"))
-            button.pressed.connect(
-                lambda: _iface().showOptionsDialog(
-                    _iface().mainWindow(), "NextGIS Connect"
-                )
-            )
+        elif error.is_network_problem or error.code.is_connection_error:
+            button = QPushButton(self.tr("Run diagnostics"))
+            button.pressed.connect(run_connection_diagnostics)
             widget.layout().addWidget(button)
 
         if error.detail is not None:

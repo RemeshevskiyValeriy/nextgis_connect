@@ -19,6 +19,7 @@ from qgis.PyQt.QtCore import (
     QAbstractItemModel,
     QModelIndex,
     QObject,
+    QPersistentModelIndex,
     QSize,
     Qt,
     QThread,
@@ -649,6 +650,7 @@ class QNGWResourceTreeModelBase(QAbstractItemModel):
     jobFinished = pyqtSignal(str, str)
     indexesLocked = pyqtSignal()
     indexesUnlocked = pyqtSignal()
+    fetchErrorReadyForRetry = pyqtSignal(QModelIndex)
 
     found_resources_changed = pyqtSignal(list)
 
@@ -732,7 +734,7 @@ class QNGWResourceTreeModelBase(QAbstractItemModel):
         self.endResetModel()
 
         if request_error is not None:
-            self.errorOccurred.emit(None, None, request_error)
+            self.errorOccurred.emit("", "", request_error)
 
     def cleanModel(self):
         self.__cleanModel()
@@ -961,7 +963,31 @@ class QNGWResourceTreeModelBase(QAbstractItemModel):
 
     def __jobErrorOccurredProcess(self, error):
         job = cast(NGWResourcesModelJob, self.sender())
+        self.__add_fetch_retry_action(job, error)
         self.errorOccurred.emit(job.getJobId(), job.getJobUuid(), error)
+
+    def __add_fetch_retry_action(
+        self,
+        job: NGWResourcesModelJob,
+        error: Exception,
+    ) -> None:
+        if (
+            job.getJobId() != "NGWResourceUpdater"
+            or not isinstance(error, NgConnectError)
+            or error.try_again is not None
+        ):
+            return
+
+        locked_indexes = self.__indexes_locked_by_jobs.get(job, [])
+        persistent_indexes = tuple(
+            QPersistentModelIndex(index)
+            for index in locked_indexes
+            if index.isValid()
+        )
+        if len(persistent_indexes) == 0:
+            return
+
+        error.try_again = lambda: self.__retry_fetch(persistent_indexes)
 
     def __jobWarningOccurredProcess(self, error):
         job = cast(NGWResourcesModelJob, self.sender())
@@ -1007,17 +1033,24 @@ class QNGWResourceTreeModelBase(QAbstractItemModel):
     def _unlockIndexesByJob(self, job):
         indexes = self.__indexes_locked_by_jobs.get(job, [])
         self.__indexes_locked_by_jobs[job] = []
+        failed_fetch_indexes: List[QModelIndex] = []
 
         for index in indexes:
             item = self.item(index)
             item.unlock()
             if job.error() is not None:
                 self.__indexes_locked_by_job_errors[index] = job.error()
+                if job.getJobId() == "NGWResourceUpdater":
+                    failed_fetch_indexes.append(index)
 
             self.dataChanged.emit(index, index)
 
         self.__sync_loading_indicator_animation()
         self.indexesUnlocked.emit()
+
+        for index in failed_fetch_indexes:
+            self.fetchErrorReadyForRetry.emit(index)
+            self.clear_fetch_error(index)
 
     def _isIndexLockedByJob(self, index):
         for indexes in self.__indexes_locked_by_jobs.values():
@@ -1027,6 +1060,27 @@ class QNGWResourceTreeModelBase(QAbstractItemModel):
 
     def _isIndexLockedByJobError(self, index):
         return index in self.__indexes_locked_by_job_errors
+
+    def clear_fetch_error(self, index: QModelIndex) -> bool:
+        """Allow fetching an index again after a failed request.
+
+        :param index: Resource group index to unlock.
+        :return: ``True`` if a failed request was registered for the index.
+        """
+        return self.__indexes_locked_by_job_errors.pop(index, None) is not None
+
+    def __retry_fetch(
+        self,
+        persistent_indexes: Tuple[QPersistentModelIndex, ...],
+    ) -> None:
+        for persistent_index in persistent_indexes:
+            if not persistent_index.isValid():
+                continue
+
+            index = QModelIndex(persistent_index)
+            self.clear_fetch_error(index)
+            if self.canFetchMore(index):
+                self.fetchMore(index)
 
     def __locked_indexes(self) -> List[QModelIndex]:
         result = []

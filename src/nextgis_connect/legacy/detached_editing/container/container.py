@@ -1078,6 +1078,23 @@ class DetachedContainer(QObject):
         self.__versioning_state = VersioningSynchronizationState.Error
         self.__additional_data_fetch_date = None
 
+        error.add_diagnostic_context(
+            "detached_container_path",
+            f"Container path: {self.path}",
+        )
+        if self.metadata is not None:
+            if not error.has_user_context("detached_layer"):
+                layer_name = self.metadata.layer_name
+                layer_context = self.tr(
+                    'Affected layer: "{layer_name}".'
+                ).format(layer_name=layer_name)
+                error.add_user_context(layer_context, key="detached_layer")
+
+            error.add_diagnostic_context(
+                "detached_layer",
+                f"Layer: {self.metadata}",
+            )
+
         if self.__is_network_error(error):
             if self.__additional_data_fetch_date is None:
                 self.__is_edit_allowed = True
@@ -1225,10 +1242,13 @@ class DetachedContainer(QObject):
         if error is None:
             return False
 
+        if isinstance(error, NgwError):
+            return error.is_network_problem
+
         if isinstance(error.__cause__, NGWError):
             return True
 
         return (
             isinstance(error.__cause__, NgwError)
-            and error.__cause__.code != ErrorCode.ServerError
+            and error.__cause__.is_network_problem
         )

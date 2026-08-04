@@ -1065,7 +1065,11 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
         ):
             self.__stop_root_children_loading()
 
-        if job_name is None and self.__root_loading_cancel_requested:
+        if not job_name and self.__root_loading_cancel_requested:
+            self.__show_root_loading_error(exception)
+            return
+
+        if not job_name:
             self.__show_root_loading_error(exception)
             return
 
@@ -1186,6 +1190,7 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
         if (
             isinstance(exception, JobServerRequestError)
             and exception.user_msg is not None
+            and exception.try_again is None
         ):
             if job_name == ROOT_RESOURCES_LOADER_JOB_ID:
                 self.__show_root_loading_error(exception)
@@ -1336,13 +1341,13 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
                 self.tr("Invalid NextGIS Web connection."),
                 title=self.tr("Unable to load resources"),
                 details=self.tr(
-                    "Open settings and check the selected connection."
+                    "Run diagnostics to check the selected connection."
                 ),
                 retry_enabled=False,
                 icon_name="globe_2_cancel",
                 action=OverlayButtonState(
-                    action=OverlayAction.OPEN_PLUGIN_SETTINGS,
-                    text=self.tr("Open settings"),
+                    action=OverlayAction.RUN_DIAGNOSTICS,
+                    text=self.tr("Run diagnostics"),
                 ),
             )
             return
@@ -1378,15 +1383,11 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
             message,
             title=self.tr("Unable to connect"),
             details=self.tr(
-                "Open settings and check the selected connection."
+                "Run diagnostics to check the selected connection."
             ),
             retry_enabled=False,
             icon_name="globe_2_cancel",
             action=OverlayButtonState(
-                action=OverlayAction.OPEN_PLUGIN_SETTINGS,
-                text=self.tr("Open settings"),
-            ),
-            secondary_action=OverlayButtonState(
                 action=OverlayAction.RUN_DIAGNOSTICS,
                 text=self.tr("Run diagnostics"),
             ),
@@ -1403,7 +1404,7 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
             if candidate is None:
                 continue
 
-            if getattr(candidate, "code", None) == ErrorCode.ServerError:
+            if getattr(candidate, "is_server_unavailable", False):
                 return True
 
             text = " ".join(

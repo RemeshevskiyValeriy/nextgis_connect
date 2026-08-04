@@ -92,6 +92,7 @@ class QNGWResourceTreeView(QTreeView):
             self._handle_overlay_state_changed
         )
         self._overlay_state_model.update(has_connections=True)
+        self.expanded.connect(self.__retry_failed_fetch)
 
     def setModel(self, model: Optional[QAbstractItemModel]) -> None:
         model = cast(QSortFilterProxyModel, model)
@@ -99,6 +100,9 @@ class QNGWResourceTreeView(QTreeView):
         self._proxy_model = model
         self._proxy_model.rowsInserted.connect(self.__insertRowsProcess)
         self._proxy_model.layoutChanged.connect(self.__expand_filtered)
+        self._source_model.fetchErrorReadyForRetry.connect(
+            self.__collapse_failed_fetch
+        )
 
         super().setModel(self._proxy_model)
 
@@ -111,6 +115,22 @@ class QNGWResourceTreeView(QTreeView):
         for resource_id in self._proxy_model.expanded_resources:  # type: ignore
             index = self._source_model.index_from_id(resource_id)
             self.expand(self._proxy_model.mapFromSource(index))
+
+    def __retry_failed_fetch(self, index: QModelIndex) -> None:
+        source_index = self._proxy_model.mapToSource(index)
+        had_fetch_error = self._source_model.clear_fetch_error(source_index)
+        if not had_fetch_error and not self._source_model.canFetchMore(
+            source_index
+        ):
+            return
+
+        if self._source_model.canFetchMore(source_index):
+            self._source_model.fetchMore(source_index)
+
+    def __collapse_failed_fetch(self, source_index: QModelIndex) -> None:
+        proxy_index = self._proxy_model.mapFromSource(source_index)
+        if proxy_index.isValid():
+            self.collapse(proxy_index)
 
     def resizeEvent(self, e):
         super().resizeEvent(e)
