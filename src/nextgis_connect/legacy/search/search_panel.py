@@ -1,6 +1,6 @@
 from typing import Optional
 
-from qgis.PyQt.QtCore import Qt, pyqtSignal, pyqtSlot
+from qgis.PyQt.QtCore import QSize, Qt, pyqtSignal, pyqtSlot
 from qgis.PyQt.QtWidgets import (
     QHBoxLayout,
     QSizePolicy,
@@ -51,6 +51,9 @@ class SearchPanel(QWidget):
             Qt.ToolButtonStyle.ToolButtonIconOnly
         )
         self.__search_button.setIcon(qgis_icon("search.svg"))
+        search_field_height = self.__text_search_widget.sizeHint().height()
+        search_icon_size = QSize(search_field_height, search_field_height)
+        self.__search_button.setFixedSize(search_icon_size)
         self.__search_button.setToolTip(self.tr("Run resource search"))
         self.__search_button.clicked.connect(self.__request_search)
         layout.addWidget(self.__search_button)
