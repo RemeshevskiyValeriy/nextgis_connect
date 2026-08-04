@@ -100,6 +100,253 @@ class LoginChoice:
     auth_config_id: Optional[str] = None
 
 
+class NextgisQgisUserAvailability:
+    AUTH_CONFIG_ID = "NextGIS"
+    AUTH_METHOD = "NextGIS"
+    UNSUPPORTED_ENDPOINT_PREFIX = "my.nextgis"
+
+    @classmethod
+    def is_available(cls) -> bool:
+        if not HAS_NGSTD or NGAccess is None:
+            return False
+
+        auth_manager = QgsApplication.authManager()
+        if auth_manager.isDisabled():
+            return False
+
+        if (
+            auth_manager.configAuthMethodKey(cls.AUTH_CONFIG_ID)
+            != cls.AUTH_METHOD
+        ):
+            return False
+
+        access = NGAccess.instance()
+        if not access.isUserAuthorized():
+            return False
+
+        endpoint_host = urlparse(access.endPoint()).hostname
+        if endpoint_host is None:
+            return False
+
+        return not endpoint_host.lower().startswith(
+            cls.UNSUPPORTED_ENDPOINT_PREFIX
+        )
+
+
+@dataclass(frozen=True)
+class LoginChoiceLabels:
+    nextgis_qgis_user: str
+    saved_user: str
+
+
+class LoginChoiceResolver:
+    def __init__(
+        self,
+        connection_url: str,
+        *,
+        is_edit: bool,
+        filter_by_resource: bool,
+        labels: LoginChoiceLabels,
+    ) -> None:
+        self.__connection_url = connection_url
+        self.__is_edit = is_edit
+        self.__filter_by_resource = filter_by_resource
+        self.__labels = labels
+
+    def existing_choices(
+        self,
+        current_auth_config_id: str,
+    ) -> Tuple[List[LoginChoice], List[LoginChoice]]:
+        auth_manager = QgsApplication.authManager()
+        configs = auth_manager.availableAuthMethodConfigs()
+
+        nextgis_choices = []
+        basic_choices = []
+        for config_id, config in configs.items():
+            method = config.method() or auth_manager.configAuthMethodKey(
+                config_id
+            )
+            if method not in ("Basic", "NextGIS"):
+                continue
+
+            if not self.__should_show_auth_config(
+                config_id,
+                config,
+                method,
+                current_auth_config_id,
+            ):
+                continue
+
+            choice = LoginChoice(
+                LoginChoiceKind.EXISTING,
+                self.__choice_title(config_id, config),
+                method,
+                config_id,
+            )
+            if method == "NextGIS":
+                nextgis_choices.append(choice)
+            else:
+                basic_choices.append(choice)
+
+        if len(current_auth_config_id) != 0 and all(
+            choice.auth_config_id != current_auth_config_id
+            for choice in nextgis_choices + basic_choices
+        ):
+            method = auth_manager.configAuthMethodKey(current_auth_config_id)
+            if current_auth_config_id == "NextGIS":
+                method = "NextGIS"
+            if (
+                method in ("Basic", "NextGIS")
+                or current_auth_config_id == "NextGIS"
+            ) and self.__should_show_missing_auth_config(
+                current_auth_config_id,
+                method,
+            ):
+                choice = LoginChoice(
+                    LoginChoiceKind.EXISTING,
+                    self.__choice_title(current_auth_config_id),
+                    method,
+                    current_auth_config_id,
+                )
+                if method == "NextGIS" or current_auth_config_id == "NextGIS":
+                    nextgis_choices.append(choice)
+                else:
+                    basic_choices.append(choice)
+
+        basic_choices.sort(key=lambda choice: choice.title.lower())
+        return nextgis_choices, basic_choices
+
+    def __should_show_auth_config(
+        self,
+        config_id: str,
+        config: QgsAuthMethodConfig,
+        method: str,
+        current_auth_config_id: str,
+    ) -> bool:
+        if method == "NextGIS":
+            return self.__should_show_nextgis_qgis_user(
+                config_id,
+                current_auth_config_id,
+            )
+
+        if not self.__filter_by_resource:
+            return True
+
+        return self.__is_auth_config_resource_current(config)
+
+    def __should_show_missing_auth_config(
+        self,
+        config_id: str,
+        method: str,
+    ) -> bool:
+        if method == "NextGIS" or config_id == "NextGIS":
+            return self.__should_show_nextgis_qgis_user(
+                config_id,
+                config_id,
+            )
+
+        if not self.__filter_by_resource:
+            return True
+
+        if method != "Basic":
+            return False
+
+        is_loaded, config = (
+            QgsApplication.authManager().loadAuthenticationConfig(
+                config_id,
+                QgsAuthMethodConfig(),
+                full=True,
+            )
+        )
+        if not is_loaded:
+            return False
+
+        return self.__is_auth_config_resource_current(config)
+
+    def __should_show_nextgis_qgis_user(
+        self,
+        config_id: str,
+        current_auth_config_id: str,
+    ) -> bool:
+        if NextgisQgisUserAvailability.is_available():
+            return True
+
+        return (
+            self.__is_edit
+            and len(current_auth_config_id) != 0
+            and config_id == current_auth_config_id
+        )
+
+    def __is_auth_config_resource_current(
+        self,
+        config: QgsAuthMethodConfig,
+    ) -> bool:
+        resource = config.uri().strip()
+        if len(resource) == 0:
+            return False
+
+        return NgwConnection.normalize_url(
+            resource
+        ) == NgwConnection.normalize_url(self.__connection_url)
+
+    def __choice_title(
+        self,
+        config_id: str,
+        config: Optional[QgsAuthMethodConfig] = None,
+    ) -> str:
+        if config_id == "NextGIS":
+            return self.__labels.nextgis_qgis_user
+
+        method = ""
+        if config is not None:
+            method = config.method()
+        if len(method) == 0:
+            method = QgsApplication.authManager().configAuthMethodKey(
+                config_id
+            )
+
+        if method == "NextGIS":
+            return self.__labels.nextgis_qgis_user
+
+        username = ""
+        if config is not None:
+            username = config.configMap().get("username", "").strip()
+            if len(username) == 0:
+                username = config.name().strip()
+                if " / " in username:
+                    username = username.rsplit(" / ", 1)[-1].strip()
+
+        if len(username) == 0:
+            loaded_username = self.__load_username(config_id)
+            if loaded_username is not None:
+                username = loaded_username
+
+        if len(username) == 0:
+            username = self.__labels.saved_user
+
+        return username
+
+    def __load_username(self, config_id: str) -> Optional[str]:
+        auth_manager = QgsApplication.authManager()
+        method = auth_manager.configAuthMethodKey(config_id)
+        if method not in ("Basic", "NextGIS"):
+            return None
+
+        is_loaded, config = auth_manager.loadAuthenticationConfig(
+            config_id,
+            QgsAuthMethodConfig(),
+            full=True,
+        )
+        if not is_loaded:
+            return None
+
+        username = config.configMap().get("username", None)
+        if not username:
+            return None
+
+        return username
+
+
 class NgwConnectionEditDialog(QDialog, WIDGET):
     NEXTGIS_DOMAIN = ".nextgis.com"
     PREFERRED_WIDTH = 460
@@ -511,7 +758,7 @@ class NgwConnectionEditDialog(QDialog, WIDGET):
         is_auth_valid = True
         if choice is not None and choice.kind != LoginChoiceKind.GUEST:
             if self.__login_choice_method(choice) == "NextGIS":
-                is_auth_valid = True
+                is_auth_valid = NextgisQgisUserAvailability.is_available()
             else:
                 is_auth_valid = self.__auth_editor.is_valid()
 
@@ -1173,14 +1420,15 @@ class NgwConnectionEditDialog(QDialog, WIDGET):
         QDesktopServices.openUrl(QUrl(nextgis_domain()))
 
     def __load_username(self, config_id: str) -> Optional[str]:
-        method = QgsApplication.authManager().configAuthMethodKey(config_id)
+        auth_manager = QgsApplication.authManager()
+        method = auth_manager.configAuthMethodKey(config_id)
         if method not in ("Basic", "NextGIS"):
             return None
 
-        is_loaded, config = (
-            QgsApplication.authManager().loadAuthenticationConfig(
-                config_id, QgsAuthMethodConfig(), full=True
-            )
+        is_loaded, config = auth_manager.loadAuthenticationConfig(
+            config_id,
+            QgsAuthMethodConfig(),
+            full=True,
         )
         if not is_loaded:
             return None
@@ -1297,117 +1545,16 @@ class NgwConnectionEditDialog(QDialog, WIDGET):
         self,
         current_auth_config_id: str,
     ) -> Tuple[List[LoginChoice], List[LoginChoice]]:
-        auth_manager = QgsApplication.authManager()
-        configs = auth_manager.availableAuthMethodConfigs()
-
-        nextgis_choices = []
-        basic_choices = []
-        for config_id, config in configs.items():
-            method = config.method() or auth_manager.configAuthMethodKey(
-                config_id
-            )
-            if method not in ("Basic", "NextGIS"):
-                continue
-
-            if not self.__should_show_auth_config(
-                config_id,
-                config,
-                method,
-                current_auth_config_id,
-            ):
-                continue
-
-            choice = LoginChoice(
-                LoginChoiceKind.EXISTING,
-                self.__login_choice_title(config_id, config),
-                method,
-                config_id,
-            )
-            if method == "NextGIS":
-                nextgis_choices.append(choice)
-            else:
-                basic_choices.append(choice)
-
-        if len(current_auth_config_id) != 0 and all(
-            choice.auth_config_id != current_auth_config_id
-            for choice in nextgis_choices + basic_choices
-        ):
-            method = auth_manager.configAuthMethodKey(current_auth_config_id)
-            if current_auth_config_id == "NextGIS":
-                method = "NextGIS"
-            if (
-                method in ("Basic", "NextGIS")
-                or current_auth_config_id == "NextGIS"
-            ) and self.__should_show_missing_auth_config(
-                current_auth_config_id,
-                method,
-            ):
-                choice = LoginChoice(
-                    LoginChoiceKind.EXISTING,
-                    self.__login_choice_title(current_auth_config_id),
-                    method,
-                    current_auth_config_id,
-                )
-                if method == "NextGIS" or current_auth_config_id == "NextGIS":
-                    nextgis_choices.append(choice)
-                else:
-                    basic_choices.append(choice)
-
-        basic_choices.sort(key=lambda choice: choice.title.lower())
-        return nextgis_choices, basic_choices
-
-    def __should_show_auth_config(
-        self,
-        config_id: str,
-        config: QgsAuthMethodConfig,
-        method: str,
-        current_auth_config_id: str,
-    ) -> bool:
-        if method == "NextGIS":
-            return True
-
-        if not self.__filter_auth_by_resource:
-            return True
-
-        return self.__is_auth_config_resource_current(config)
-
-    def __should_show_missing_auth_config(
-        self,
-        config_id: str,
-        method: str,
-    ) -> bool:
-        if method == "NextGIS" or config_id == "NextGIS":
-            return True
-
-        if not self.__filter_auth_by_resource:
-            return True
-
-        if method != "Basic":
-            return False
-
-        is_loaded, config = (
-            QgsApplication.authManager().loadAuthenticationConfig(
-                config_id,
-                QgsAuthMethodConfig(),
-                full=True,
-            )
+        resolver = LoginChoiceResolver(
+            self.urlLineEdit.text(),
+            is_edit=self.__is_edit,
+            filter_by_resource=self.__filter_auth_by_resource,
+            labels=LoginChoiceLabels(
+                nextgis_qgis_user=self.tr("NextGIS QGIS User"),
+                saved_user=self.tr("Saved user"),
+            ),
         )
-        if not is_loaded:
-            return False
-
-        return self.__is_auth_config_resource_current(config)
-
-    def __is_auth_config_resource_current(
-        self, config: QgsAuthMethodConfig
-    ) -> bool:
-        resource = config.uri().strip()
-        if len(resource) == 0:
-            return False
-
-        return (
-            NgwConnection.normalize_url(resource)
-            == self.__default_auth_resource()
-        )
+        return resolver.existing_choices(current_auth_config_id)
 
     def __is_same_login_choice(
         self,
@@ -1454,43 +1601,6 @@ class NgwConnectionEditDialog(QDialog, WIDGET):
             self.tr("Show users for this Web GIS")
         )
 
-    def __login_choice_title(
-        self,
-        config_id: str,
-        config: Optional[QgsAuthMethodConfig] = None,
-    ) -> str:
-        if config_id == "NextGIS":
-            return self.tr("NextGIS QGIS User")
-
-        method = ""
-        if config is not None:
-            method = config.method()
-        if len(method) == 0:
-            method = QgsApplication.authManager().configAuthMethodKey(
-                config_id
-            )
-
-        if method == "NextGIS":
-            return self.tr("NextGIS QGIS User")
-
-        username = ""
-        if config is not None:
-            username = config.configMap().get("username", "").strip()
-            if len(username) == 0:
-                username = config.name().strip()
-                if " / " in username:
-                    username = username.rsplit(" / ", 1)[-1].strip()
-
-        if len(username) == 0:
-            loaded_username = self.__load_username(config_id)
-            if loaded_username is not None:
-                username = loaded_username
-
-        if len(username) == 0:
-            username = self.tr("Saved user")
-
-        return username
-
     def __current_login_choice(self) -> Optional[LoginChoice]:
         return cast(Optional[LoginChoice], self.userComboBox.currentData())
 
@@ -1503,6 +1613,9 @@ class NgwConnectionEditDialog(QDialog, WIDGET):
             return True
 
         if self.__login_choice_method(choice) == "NextGIS":
+            if not NextgisQgisUserAvailability.is_available():
+                return False
+
             self.authWidget.setConfigId(choice.auth_config_id or "NextGIS")
             return True
 

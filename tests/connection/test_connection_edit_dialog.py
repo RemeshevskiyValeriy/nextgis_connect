@@ -1,0 +1,183 @@
+from typing import List
+from unittest.mock import MagicMock
+
+import pytest
+
+from nextgis_connect.legacy.ngw_connection.presentation import (
+    connection_edit_dialog,
+)
+from nextgis_connect.legacy.ngw_connection.presentation.connection_edit_dialog import (
+    LoginChoiceLabels,
+    LoginChoiceResolver,
+    NextgisQgisUserAvailability,
+)
+
+
+def test_nextgis_qgis_user_is_unavailable_without_ngstd(monkeypatch) -> None:
+    monkeypatch.setattr(connection_edit_dialog, "HAS_NGSTD", False)
+    monkeypatch.setattr(connection_edit_dialog, "NGAccess", None)
+
+    assert not NextgisQgisUserAvailability.is_available()
+
+
+@pytest.mark.parametrize(
+    (
+        "is_auth_manager_disabled",
+        "auth_method",
+        "is_user_authorized",
+        "endpoint",
+        "expected_result",
+    ),
+    (
+        (True, "NextGIS", True, "https://auth.nextgis.com", False),
+        (False, "", True, "https://auth.nextgis.com", False),
+        (False, "NextGIS", False, "https://auth.nextgis.com", False),
+        (False, "NextGIS", True, "", False),
+        (False, "NextGIS", True, "https://my.nextgis.com", False),
+        (False, "NextGIS", True, "https://auth.nextgis.com", True),
+    ),
+)
+def test_nextgis_qgis_user_availability_requires_usable_auth(
+    monkeypatch,
+    is_auth_manager_disabled: bool,
+    auth_method: str,
+    is_user_authorized: bool,
+    endpoint: str,
+    expected_result: bool,
+) -> None:
+    auth_manager = MagicMock()
+    auth_manager.isDisabled.return_value = is_auth_manager_disabled
+    auth_manager.configAuthMethodKey.return_value = auth_method
+    qgs_application = MagicMock()
+    qgs_application.authManager.return_value = auth_manager
+
+    access = MagicMock()
+    access.isUserAuthorized.return_value = is_user_authorized
+    access.endPoint.return_value = endpoint
+    ng_access = MagicMock()
+    ng_access.instance.return_value = access
+
+    monkeypatch.setattr(connection_edit_dialog, "HAS_NGSTD", True)
+    monkeypatch.setattr(connection_edit_dialog, "NGAccess", ng_access)
+    monkeypatch.setattr(
+        connection_edit_dialog,
+        "QgsApplication",
+        qgs_application,
+    )
+
+    assert NextgisQgisUserAvailability.is_available() is expected_result
+
+
+def test_current_nextgis_qgis_user_remains_visible_when_editing(
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr(
+        NextgisQgisUserAvailability,
+        "is_available",
+        lambda: False,
+    )
+    auth_manager = MagicMock()
+    auth_manager.availableAuthMethodConfigs.return_value = {}
+    auth_manager.configAuthMethodKey.return_value = "NextGIS"
+    qgs_application = MagicMock()
+    qgs_application.authManager.return_value = auth_manager
+    monkeypatch.setattr(
+        connection_edit_dialog,
+        "QgsApplication",
+        qgs_application,
+    )
+    resolver = LoginChoiceResolver(
+        "https://example.nextgis.com",
+        is_edit=True,
+        filter_by_resource=True,
+        labels=LoginChoiceLabels(
+            nextgis_qgis_user="NextGIS QGIS User",
+            saved_user="Saved user",
+        ),
+    )
+
+    nextgis_choices, _ = resolver.existing_choices("NextGIS")
+
+    assert [choice.auth_config_id for choice in nextgis_choices] == ["NextGIS"]
+
+
+def test_unavailable_nextgis_qgis_user_is_hidden_when_not_current(
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr(
+        NextgisQgisUserAvailability,
+        "is_available",
+        lambda: False,
+    )
+    auth_manager = MagicMock()
+    auth_manager.availableAuthMethodConfigs.return_value = {}
+    auth_manager.configAuthMethodKey.return_value = "NextGIS"
+    qgs_application = MagicMock()
+    qgs_application.authManager.return_value = auth_manager
+    monkeypatch.setattr(
+        connection_edit_dialog,
+        "QgsApplication",
+        qgs_application,
+    )
+    resolver = LoginChoiceResolver(
+        "https://example.nextgis.com",
+        is_edit=False,
+        filter_by_resource=True,
+        labels=LoginChoiceLabels(
+            nextgis_qgis_user="NextGIS QGIS User",
+            saved_user="Saved user",
+        ),
+    )
+
+    nextgis_choices, _ = resolver.existing_choices("NextGIS")
+
+    assert nextgis_choices == []
+
+
+@pytest.mark.parametrize(
+    ("filter_by_resource", "expected_auth_config_ids"),
+    (
+        (True, ["matching"]),
+        (False, ["matching", "other"]),
+    ),
+)
+def test_login_choice_resolver_filters_basic_users_by_web_gis(
+    monkeypatch,
+    filter_by_resource: bool,
+    expected_auth_config_ids: List[str],
+) -> None:
+    matching_config = MagicMock()
+    matching_config.method.return_value = "Basic"
+    matching_config.uri.return_value = "https://example.nextgis.com"
+    matching_config.configMap.return_value = {"username": "Alice"}
+    other_config = MagicMock()
+    other_config.method.return_value = "Basic"
+    other_config.uri.return_value = "https://other.nextgis.com"
+    other_config.configMap.return_value = {"username": "Bob"}
+    auth_manager = MagicMock()
+    auth_manager.availableAuthMethodConfigs.return_value = {
+        "matching": matching_config,
+        "other": other_config,
+    }
+    qgs_application = MagicMock()
+    qgs_application.authManager.return_value = auth_manager
+    monkeypatch.setattr(
+        connection_edit_dialog,
+        "QgsApplication",
+        qgs_application,
+    )
+    resolver = LoginChoiceResolver(
+        "https://example.nextgis.com",
+        is_edit=True,
+        filter_by_resource=filter_by_resource,
+        labels=LoginChoiceLabels(
+            nextgis_qgis_user="NextGIS QGIS User",
+            saved_user="Saved user",
+        ),
+    )
+
+    _, basic_choices = resolver.existing_choices("")
+
+    assert [
+        choice.auth_config_id for choice in basic_choices
+    ] == expected_auth_config_ids

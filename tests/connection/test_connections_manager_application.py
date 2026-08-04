@@ -1,6 +1,9 @@
 from dataclasses import dataclass
 from typing import List, Optional, Tuple
 
+from nextgis_connect.legacy.ngw_connection.application.connection_switcher import (
+    NgwConnectionSwitcher,
+)
 from nextgis_connect.legacy.ngw_connection.application.connections_manager import (
     ConnectionUpdateState,
     NgwConnectionsManager,
@@ -119,6 +122,52 @@ def test_manager_normalizes_missing_current_connection(qgis_app) -> None:
 
     assert manager.current_connection_id == alpha_connection.id
     assert manager.current_connection == alpha_connection
+
+
+def test_connection_switcher_persists_connection_and_authentication(
+    qgis_app,
+) -> None:
+    del qgis_app
+    first_connection = NgwConnection(
+        "first-id",
+        "First",
+        "https://first.nextgis.com",
+        None,
+    )
+    second_connection = NgwConnection(
+        "second-id",
+        "Second",
+        "https://second.nextgis.com",
+        "old-auth",
+    )
+    repository = InMemoryConnectionSettingsRepository(
+        [first_connection, second_connection],
+        first_connection.id,
+    )
+    manager = NgwConnectionsManager(
+        connections=[first_connection, second_connection],
+        current_connection_id=first_connection.id,
+        settings_repository=repository,
+    )
+    switcher = NgwConnectionSwitcher(manager)
+
+    assert switcher.switch(second_connection.id, "new-auth")
+    assert manager.current_connection_id == second_connection.id
+    assert manager.current_connection == NgwConnection(
+        second_connection.id,
+        second_connection.name,
+        second_connection.url,
+        "new-auth",
+    )
+    assert repository.saved_snapshot is not None
+    assert (
+        repository.saved_snapshot.current_connection_id == second_connection.id
+    )
+
+    repository.saved_snapshot = None
+
+    assert not switcher.switch(second_connection.id, "new-auth")
+    assert repository.saved_snapshot is None
 
 
 def test_repository_persists_old_connection_ids(qgis_app) -> None:

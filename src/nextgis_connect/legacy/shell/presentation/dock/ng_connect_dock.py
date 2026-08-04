@@ -188,6 +188,9 @@ from nextgis_connect.legacy.ngw.qt.qt_ngw_resource_model_job_error import (
 from nextgis_connect.legacy.ngw.resources.creation.vector_layer_creation_dialog import (
     VectorLayerCreationDialog,
 )
+from nextgis_connect.legacy.ngw_connection.application.connection_switcher import (
+    NgwConnectionSwitcher,
+)
 from nextgis_connect.legacy.ngw_connection.application.connections_manager import (
     NgwConnectionsManager,
 )
@@ -196,6 +199,10 @@ from nextgis_connect.legacy.ngw_connection.domain.connection import (
 )
 from nextgis_connect.legacy.ngw_connection.presentation.connection_edit_dialog import (
     NgwConnectionEditDialog,
+)
+from nextgis_connect.legacy.ngw_connection.presentation.connection_switch_menu import (
+    ConnectionSwitcherToolButton,
+    ConnectionSwitchMenu,
 )
 from nextgis_connect.legacy.ngw_connection.presentation.diagnostics.dialog import (
     NgwConnectionDiagnosticsDialog,
@@ -319,6 +326,7 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
         self.__is_tree_overlay_visible = False
         self.__promo_banner_container: Optional[QFrame] = None
         self.__search_menu = None
+        self.__connection_switch_menu: Optional[ConnectionSwitchMenu] = None
         self.__is_closed = False
         self.__is_project_export_action_registered = False
         self.__plugin_update_task: Optional[PluginUpdateCheckTask] = None
@@ -493,7 +501,12 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
 
         self.main_tool_bar.addSeparator()
 
-        self.main_tool_bar.addAction(self.actionSettings)
+        self.settings_button = ConnectionSwitcherToolButton()
+        self.settings_button.setDefaultAction(self.actionSettings)
+        self.settings_button.middle_pressed.connect(
+            self.__show_connection_switch_menu
+        )
+        self.main_tool_bar.addWidget(self.settings_button)
         self.main_tool_bar.addAction(self.actionHelp)
 
         self.resource_model = QNGWResourceTreeModel(self)
@@ -1975,6 +1988,45 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
         self.iface.showOptionsDialog(
             self.iface.mainWindow(), "NextGIS Connect"
         )
+
+    @pyqtSlot()
+    def __show_connection_switch_menu(self) -> None:
+        if self.__connection_switch_menu is not None:
+            self.__connection_switch_menu.deleteLater()
+
+        connections_manager = NgwConnectionsManager()
+        menu = ConnectionSwitchMenu(
+            connections_manager.connections,
+            connections_manager.current_connection_id,
+            self.settings_button,
+        )
+        menu.switch_requested.connect(self.__switch_connection)
+        self.__connection_switch_menu = menu
+
+        popup_position = self.settings_button.mapToGlobal(
+            QPoint(0, self.settings_button.height())
+        )
+        menu.popup(popup_position)
+
+    @pyqtSlot(str, object)
+    def __switch_connection(
+        self,
+        connection_id: str,
+        auth_config_id: Optional[str],
+    ) -> None:
+        connections_manager = NgwConnectionsManager()
+        plugin = NgConnectInterface.instance()
+        connections_manager.connection_updated.connect(
+            plugin.connection_updated.emit
+        )
+        switcher = NgwConnectionSwitcher(connections_manager)
+        if not switcher.switch(connection_id, auth_config_id):
+            return
+
+        plugin.settings_changed.emit()
+
+        self.search_panel.set_connection_id(connection_id)
+        self.reinit_tree(force=True)
 
     def add_to_web_gis_action(
         self,
