@@ -81,7 +81,9 @@ class PluginPanelToolBar(QToolBar):
         self.setContextMenuPolicy(Qt.ContextMenuPolicy.PreventContextMenu)
         self.setFloatable(False)
         self.setMovable(False)
-        self.setIconSize(QSize(self.ICON_SIZE, self.ICON_SIZE))
+        self._fixed_icon_size = QSize(self.ICON_SIZE, self.ICON_SIZE)
+        self.iconSizeChanged.connect(self._restore_fixed_icon_size)
+        self.setIconSize(self._fixed_icon_size)
         self.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonIconOnly)
 
         self._add_action(
@@ -131,6 +133,13 @@ class PluginPanelToolBar(QToolBar):
             button.setPopupMode(popup_mode)
 
         return button
+
+    @pyqtSlot(QSize)
+    def _restore_fixed_icon_size(self, icon_size: QSize) -> None:
+        if icon_size == self._fixed_icon_size:
+            return
+
+        self.setIconSize(self._fixed_icon_size)
 
     @pyqtSlot()
     def _emit_settings_middle_clicked(self) -> None:

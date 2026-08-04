@@ -1,6 +1,6 @@
 from typing import Tuple
 
-from qgis.PyQt.QtCore import QPoint, Qt, QTimer
+from qgis.PyQt.QtCore import QPoint, QSize, Qt, QTimer
 from qgis.PyQt.QtTest import QTest
 from qgis.PyQt.QtWidgets import (
     QAction,
@@ -8,6 +8,7 @@ from qgis.PyQt.QtWidgets import (
     QMainWindow,
     QMenu,
     QStyle,
+    QToolBar,
     QToolButton,
     QVBoxLayout,
     QWidget,
@@ -215,6 +216,25 @@ class TestPluginPanelToolBar:
         assert triggered_actions == [actions.settings]
 
         main_window.deleteLater()
+
+    def test_toolbar_restores_icon_size_after_external_update(
+        self,
+        qgis_app,
+    ) -> None:
+        del qgis_app
+        parent = QWidget()
+        actions = self._create_actions(parent)
+        toolbar = PluginPanelToolBar(actions, parent)
+        expected_size = QSize(
+            PluginPanelToolBar.ICON_SIZE,
+            PluginPanelToolBar.ICON_SIZE,
+        )
+
+        QToolBar.setIconSize(toolbar, QSize(16, 16))
+
+        assert toolbar.iconSize() == expected_size
+
+        parent.deleteLater()
 
     def _create_actions(
         self,
