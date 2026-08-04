@@ -17,6 +17,12 @@
 from pathlib import Path
 from typing import Iterable, Protocol, Set
 
+from nextgis_connect.legacy.detached_editing.utils import (
+    ContainerError,
+    container_path,
+    is_ngw_container,
+)
+
 
 class ProjectStorageUsage(Protocol):
     """Inspect storage paths used by the current project."""
@@ -40,12 +46,7 @@ class QgisProjectStorageUsage:
         """Return detached container paths used by the current QGIS project."""
         try:
             from qgis.core import QgsProject
-
-            from nextgis_connect.legacy.detached_editing.utils import (
-                container_path,
-                is_ngw_container,
-            )
-        except Exception:
+        except ImportError:
             return set()
 
         result: Set[Path] = set()
@@ -54,7 +55,7 @@ class QgisProjectStorageUsage:
                 continue
             try:
                 result.add(container_path(layer))
-            except Exception:
+            except (ContainerError, TypeError):
                 continue
         return result
 

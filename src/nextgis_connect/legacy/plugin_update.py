@@ -15,7 +15,6 @@
 # with this program; if not, see <https://www.gnu.org/licenses/>.
 
 import re
-import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 from typing import Callable, Iterable, List, Optional, Sequence
 
@@ -38,6 +37,7 @@ from nextgis_connect.legacy.ngw_connection.domain.connection import (
 from nextgis_connect.platform.logging import logger
 from nextgis_connect.platform.qgis.compat import parse_version
 from nextgis_connect.platform.tasks import NgConnectTask
+from nextgis_connect.platform.xml_utils import XmlParseError
 
 PLUGIN_REPOSITORIES_GROUP = "app/plugin_repositories"
 OFFICIAL_REPOSITORY_NAME = "QGIS Official Plugin Repository"
@@ -204,7 +204,7 @@ class PluginUpdateChecker:
                 latest_version = QgisPluginRepositoryParser.latest_version(
                     self._fetch_payload(repository, feedback)
                 )
-            except (ET.ParseError, ValueError, RuntimeError) as error:
+            except (XmlParseError, ValueError, RuntimeError) as error:
                 errors.append(f"{repository.name}: {error}")
                 continue
 

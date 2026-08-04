@@ -451,7 +451,7 @@ class DetachedContainerFactory:
         fields_name = ", ".join(metadata.keys())
         values = ", ".join(metadata.values())
         cursor.execute(
-            f"INSERT INTO ngw_metadata ({fields_name}) VALUES ({values})"  # nosec B608
+            f"INSERT INTO ngw_metadata ({fields_name}) VALUES ({values})"
         )
 
         fields_tuple_generator = (
@@ -549,12 +549,12 @@ class DetachedContainerFactory:
             INSERT INTO ngw_features_metadata (fid, ngw_fid)
                 SELECT {fid_field}, {fid_field}
                 FROM {wrap_sql_table_name(table_name)}
-            """  # nosec B608
+            """
         )
 
     def __update_sync_date(self, cursor: sqlite3.Cursor) -> None:
         cursor.execute(
-            f"UPDATE ngw_metadata SET sync_date='{datetime.now().isoformat()}'"  # nosec B608
+            f"UPDATE ngw_metadata SET sync_date='{datetime.now().isoformat()}'"
         )
 
     def __check_fields(

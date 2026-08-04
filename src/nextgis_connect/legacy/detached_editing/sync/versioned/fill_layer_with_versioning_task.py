@@ -90,7 +90,7 @@ class FillLayerWithVersioningTask(DetachedEditingTask):
                 make_connection(self._container_path)
             ) as connection, closing(connection.cursor()) as cursor:
                 cursor.execute(
-                    f"UPDATE ngw_metadata SET sync_date='{sync_date}'"  # nosec B608
+                    f"UPDATE ngw_metadata SET sync_date='{sync_date}'"
                 )
                 connection.commit()
 

@@ -15,11 +15,11 @@
 # with this program; if not, see <https://www.gnu.org/licenses/>.
 
 import shutil
-import subprocess
+import subprocess  # nosec B404
 import sys
 import time
 from pathlib import Path
-from typing import Callable, TypeVar, Union
+from typing import Callable, List, TypeVar, Union
 
 PathLike = Union[str, Path]
 T = TypeVar("T")
@@ -124,22 +124,27 @@ def reveal_in_file_manager(file_path: Path) -> None:
     _reveal_in_linux(path)
 
 
+def _launch_file_manager(command: List[str]) -> None:
+    """Launch a known system file manager command without a shell."""
+    subprocess.Popen(command, close_fds=True)  # nosec B603
+
+
 def _reveal_in_windows(path: Path) -> None:
     # Use Windows Explorer. '/select,' highlights the file in its folder.
     if path.is_dir():
-        subprocess.Popen(["explorer", str(path)], close_fds=True)
+        _launch_file_manager(["explorer", str(path)])
         return
 
-    subprocess.Popen(["explorer", "/select,", str(path)], close_fds=True)
+    _launch_file_manager(["explorer", "/select,", str(path)])
 
 
 def _reveal_in_macos(path: Path) -> None:
     # Use Finder. '-R' reveals the file.
     if path.is_dir():
-        subprocess.Popen(["/usr/bin/open", str(path)], close_fds=True)
+        _launch_file_manager(["/usr/bin/open", str(path)])
         return
 
-    subprocess.Popen(["/usr/bin/open", "-R", str(path)], close_fds=True)
+    _launch_file_manager(["/usr/bin/open", "-R", str(path)])
 
 
 def _reveal_in_linux(path: Path) -> None:
@@ -149,4 +154,4 @@ def _reveal_in_linux(path: Path) -> None:
 
 def _open_base_directory_with_xdg(path: Path) -> None:
     directory = path if path.is_dir() else path.parent
-    subprocess.Popen(["xdg-open", str(directory)], close_fds=True)
+    _launch_file_manager(["xdg-open", str(directory)])

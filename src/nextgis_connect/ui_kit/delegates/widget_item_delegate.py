@@ -103,8 +103,8 @@ class WidgetItemDelegate(QAbstractItemDelegate):
         try:
             if self._has_valid_item_view():
                 self._pool.full_clear()
-        except Exception:
-            pass
+        except RuntimeError:
+            logger.debug("Delegate cleanup skipped for deleted Qt object")
 
     @staticmethod
     def _is_qobject_deleted(qobject: Optional[QObject]) -> bool:

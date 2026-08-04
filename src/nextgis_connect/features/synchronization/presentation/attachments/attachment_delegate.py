@@ -64,6 +64,7 @@ from nextgis_connect.legacy.detached_editing.identification.attachments_model im
 from nextgis_connect.legacy.detached_editing.identification.settings import (
     IdentificationSettings,
 )
+from nextgis_connect.platform.logging import logger
 from nextgis_connect.ui_kit.delegates.widget_item_delegate import (
     WidgetItemDelegate,
 )
@@ -797,8 +798,8 @@ class AttachmentDelegate(WidgetItemDelegate):
         # Remove extra inner text margins for precise alignment
         try:
             title_edit.setTextMargins(0, 0, 0, 0)
-        except Exception:
-            pass
+        except AttributeError:
+            logger.debug("QLineEdit.setTextMargins is unavailable")
 
         title_edit.textEdited.connect(
             lambda _: self.commitData.emit(container)
@@ -824,8 +825,8 @@ class AttachmentDelegate(WidgetItemDelegate):
         )
         try:
             desc_edit.setTextMargins(0, 0, 0, 0)
-        except Exception:
-            pass
+        except AttributeError:
+            logger.debug("QLineEdit.setTextMargins is unavailable")
         # Keep default frame/padding to indicate edit mode
         desc_edit.setFont(QFont(option.font))
         desc_edit.textEdited.connect(lambda _: self.commitData.emit(container))
@@ -860,8 +861,8 @@ class AttachmentDelegate(WidgetItemDelegate):
             # Close the editor on click
             try:
                 edit_menu_action.triggered.connect(self.close_current_editor)
-            except Exception:
-                pass
+            except RuntimeError:
+                logger.debug("Cannot connect destroyed edit action")
 
         # Recompute layout with actual tool button size to avoid mismatch
         layout = self._compute_layout(
@@ -1081,8 +1082,8 @@ class AttachmentDelegate(WidgetItemDelegate):
                 self._current_editor,
                 AttachmentDelegate.EndEditHint.NoHint,
             )
-        except Exception:
-            pass
+        except RuntimeError:
+            logger.debug("Cannot close an already destroyed editor")
 
         if self._has_valid_item_view():
             self.item_view().setFocus()

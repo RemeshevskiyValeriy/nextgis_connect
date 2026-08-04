@@ -37,6 +37,7 @@ from nextgis_connect.features.synchronization.infrastructure.storage.storage_cle
     StorageCleanupService,
 )
 from nextgis_connect.legacy.detached_editing.utils import (
+    ContainerError,
     container_metadata,
     container_path,
     is_ngw_container,
@@ -231,7 +232,7 @@ class CacheMaintenanceService:
         for container_file in Path(self.cache_directory).glob("**/*.gpkg"):
             try:
                 metadata = container_metadata(container_file)
-            except Exception:
+            except ContainerError:
                 continue
 
             domain_connections = connections_by_domain_uuid.get(

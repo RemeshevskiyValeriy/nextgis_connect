@@ -15,11 +15,11 @@
 # with this program; if not, see <https://www.gnu.org/licenses/>.
 
 import configparser
-import xml.etree.ElementTree as ET
 from pathlib import Path
 from typing import Optional
 
 from nextgis_connect.platform.qgis.compat import parse_version
+from nextgis_connect.platform.xml_utils import parse_xml_bytes
 from nextgis_connect.plugin.plugin_interface import NgConnectInterface
 from nextgis_connect.shared.constants import PACKAGE_NAME, PLUGIN_NAME
 
@@ -27,7 +27,7 @@ from nextgis_connect.shared.constants import PACKAGE_NAME, PLUGIN_NAME
 class QgisPluginRepositoryParser:
     @classmethod
     def latest_version(cls, payload: bytes) -> Optional[str]:
-        xml_root = ET.fromstring(payload)
+        xml_root = parse_xml_bytes(payload)
 
         latest_version = None
         latest_parsed_version = None

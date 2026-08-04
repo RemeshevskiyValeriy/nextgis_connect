@@ -202,7 +202,7 @@ class ChangesApplier(ABC):
             SELECT backup
             FROM ngw_removed_features
             WHERE fid IN ({placeholders});
-            """,  # nosec B608
+            """,
             removed_fids,
         )
 

@@ -14,7 +14,6 @@
 # You should have received a copy of the GNU General Public License along
 # with this program; if not, see <https://www.gnu.org/licenses/>.
 
-import xml.etree.ElementTree as ET
 from typing import TYPE_CHECKING
 
 from qgis.core import Qgis, QgsFeedback
@@ -31,6 +30,7 @@ from nextgis_connect.legacy.ngw_connection.domain.diagnostics import (
 )
 from nextgis_connect.platform.qgis.compat import parse_version
 from nextgis_connect.platform.qgis.errors import NgConnectError, NgwError
+from nextgis_connect.platform.xml_utils import XmlParseError
 
 from .base import BaseConnectionCheck, UpdateReporter
 
@@ -100,7 +100,7 @@ class PluginVersionCheck(BaseConnectionCheck):
             latest_version = QgisPluginRepositoryParser.latest_version(
                 self._as_bytes(response)
             )
-        except (ET.ParseError, ValueError) as error:
+        except (XmlParseError, ValueError) as error:
             return self._warning(
                 self.tr("The plugin repository returned invalid XML."),
                 issue=self._server_issue(

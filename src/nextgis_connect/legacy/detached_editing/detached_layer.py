@@ -716,7 +716,7 @@ class DetachedLayer(QObject):
                     f"""
                     INSERT INTO ngw_features_metadata (fid) VALUES {added_fids};
                     INSERT INTO ngw_added_features (fid) VALUES {added_fids};
-                    """  # nosec B608
+                    """
                 )
 
                 connection.commit()
@@ -1324,7 +1324,7 @@ class DetachedLayer(QObject):
             SELECT fid
             FROM ngw_added_features
             WHERE fid in ({placeholders})
-        """.format(placeholders=",".join(map(str, feature_ids)))  # nosec B608
+        """.format(placeholders=",".join(map(str, feature_ids)))
         cursor.execute(fetch_added_query)
         return set(row[0] for row in cursor.fetchall())
 
@@ -1440,7 +1440,7 @@ class DetachedLayer(QObject):
             f"""
             DELETE FROM ngw_features_metadata
             WHERE fid IN ({joined_fids}) AND ngw_fid IS NULL;
-            """  # nosec B608
+            """
         )
 
     def __add_remove_records(
@@ -1483,29 +1483,29 @@ class DetachedLayer(QObject):
         script = f"""
             INSERT INTO ngw_removed_features (fid, backup)
                 VALUES {removed_records};
-        """  # nosec B608
+        """
 
         if len(fields_backups) > 0:
             script += f"""
             DELETE FROM ngw_updated_attributes
                 WHERE fid in ({joined_removed_fids});
-            """  # nosec B608
+            """
         if len(geometries_backups) > 0:
             script += f"""
             DELETE FROM ngw_updated_geometries
                 WHERE fid in ({joined_removed_fids});
-            """  # nosec B608
+            """
         script += f"""
             DELETE FROM ngw_features_attachments
                 WHERE fid in ({joined_removed_fids});
-        """  # nosec B608
+        """
         if len(description_backups) > 0:
             script += f"""
             DELETE FROM ngw_updated_descriptions
                 WHERE fid in ({joined_removed_fids});
             DELETE FROM ngw_features_descriptions
                 WHERE fid in ({joined_removed_fids});
-            """  # nosec B608
+            """
 
         cursor.executescript(script)
 
@@ -1519,7 +1519,7 @@ class DetachedLayer(QObject):
                 SELECT fid, attribute, backup
                 FROM ngw_updated_attributes
                 WHERE fid IN ({joined_fids})
-                """  # nosec B608
+                """
             )
         }
 
@@ -1533,7 +1533,7 @@ class DetachedLayer(QObject):
                 SELECT fid, backup
                 FROM ngw_updated_geometries
                 WHERE fid IN ({joined_fids})
-                """  # nosec B608
+                """
             )
         }
 

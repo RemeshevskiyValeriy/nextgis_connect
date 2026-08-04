@@ -16,7 +16,6 @@
 
 import os
 import tempfile
-import xml.etree.ElementTree as ElementTree
 import zipfile
 from dataclasses import dataclass
 from pathlib import Path
@@ -40,6 +39,14 @@ from nextgis_connect.platform.qgis.compat import DataType
 from nextgis_connect.platform.qgis.errors import (
     DataPreparationError,
     NgConnectError,
+)
+from nextgis_connect.platform.xml_utils import (
+    XmlElement,
+    XmlParseError,
+    create_xml_element,
+    create_xml_subelement,
+    parse_xml_file,
+    write_xml_tree,
 )
 from qgis.core import (
     Qgis,
@@ -529,11 +536,9 @@ class RasterUploadPreparer:
             self._dataset_geotransform_text(raster_path),
         )
 
-        xml_tree = ElementTree.ElementTree(root)
-        ElementTree.indent(xml_tree, space="  ")
-        xml_tree.write(
-            str(output_path),
-            encoding="utf-8",
+        write_xml_tree(
+            root,
+            output_path,
             xml_declaration=False,
         )
 
@@ -569,21 +574,19 @@ class RasterUploadPreparer:
 
         return candidates
 
-    def _load_aux_xml_root(
-        self, sidecar_path: Optional[Path]
-    ) -> ElementTree.Element:
+    def _load_aux_xml_root(self, sidecar_path: Optional[Path]) -> XmlElement:
         """Load an aux.xml document root or create a new PAM dataset."""
         if sidecar_path is None:
-            return ElementTree.Element("PAMDataset")
+            return create_xml_element("PAMDataset")
 
         try:
-            root = ElementTree.parse(str(sidecar_path)).getroot()
-        except (ElementTree.ParseError, OSError):
+            root = parse_xml_file(sidecar_path)
+        except (OSError, XmlParseError):
             logger.warning(
                 "Cannot parse aux.xml sidecar %s, it will be recreated",
                 sidecar_path,
             )
-            return ElementTree.Element("PAMDataset")
+            return create_xml_element("PAMDataset")
 
         if root.tag != "PAMDataset":
             logger.warning(
@@ -591,13 +594,13 @@ class RasterUploadPreparer:
                 root.tag,
                 sidecar_path,
             )
-            return ElementTree.Element("PAMDataset")
+            return create_xml_element("PAMDataset")
 
         return root
 
     def _set_aux_xml_text(
         self,
-        root: ElementTree.Element,
+        root: XmlElement,
         element_name: str,
         text: Optional[str],
     ) -> None:
@@ -609,7 +612,7 @@ class RasterUploadPreparer:
             return
 
         if element is None:
-            element = ElementTree.SubElement(root, element_name)
+            element = create_xml_subelement(root, element_name)
 
         element.text = text
 

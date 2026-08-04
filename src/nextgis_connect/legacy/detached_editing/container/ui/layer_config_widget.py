@@ -101,7 +101,7 @@ class DetachedLayerConfigPage(QgsMapLayerConfigWidget):
                 UPDATE ngw_metadata
                 SET
                     is_auto_sync_enabled={wrap_sql_value(new_autosync_state)}
-                """  # nosec B608
+                """
             )
 
             connection.commit()
