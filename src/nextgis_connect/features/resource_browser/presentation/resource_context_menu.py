@@ -476,7 +476,7 @@ class ResourceContextMenuFactory(QObject):
             ResourceKind.VECTOR_LAYER,
             ResourceKind.QGIS_VECTOR_STYLE,
         ):
-            return self.tr("Synchronized layer")
+            return self.tr("Synchronizable layer")
         if resource_kind in (
             ResourceKind.RASTER_LAYER,
             ResourceKind.QGIS_RASTER_STYLE,

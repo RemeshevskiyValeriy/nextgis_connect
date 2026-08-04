@@ -20,13 +20,14 @@
 
 from typing import Tuple
 
-from qgis.core import QgsApplication, QgsProviderRegistry
+from qgis.core import QgsApplication
 
 from nextgis_connect.platform.qgis.errors import (
     ErrorCode,
     NgwError,
     ResourcePermissionError,
 )
+from nextgis_connect.platform.qgis.wms_uri import QgisWmsUriFactory
 
 from .ngw_resource import NGWResource
 from .ngw_wms_connection import NGWWmsConnection
@@ -64,10 +65,6 @@ class NGWWmsLayer(NGWResource):
                 code=ErrorCode.InvalidResource,
             )
 
-        provider_regstry = QgsProviderRegistry.instance()
-        assert provider_regstry is not None
-        wms_metadata = provider_regstry.providerMetadata("wms")
-        assert wms_metadata is not None
         uri_params = {
             "format": layer_params["imgformat"],
             "crs": f"EPSG:{layer_params['srs']['id']}",
@@ -80,7 +77,7 @@ class NGWWmsLayer(NGWResource):
                     "password": connection_info["password"],
                 }
             )
-        url = wms_metadata.encodeUri(uri_params)
+        url = QgisWmsUriFactory.create(uri_params)
         for layer in layers.split(","):
             url += f"&layers={layer}&styles"
 

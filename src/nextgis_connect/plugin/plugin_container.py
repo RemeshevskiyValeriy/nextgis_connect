@@ -482,6 +482,7 @@ class PluginContainer:
             ),
         )
 
+        layer_menu_icon = plugin_icon("branding/connect_logo.svg")
         for action in ng_layer_actions:
             for layer_type in (LayerType.Vector, LayerType.Raster):
                 self.__layer_tree_action_registry.register(
@@ -489,6 +490,7 @@ class PluginContainer:
                     PLUGIN_NAME,
                     layer_type,
                     all_layers=True,
+                    menu_icon=layer_menu_icon,
                 )
 
         self.__create_ngw_vector_layer_source_action = (

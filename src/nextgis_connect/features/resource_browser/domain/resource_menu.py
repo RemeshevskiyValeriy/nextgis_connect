@@ -780,11 +780,31 @@ class ResourceMenuPolicy:
         resource: ResourceMenuItem,
     ) -> List[ResourceMenuSubmenu]:
         submenus: List[ResourceMenuSubmenu] = []
+        submenu_sections = self._creation_submenu_sections(resource)
+        if len(submenu_sections) > 0:
+            submenus.append(
+                ResourceMenuSubmenu(
+                    kind=ResourceMenuSubmenuKind.CREATE,
+                    sections=submenu_sections,
+                )
+            )
+
+        return submenus
+
+    def _creation_submenu_sections(
+        self,
+        resource: ResourceMenuItem,
+    ) -> Tuple[ResourceMenuSubmenuSection, ...]:
         create_in_resource_actions: List[ResourceMenuAction] = []
         create_for_resource_actions: List[ResourceMenuAction] = []
         if resource.kind == ResourceKind.GROUP:
-            create_in_resource_actions.extend(self._RESOURCE_CREATION_ACTIONS)
-        if resource.kind in self._FEATURE_SERVICE_KINDS:
+            create_in_resource_actions.extend(
+                (
+                    ResourceMenuAction.CREATE_GROUP,
+                    ResourceMenuAction.CREATE_VECTOR_LAYER,
+                )
+            )
+        if resource.kind == ResourceKind.VECTOR_LAYER:
             create_in_resource_actions.append(ResourceMenuAction.CREATE_FORM)
         if resource.kind in self._WEB_MAP_KINDS:
             create_for_resource_actions.append(
@@ -818,15 +838,7 @@ class ResourceMenuPolicy:
                     actions=tuple(create_for_resource_actions),
                 )
             )
-        if len(submenu_sections) > 0:
-            submenus.append(
-                ResourceMenuSubmenu(
-                    kind=ResourceMenuSubmenuKind.CREATE,
-                    sections=tuple(submenu_sections),
-                )
-            )
-
-        return submenus
+        return tuple(submenu_sections)
 
     def _can_add_to_qgis(
         self,

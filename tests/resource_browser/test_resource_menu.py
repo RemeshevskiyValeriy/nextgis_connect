@@ -259,6 +259,58 @@ class TestResourceMenuPolicy:
             ),
         )
 
+    def test_toolbar_creation_actions_are_limited_to_groups(self) -> None:
+        policy = ResourceMenuPolicy()
+        group_context = ResourceMenuContext(
+            resources=(ResourceMenuItem(kind=ResourceKind.GROUP),)
+        )
+        vector_context = ResourceMenuContext(
+            resources=(ResourceMenuItem(kind=ResourceKind.VECTOR_LAYER),)
+        )
+        style_context = ResourceMenuContext(
+            resources=(ResourceMenuItem(kind=ResourceKind.QGIS_VECTOR_STYLE),)
+        )
+
+        assert policy.is_resource_creation_action_available(
+            group_context,
+            ResourceMenuAction.CREATE_GROUP,
+        )
+        assert policy.is_resource_creation_action_available(
+            group_context,
+            ResourceMenuAction.CREATE_VECTOR_LAYER,
+        )
+        assert not policy.is_resource_creation_action_available(
+            vector_context,
+            ResourceMenuAction.CREATE_GROUP,
+        )
+        assert not policy.is_resource_creation_action_available(
+            style_context,
+            ResourceMenuAction.CREATE_GROUP,
+        )
+
+    def test_postgis_layer_does_not_expose_form_creation(self) -> None:
+        context = ResourceMenuContext(
+            resources=(ResourceMenuItem(kind=ResourceKind.POSTGIS_LAYER),)
+        )
+        policy = ResourceMenuPolicy()
+        layout = policy.create_layout(context)
+        create_submenu = self._first_submenu(
+            layout,
+            ResourceMenuSubmenuKind.CREATE,
+        )
+
+        assert create_submenu.sections == (
+            ResourceMenuSubmenuSection(
+                label=ResourceMenuSectionLabel.CREATE_FOR_RESOURCE,
+                actions=(
+                    ResourceMenuAction.CREATE_WFS_SERVICE,
+                    ResourceMenuAction.CREATE_OGCF_SERVICE,
+                    ResourceMenuAction.CREATE_WMS_SERVICE,
+                ),
+            ),
+        )
+        assert ResourceMenuAction.CREATE_FORM not in self._all_actions(layout)
+
     def test_group_create_in_resource_actions_are_grouped(self) -> None:
         context = ResourceMenuContext(
             resources=(ResourceMenuItem(kind=ResourceKind.GROUP),)
@@ -673,7 +725,7 @@ class TestResourceContextMenuFactory:
         ]
         assert all(isinstance(submenu, QMenu) for submenu in submenus)
         assert [action.text() for action in submenus[0].actions()] == [
-            "Synchronized layer",
+            "Synchronizable layer",
             "MVT",
             "TMS layer",
         ]

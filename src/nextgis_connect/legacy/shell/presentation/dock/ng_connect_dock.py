@@ -38,6 +38,7 @@ from qgis.core import (
     Qgis,
     QgsFileUtils,
     QgsLayerTreeLayer,
+    QgsLayerTreeNode,
     QgsLayerTreeRegistryBridge,
     QgsMapLayer,
     QgsNetworkAccessManager,
@@ -2202,8 +2203,8 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
             resources=tuple(menu_items),
             current_layer_kind=current_layer_kind,
             is_developer_mode=NgConnectSettings().is_developer_mode,
-            has_qgis_selection=len(qgis_nodes) > 0,
-            has_project_layers=project.count() > 0,
+            has_qgis_selection=self.__has_uploadable_qgis_nodes(qgis_nodes),
+            has_project_layers=self.__has_uploadable_project_layers(project),
             can_update_style=can_update_style,
             can_add_style=can_add_style,
         )
@@ -2222,6 +2223,46 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
         return (
             not isinstance(geometry_resource, NGWAbstractVectorResource)
             or geometry_resource.geometry_type != GeometryType.Null
+        )
+
+    def __has_uploadable_project_layers(self, project: QgsProject) -> bool:
+        root = project.layerTreeRoot()
+        if root is None:
+            return False
+
+        return self.__has_uploadable_qgis_nodes(root.children())
+
+    def __has_uploadable_qgis_nodes(
+        self,
+        qgis_nodes: List[QgsLayerTreeNode],
+    ) -> bool:
+        for qgis_node in qgis_nodes:
+            if isinstance(qgis_node, QgsLayerTreeLayer):
+                qgis_layer = qgis_node.layer()
+                if self.__is_uploadable_qgis_layer(qgis_layer):
+                    return True
+                continue
+
+            children = getattr(qgis_node, "children", None)
+            if not callable(children):
+                continue
+
+            if self.__has_uploadable_qgis_nodes(children()):
+                return True
+
+        return False
+
+    def __is_uploadable_qgis_layer(
+        self,
+        qgis_layer: Optional[QgsMapLayer],
+    ) -> bool:
+        if qgis_layer is None:
+            return False
+
+        resource_job = QGISResourceJob()
+        return (
+            resource_job.isSuitableLayer(qgis_layer)
+            == resource_job.SUITABLE_LAYER
         )
 
     @pyqtSlot(QPoint)

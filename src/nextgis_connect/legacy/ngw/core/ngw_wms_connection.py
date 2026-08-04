@@ -20,13 +20,14 @@
 
 from typing import Any, Dict
 
-from qgis.core import QgsApplication, QgsProviderRegistry
+from qgis.core import QgsApplication
 
 from nextgis_connect.platform.qgis.errors import (
     ErrorCode,
     NgwError,
     ResourcePermissionError,
 )
+from nextgis_connect.platform.qgis.wms_uri import QgisWmsUriFactory
 
 from .ngw_resource import NGWResource, dict_to_object, list_dict_to_list_object
 
@@ -66,10 +67,6 @@ class NGWWmsConnection(NGWResource):
                 code=ErrorCode.InvalidResource,
             )
 
-        provider_regstry = QgsProviderRegistry.instance()
-        assert provider_regstry is not None
-        wms_metadata = provider_regstry.providerMetadata("wms")
-        assert wms_metadata is not None
         if (
             not hasattr(self, "wms")
             or self.wms is None
@@ -92,7 +89,7 @@ class NGWWmsConnection(NGWResource):
             uri_params["username"] = self.wms.username
             uri_params["password"] = self.wms.password
 
-        url = wms_metadata.encodeUri(uri_params)
+        url = QgisWmsUriFactory.create(uri_params)
         return (url, layer.display_name, "wms")
 
     @classmethod

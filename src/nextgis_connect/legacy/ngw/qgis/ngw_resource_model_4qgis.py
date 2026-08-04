@@ -222,6 +222,7 @@ class ValueRelation:
 class QGISResourceJob(NGWResourceModelJob):
     SUITABLE_LAYER = 0
     SUITABLE_LAYER_BAD_GEOMETRY = 1
+    SUITABLE_LAYER_UNSUPPORTED = 2
 
     _value_relations: Set[ValueRelation]
     _lookup_tables_id: Dict[ValueRelation, int]
@@ -246,8 +247,13 @@ class QGISResourceJob(NGWResourceModelJob):
 
         raise NgConnectError("Request was canceled")
 
-    def isSuitableLayer(self, qgs_map_layer: QgsVectorLayer):
+    def isSuitableLayer(self, qgs_map_layer: QgsMapLayer):
         layer_type = qgs_map_layer.type()
+        if layer_type == LayerType.VectorTile:
+            return self.SUITABLE_LAYER_UNSUPPORTED
+
+        if self._is_mbtiles_layer(qgs_map_layer):
+            return self.SUITABLE_LAYER_UNSUPPORTED
 
         if (
             layer_type == LayerType.Vector
@@ -256,6 +262,13 @@ class QGISResourceJob(NGWResourceModelJob):
             return self.SUITABLE_LAYER_BAD_GEOMETRY
 
         return self.SUITABLE_LAYER
+
+    def _is_mbtiles_layer(self, qgs_map_layer: QgsMapLayer) -> bool:
+        source = qgs_map_layer.source()
+        if not isinstance(source, str):
+            return False
+
+        return ".mbtiles" in source.casefold()
 
     def _ensure_no_geometry_supported(
         self,
@@ -278,6 +291,12 @@ class QGISResourceJob(NGWResourceModelJob):
 
     def importQGISMapLayer(self, qgs_map_layer, ngw_parent_resource):
         self._raise_if_canceled()
+        if (
+            self.isSuitableLayer(qgs_map_layer)
+            == self.SUITABLE_LAYER_UNSUPPORTED
+        ):
+            return []
+
         ngw_parent_resource.update()
         self._raise_if_canceled()
 
@@ -420,6 +439,15 @@ class QGISResourceJob(NGWResourceModelJob):
 
     def importQgsRasterLayer(self, qgs_raster_layer, ngw_parent_resource):
         self._raise_if_canceled()
+        if (
+            self.isSuitableLayer(qgs_raster_layer)
+            == self.SUITABLE_LAYER_UNSUPPORTED
+        ):
+            raise JobError(
+                f"Raster layer '{qgs_raster_layer.name()}' is not supported "
+                "for upload"
+            )
+
         new_layer_name = self.unique_resource_name(
             qgs_raster_layer.name(), ngw_parent_resource
         )
@@ -474,6 +502,18 @@ class QGISResourceJob(NGWResourceModelJob):
         ngw_parent_resource: NGWGroupResource,
     ) -> Optional[NGWVectorLayer]:
         self._raise_if_canceled()
+        if (
+            self.isSuitableLayer(qgs_vector_layer)
+            == self.SUITABLE_LAYER_UNSUPPORTED
+        ):
+            self.errorOccurred.emit(
+                JobError(
+                    f"Vector layer '{qgs_vector_layer.name()}' is not "
+                    "supported for upload"
+                )
+            )
+            return None
+
         self._ensure_no_geometry_supported(
             qgs_vector_layer,
             ngw_parent_resource.connection,
@@ -1270,6 +1310,13 @@ class QGISResourcesUploader(QGISResourceJob):
     def _check_quote(self, add_map: bool = False) -> None:
         def resource_type_for_layer(node: QgsLayerTreeNode) -> Optional[str]:
             layer = cast(QgsLayerTreeLayer, node).layer()
+            if (
+                layer is None
+                or self.isSuitableLayer(layer)
+                == self.SUITABLE_LAYER_UNSUPPORTED
+            ):
+                return None
+
             if isinstance(layer, QgsVectorLayer):
                 return "vector_layer"
             if isinstance(layer, QgsRasterLayer):
@@ -2120,6 +2167,15 @@ class NGWUpdateRasterLayer(QGISResourceJob):
                 QgsApplication.translate(
                     "QGISResourceJob", "uploading ({}%)"
                 ).format(percent),
+            )
+
+        if (
+            self.isSuitableLayer(self.qgis_layer)
+            == self.SUITABLE_LAYER_UNSUPPORTED
+        ):
+            raise JobError(
+                f"Raster layer '{self.qgis_layer.name()}' is not supported "
+                "for upload"
             )
 
         if not self.qgis_layer.crs().isValid():
