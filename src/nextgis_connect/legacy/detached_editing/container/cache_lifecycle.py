@@ -44,7 +44,10 @@ class CachedDetachedContainerLifecycle:
             metadata = container_metadata(container_path)
         except Exception:
             logger.exception("Could not read detached container metadata")
-            return False
+            return self.replace_with_empty_container(
+                container_path,
+                ngw_layer,
+            )
 
         if not self._is_same_remote_layer(metadata, ngw_layer, connection):
             if metadata.has_changes:

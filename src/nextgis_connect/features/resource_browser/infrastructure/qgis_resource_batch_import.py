@@ -58,7 +58,6 @@ from nextgis_connect.legacy.detached_editing.storage_service_factory import (
 )
 from nextgis_connect.legacy.detached_editing.utils import (
     detached_layer_uri,
-    is_ngw_container,
 )
 from nextgis_connect.legacy.ngw.core import (
     NGWGroupResource,
@@ -1160,9 +1159,7 @@ class QgisResourceBatchImporter(QObject):
                 connection.domain_uuid, vector_layer.resource_id
             )
         )
-        if detached_layer_path.exists() and is_ngw_container(
-            detached_layer_path
-        ):
+        if detached_layer_path.exists():
             is_ready = CachedDetachedContainerLifecycle().reconcile(
                 detached_layer_path,
                 vector_layer,

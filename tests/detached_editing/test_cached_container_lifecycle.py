@@ -1,5 +1,6 @@
 import shutil
 import uuid
+from contextlib import closing
 from unittest.mock import MagicMock
 
 from qgis.core import QgsProject, QgsVectorLayer
@@ -16,6 +17,7 @@ from nextgis_connect.features.synchronization.infrastructure.storage.detached_st
 from nextgis_connect.legacy.detached_editing.utils import (
     container_metadata,
     detached_layer_uri,
+    make_connection,
 )
 from nextgis_connect.legacy.ngw_connection import (
     NgwConnection,
@@ -113,6 +115,31 @@ class TestCachedContainerLifecycle(NgConnectTestCase):
         )
         self.assertTrue(metadata.is_not_initialized)
         self.assertEqual(metadata.features_count, 0)
+
+    @mock_container(TestData.Points)
+    def test_tree_add_recreates_broken_cached_container_without_user_error(
+        self, container_mock: MagicMock, qgs_layer: QgsVectorLayer
+    ) -> None:
+        ngw_layer = self.resource(TestData.Points)
+        container_path = self._move_to_cache(container_mock)
+        with closing(make_connection(container_path)) as connection:
+            connection.execute("PRAGMA foreign_keys = OFF")
+            connection.execute("DROP TABLE gpkg_contents")
+            connection.commit()
+
+        layer_params = self._collect_detached_layer_params(ngw_layer)
+
+        metadata = container_metadata(container_path)
+        self.assertTrue(metadata.is_not_initialized)
+        self.assertEqual(metadata.features_count, 0)
+        self.assertEqual(
+            layer_params,
+            (
+                detached_layer_uri(container_path),
+                ngw_layer.display_name,
+                "ogr",
+            ),
+        )
 
     @mock_container(TestData.Points)
     def test_tree_add_rebinds_container_after_connection_recreation(
