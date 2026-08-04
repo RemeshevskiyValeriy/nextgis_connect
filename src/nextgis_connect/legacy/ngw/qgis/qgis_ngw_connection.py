@@ -788,7 +788,7 @@ class QgsNgwConnection(QObject):
             retries = 0
             while retries < max_retry_count:
                 if retries > 0:
-                    logger.debug(f"Retrying. Attempt №{retries}")
+                    logger.debug(f"Retrying. Attempt #{retries}")
 
                 _, chunk_reply = self.__request_rep(
                     file_upload_url,
