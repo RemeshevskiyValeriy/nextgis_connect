@@ -432,12 +432,22 @@ class AttachmentsTab(QWidget):
     def set_read_only(self, read_only: bool) -> None:
         self._is_read_only = read_only
         self._attachments_model.set_editable(not read_only)
-        self._add_button.setEnabled(
-            not read_only
-            and self._feature_id is not None
-            and self._attachments_task is None
-        )
+        self._update_action_buttons_availability()
         self._view_wrapper.set_read_only(read_only)
+
+    def _update_action_buttons_availability(self, *arguments: Any) -> None:
+        del arguments
+
+        has_feature = self._feature_id is not None
+        is_ready = self._attachments_task is None
+        has_attachments = self._attachments_model.rowCount() > 0
+
+        self._add_button.setEnabled(
+            not self._is_read_only and has_feature and is_ready
+        )
+        self._extra_button.setEnabled(
+            has_feature and is_ready and has_attachments
+        )
 
     def close_editor(self) -> None:
         self._view_wrapper.view.close_current_editor()
@@ -549,6 +559,15 @@ class AttachmentsTab(QWidget):
 
         # Model
         self._attachments_model = AttachmentsModel([], self)
+        self._attachments_model.modelReset.connect(
+            self._update_action_buttons_availability
+        )
+        self._attachments_model.rowsInserted.connect(
+            self._update_action_buttons_availability
+        )
+        self._attachments_model.rowsRemoved.connect(
+            self._update_action_buttons_availability
+        )
         self._attachments_model.attachment_removed.connect(
             self._on_attachment_removed_from_model
         )
@@ -559,6 +578,7 @@ class AttachmentsTab(QWidget):
         self._attachments_proxy.setSourceModel(self._attachments_model)
         self._attachments_proxy.sort(0, Qt.SortOrder.AscendingOrder)
         self._view_wrapper.view.setModel(self._attachments_proxy)
+        self._update_action_buttons_availability()
 
     def _disconnect_attachment_signals(self) -> None:
         with suppress(RuntimeError, TypeError):
@@ -593,19 +613,15 @@ class AttachmentsTab(QWidget):
         if task.status() != QgsTask.TaskStatus.Complete:
             if task.keep_existing:
                 self._connect_attachment_signals(task.detached_layer)
-                self._add_button.setEnabled(not self._is_read_only)
-                self._extra_button.setEnabled(True)
             else:
                 self._attachments_model.set_attachments([])
-                self._add_button.setDisabled(True)
-                self._extra_button.setDisabled(True)
+            self._update_action_buttons_availability()
             self._view_wrapper.end_loading()
             return
 
         self._attachments_model.set_attachments(task.attachments)
         self._connect_attachment_signals(task.detached_layer)
-        self._add_button.setEnabled(not self._is_read_only)
-        self._extra_button.setEnabled(True)
+        self._update_action_buttons_availability()
         self._view_wrapper.end_loading()
         self._start_thumbnail_loading(task.attachments)
 

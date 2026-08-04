@@ -544,6 +544,45 @@ class TestIdentificationResultsWidget:
             tab.deleteLater()
             _restore_plugin_mock(previous_plugin)
 
+    def test_extra_actions_button_follows_attachment_count(
+        self,
+        qgis_app: QgsApplication,
+    ) -> None:
+        del qgis_app
+
+        _plugin, previous_plugin = _install_plugin_mock()
+        tab = AttachmentsTab()
+        tab._feature_id = 1
+
+        try:
+            tab.set_read_only(False)
+
+            assert tab._add_button.isEnabled()
+            assert not tab._extra_button.isEnabled()
+
+            tab._attachments_model.set_attachments(
+                [
+                    AttachmentMetadata(
+                        fid=1,
+                        aid=1,
+                        name="report.pdf",
+                        mime_type="application/pdf",
+                    )
+                ]
+            )
+
+            assert tab._add_button.isEnabled()
+            assert tab._extra_button.isEnabled()
+
+            tab._attachments_model.clear_attachments()
+
+            assert tab._add_button.isEnabled()
+            assert not tab._extra_button.isEnabled()
+        finally:
+            tab.close()
+            tab.deleteLater()
+            _restore_plugin_mock(previous_plugin)
+
     def test_download_task_finish_opens_pending_attachment(
         self,
         qgis_app: QgsApplication,
