@@ -6,7 +6,6 @@ from qgis.PyQt.QtWidgets import (
     QAction,
     QActionGroup,
     QMenu,
-    QToolButton,
     QWidget,
 )
 
@@ -20,25 +19,6 @@ from nextgis_connect.legacy.ngw_connection.presentation.connection_edit_dialog i
     LoginChoiceResolver,
     NextgisQgisUserAvailability,
 )
-
-
-class ConnectionSwitcherToolButton(QToolButton):
-    middle_pressed = pyqtSignal()
-
-    def mousePressEvent(self, event: QMouseEvent) -> None:
-        if event.button() == Qt.MouseButton.MiddleButton:
-            event.accept()
-            self.middle_pressed.emit()
-            return
-
-        super().mousePressEvent(event)
-
-    def mouseReleaseEvent(self, event: QMouseEvent) -> None:
-        if event.button() == Qt.MouseButton.MiddleButton:
-            event.accept()
-            return
-
-        super().mouseReleaseEvent(event)
 
 
 class ConnectionSwitchMenu(QMenu):

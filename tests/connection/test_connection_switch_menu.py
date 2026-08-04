@@ -2,7 +2,7 @@ from typing import List, Tuple
 
 from qgis.PyQt.QtCore import QPoint, Qt
 from qgis.PyQt.QtTest import QTest
-from qgis.PyQt.QtWidgets import QAction, QApplication
+from qgis.PyQt.QtWidgets import QApplication
 
 from nextgis_connect.legacy.ngw_connection.domain.connection import (
     NgwConnection,
@@ -16,7 +16,6 @@ from nextgis_connect.legacy.ngw_connection.presentation.connection_edit_dialog i
     NextgisQgisUserAvailability,
 )
 from nextgis_connect.legacy.ngw_connection.presentation.connection_switch_menu import (
-    ConnectionSwitcherToolButton,
     ConnectionSwitchMenu,
 )
 
@@ -66,41 +65,6 @@ class NextgisLoginChoiceResolverStub(LoginChoiceResolverStub):
             ],
             [],
         )
-
-
-def test_middle_mouse_opens_switcher_without_triggering_settings(
-    qgis_app,
-) -> None:
-    del qgis_app
-    button = ConnectionSwitcherToolButton()
-    settings_action = QAction("Settings", button)
-    settings_trigger_count = []
-    middle_press_count = []
-    settings_action.triggered.connect(
-        lambda: settings_trigger_count.append(True)
-    )
-    button.middle_pressed.connect(lambda: middle_press_count.append(True))
-    button.setDefaultAction(settings_action)
-    button.show()
-    menu = ConnectionSwitchMenu([], None, button)
-    button.middle_pressed.connect(
-        lambda: menu.popup(button.mapToGlobal(QPoint(0, button.height())))
-    )
-
-    QTest.mouseClick(button, Qt.MouseButton.MiddleButton)
-    QApplication.processEvents()
-
-    assert middle_press_count == [True]
-    assert settings_trigger_count == []
-    assert menu.isVisible()
-
-    menu.close()
-
-    QTest.mouseClick(button, Qt.MouseButton.LeftButton)
-
-    assert settings_trigger_count == [True]
-    menu.deleteLater()
-    button.deleteLater()
 
 
 def test_switch_menu_marks_current_connection_and_user(

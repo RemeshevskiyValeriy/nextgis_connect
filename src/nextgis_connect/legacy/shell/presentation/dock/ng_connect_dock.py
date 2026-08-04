@@ -51,7 +51,6 @@ from qgis.gui import QgisInterface, QgsDockWidget, QgsNewNameDialog
 from qgis.PyQt import uic
 from qgis.PyQt.QtCore import (
     QDir,
-    QEvent,
     QEventLoop,
     QFile,
     QFileInfo,
@@ -60,18 +59,13 @@ from qgis.PyQt.QtCore import (
     QItemSelectionModel,
     QModelIndex,
     QPoint,
-    QSize,
     Qt,
     QTemporaryFile,
     QTimer,
     QUrl,
     pyqtSlot,
 )
-from qgis.PyQt.QtGui import (
-    QContextMenuEvent,
-    QDesktopServices,
-    QResizeEvent,
-)
+from qgis.PyQt.QtGui import QDesktopServices
 from qgis.PyQt.QtNetwork import QNetworkReply, QNetworkRequest
 from qgis.PyQt.QtWidgets import (
     QAbstractButton,
@@ -88,8 +82,6 @@ from qgis.PyQt.QtWidgets import (
     QMenu,
     QMessageBox,
     QSizePolicy,
-    QToolBar,
-    QToolButton,
     QVBoxLayout,
 )
 from qgis.PyQt.QtXml import QDomDocument
@@ -202,7 +194,6 @@ from nextgis_connect.legacy.ngw_connection.presentation.connection_edit_dialog i
     NgwConnectionEditDialog,
 )
 from nextgis_connect.legacy.ngw_connection.presentation.connection_switch_menu import (
-    ConnectionSwitcherToolButton,
     ConnectionSwitchMenu,
 )
 from nextgis_connect.legacy.ngw_connection.presentation.diagnostics.dialog import (
@@ -255,6 +246,10 @@ from nextgis_connect.platform.qgis.errors import (
 )
 from nextgis_connect.plugin.plugin_interface import NgConnectInterface
 from nextgis_connect.shared.constants import PACKAGE_NAME, PLUGIN_NAME
+from nextgis_connect.shell.presentation.plugin_panel import (
+    PluginPanelToolBar,
+    PluginPanelToolBarActions,
+)
 from nextgis_connect.ui_kit.buttons.shining import ShiningButton
 from nextgis_connect.ui_kit.icons import (
     icon_to_base64,
@@ -435,10 +430,6 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
         connections_manager = NgwConnectionsManager()
         current_connection_id = connections_manager.current_connection_id
 
-        # Add toolbar
-        self.main_tool_bar = NGWPanelToolBar()
-        self.content.layout().addWidget(self.main_tool_bar)
-
         self.search_panel = SearchPanel(current_connection_id, self)
         NgConnectInterface.instance().settings_changed.connect(
             self.search_panel.on_settings_changed
@@ -457,60 +448,47 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
         self.menuDownload.setTitle(self.tr("Add to QGIS"))
         self.menuDownload.setIcon(plugin_icon("actions/cloud_download.svg"))
 
-        self.toolbuttonDownload = QToolButton()
-        self.toolbuttonDownload.setIcon(self.menuDownload.icon())
-        self.toolbuttonDownload.setText(self.menuDownload.title())
-        self.toolbuttonDownload.setToolTip(self.menuDownload.title())
-        self.toolbuttonDownload.clicked.connect(self.__trigger_default_import)
-        self.toolbuttonDownload.setProperty(
-            "NgConnectPanelUseMenuButtonWidth",
-            True,
+        self.download_action = QAction(
+            self.menuDownload.icon(),
+            self.menuDownload.title(),
+            self,
         )
+        self.download_action.setToolTip(self.menuDownload.title())
+        self.download_action.triggered.connect(self.__trigger_default_import)
         self.__set_resource_import_menu_visible(False)
-        self.main_tool_bar.addWidget(self.toolbuttonDownload)
 
-        self.toolbuttonUpload = QToolButton()
-        self.toolbuttonUpload.setPopupMode(
-            QToolButton.ToolButtonPopupMode.InstantPopup
+        self.upload_action = QAction(
+            self.menuUpload.icon(),
+            self.menuUpload.title(),
+            self,
         )
-        self.toolbuttonUpload.setMenu(self.menuUpload)
-        self.toolbuttonUpload.setIcon(self.menuUpload.icon())
-        self.toolbuttonUpload.setText(self.menuUpload.title())
-        self.toolbuttonUpload.setToolTip(self.menuUpload.title())
-        self.toolbuttonUpload.setProperty(
-            "NgConnectPanelUseMenuButtonWidth",
-            True,
-        )
-        self.main_tool_bar.addWidget(self.toolbuttonUpload)
-
-        self.main_tool_bar.addSeparator()
+        self.upload_action.setToolTip(self.menuUpload.title())
+        self.upload_action.setMenu(self.menuUpload)
 
         self.actionIdentify = NgConnectInterface.instance().detached_editing.identification_action
-        self.main_tool_bar.addAction(self.actionIdentify)
 
-        self.main_tool_bar.addSeparator()
+        self.__create_resource_creation_action()
+        self.__create_search_action()
 
-        self.__create_resource_creation_button()
-        self.main_tool_bar.addWidget(self.creation_button)
-
-        self.__create_search_button()
-        self.main_tool_bar.addWidget(self.search_button)
-
-        self.main_tool_bar.addAction(self.actionRefresh)
-
-        self.main_tool_bar.addSeparator()
-
-        self.main_tool_bar.addAction(self.actionOpenInBrowser)
-
-        self.main_tool_bar.addSeparator()
-
-        self.settings_button = ConnectionSwitcherToolButton()
-        self.settings_button.setDefaultAction(self.actionSettings)
-        self.settings_button.middle_pressed.connect(
+        toolbar_actions = PluginPanelToolBarActions(
+            add_to_qgis=self.download_action,
+            add_to_web_gis=self.upload_action,
+            identify=self.actionIdentify,
+            create_resource=self.creation_action,
+            search=self.search_action,
+            refresh=self.actionRefresh,
+            open_in_browser=self.actionOpenInBrowser,
+            settings=self.actionSettings,
+            help=self.actionHelp,
+        )
+        self.main_tool_bar = PluginPanelToolBar(
+            toolbar_actions,
+            self.content,
+        )
+        self.main_tool_bar.settings_middle_clicked.connect(
             self.__show_connection_switch_menu
         )
-        self.main_tool_bar.addWidget(self.settings_button)
-        self.main_tool_bar.addAction(self.actionHelp)
+        self.content.layout().insertWidget(0, self.main_tool_bar)
 
         self.resource_model = QNGWResourceTreeModel(self)
         self.resource_model.errorOccurred.connect(self.__model_error_process)
@@ -633,8 +611,6 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
         )
         self.__initialization_timer.start(0)
 
-        self.main_tool_bar.fix_icons_size()
-
         if HAS_NGSTD:
             self.__ngstd_connection = (
                 NGAccess.instance().userInfoUpdated.connect(
@@ -676,6 +652,11 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
 
         self.__is_closed = True
         self.__unregister_project_export_action()
+        self.__close_connection_switch_menu()
+        self.__safe_disconnect(
+            self.main_tool_bar.settings_middle_clicked,
+            self.__show_connection_switch_menu,
+        )
         self.__initialization_timer.stop()
         self.__safe_disconnect(
             self.__initialization_timer.timeout,
@@ -870,7 +851,7 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
         )
 
         # Search
-        self.search_button.setEnabled(self.resource_model.is_connected)
+        self.search_action.setEnabled(self.resource_model.is_connected)
         self.search_panel.setEnabled(self.resource_model.is_connected)
 
         if not self.resource_model.is_connected:
@@ -883,8 +864,8 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
             self.__resource_menu_controller.set_resource_creation_actions_enabled(
                 False
             )
-            self.toolbuttonUpload.setEnabled(False)
-            self.creation_button.setEnabled(False)
+            self.upload_action.setEnabled(False)
+            self.creation_action.setEnabled(False)
             self.__set_resource_import_menu_visible(False)
             self.actionUploadProjectViaImportExportMenu.setEnabled(False)
             return
@@ -933,7 +914,7 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
         self.__resource_menu_controller.update_resource_creation_actions(
             resource_menu_context
         )
-        self.toolbuttonUpload.setEnabled(
+        self.upload_action.setEnabled(
             self.__resource_menu_controller.has_available_add_to_web_gis_actions()
         )
         self.actionUploadProjectViaImportExportMenu.setEnabled(
@@ -944,7 +925,7 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
         self.__set_resource_import_menu_visible(
             self.__resource_menu_controller.has_available_alternative_resource_import_actions()
         )
-        self.toolbuttonDownload.setEnabled(
+        self.download_action.setEnabled(
             self.__resource_menu_controller.has_available_resource_import_actions()
         )
 
@@ -959,7 +940,7 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
             and ngw_resources[0].is_preview_supported
         )
 
-        self.creation_button.setEnabled(
+        self.creation_action.setEnabled(
             self.__resource_menu_controller.has_available_resource_creation_actions()
         )
 
@@ -993,7 +974,7 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
 
     @pyqtSlot()
     def __trigger_default_import(self) -> None:
-        if self.toolbuttonDownload.menu() is not None:
+        if self.download_action.menu() is not None:
             return
 
         action = self.__resource_menu_controller.resource_import_action(
@@ -1006,16 +987,10 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
 
     def __set_resource_import_menu_visible(self, visible: bool) -> None:
         if visible:
-            self.toolbuttonDownload.setPopupMode(
-                QToolButton.ToolButtonPopupMode.InstantPopup
-            )
-            self.toolbuttonDownload.setMenu(self.menuDownload)
+            self.download_action.setMenu(self.menuDownload)
             return
 
-        self.toolbuttonDownload.setMenu(None)
-        self.toolbuttonDownload.setPopupMode(
-            QToolButton.ToolButtonPopupMode.DelayedPopup
-        )
+        self.download_action.setMenu(None)
 
     def __is_style_transfer_compatible(
         self,
@@ -1899,7 +1874,7 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
             )
             NgConnectInterface.instance().notifier.display_exception(error)
 
-        self.__update_search_button()
+        self.__update_search_action()
         self.__is_reinit_tree = False
 
     def __cancel_active_loading(self) -> None:
@@ -1965,10 +1940,10 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
 
     def disable_tools(self):
         for widget in (
-            self.toolbuttonDownload,
-            self.toolbuttonUpload,
-            self.creation_button,
-            self.search_button,
+            self.download_action,
+            self.upload_action,
+            self.creation_action,
+            self.search_action,
             self.search_panel,
             self.actionOpenInBrowser,
         ):
@@ -1993,24 +1968,31 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
             self.iface.mainWindow(), "NextGIS Connect"
         )
 
-    @pyqtSlot()
-    def __show_connection_switch_menu(self) -> None:
-        if self.__connection_switch_menu is not None:
-            self.__connection_switch_menu.deleteLater()
+    @pyqtSlot(QPoint)
+    def __show_connection_switch_menu(
+        self,
+        popup_position: QPoint,
+    ) -> None:
+        self.__close_connection_switch_menu()
 
         connections_manager = NgwConnectionsManager()
         menu = ConnectionSwitchMenu(
             connections_manager.connections,
             connections_manager.current_connection_id,
-            self.settings_button,
+            self.main_tool_bar,
         )
         menu.switch_requested.connect(self.__switch_connection)
         self.__connection_switch_menu = menu
-
-        popup_position = self.settings_button.mapToGlobal(
-            QPoint(0, self.settings_button.height())
-        )
         menu.popup(popup_position)
+
+    def __close_connection_switch_menu(self) -> None:
+        menu = self.__connection_switch_menu
+        if menu is None:
+            return
+
+        self.__connection_switch_menu = None
+        menu.close()
+        menu.deleteLater()
 
     @pyqtSlot(str, object)
     def __switch_connection(
@@ -2028,7 +2010,6 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
             return
 
         plugin.settings_changed.emit()
-
         self.search_panel.set_connection_id(connection_id)
         self.reinit_tree(force=True)
 
@@ -4514,7 +4495,7 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
 
         self.reinit_tree(force=True)
 
-    def __create_search_button(self) -> None:
+    def __create_search_action(self) -> None:
         menu = QMenu()
 
         search_type_group = QActionGroup(menu)
@@ -4540,24 +4521,20 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
         by_metadata_action.setChecked(last_type == SearchType.ByMetadata)
         by_metadata_action.triggered.connect(self.__on_search_type_changed)
 
-        self.search_button = QToolButton()
-        self.search_button.setToolButtonStyle(
-            Qt.ToolButtonStyle.ToolButtonIconOnly
+        self.search_action = QAction(
+            plugin_icon("actions/filter.svg"),
+            self.tr("Search"),
+            self,
         )
-        self.search_button.setPopupMode(
-            QToolButton.ToolButtonPopupMode.DelayedPopup
-        )
-        self.search_button.setIcon(plugin_icon("actions/filter.svg"))
-        self.search_button.setText(self.tr("Search"))
-        self.search_button.setToolTip(
+        self.search_action.setToolTip(
             self.tr("Show resource search by name or metadata")
         )
-        self.search_button.setCheckable(True)
-        self.search_button.clicked.connect(self.__toggle_filter)
+        self.search_action.setCheckable(True)
+        self.search_action.triggered.connect(self.__toggle_filter)
 
         self.__search_menu = menu
 
-    def __update_search_button(self) -> None:
+    def __update_search_action(self) -> None:
         has_new_search_api = (
             self.resource_model.ngw_version is not None
             and parse_version(self.resource_model.ngw_version)
@@ -4565,31 +4542,25 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
         )
 
         if has_new_search_api:
-            self.search_button.setPopupMode(
-                QToolButton.ToolButtonPopupMode.MenuButtonPopup
-            )
-            self.search_button.setMenu(self.__search_menu)
+            self.search_action.setMenu(self.__search_menu)
         else:
-            self.search_button.setPopupMode(
-                QToolButton.ToolButtonPopupMode.DelayedPopup
-            )
             self.__search_menu.actions()[1].setChecked(True)
             self.search_panel.set_type(SearchType.ByDisplayName)
-            self.search_button.setMenu(None)
+            self.search_action.setMenu(None)
 
-        self.main_tool_bar.fix_icons_size()
-
-    def __create_resource_creation_button(self) -> None:
+    def __create_resource_creation_action(self) -> None:
         menu = self.__resource_menu_controller.create_resource_creation_menu()
-
-        self.creation_button = QToolButton()
-        self.creation_button.setPopupMode(
-            QToolButton.ToolButtonPopupMode.MenuButtonPopup
+        default_action = self.resource_creation_action(
+            ResourceMenuAction.CREATE_GROUP
         )
-        self.creation_button.setMenu(menu)
-        self.creation_button.setDefaultAction(
-            self.resource_creation_action(ResourceMenuAction.CREATE_GROUP)
+        self.creation_action = QAction(
+            default_action.icon(),
+            default_action.text(),
+            self,
         )
+        self.creation_action.setToolTip(default_action.toolTip())
+        self.creation_action.setMenu(menu)
+        self.creation_action.triggered.connect(default_action.trigger)
 
     @pyqtSlot(str)
     def __on_search_requested(self, search_string: str) -> None:
@@ -4704,7 +4675,7 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
         self.resource_model.reset_search()
         self.resources_tree_view.set_search_empty(False)
         self.__clear_search_connection_target()
-        self.search_button.setChecked(False)
+        self.search_action.setChecked(False)
         self.search_panel.setVisible(False)
 
     @pyqtSlot(bool)
@@ -4716,7 +4687,7 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
         self.search_panel.set_type(action.data())
         self.search_panel.show()
         self.search_panel.focus()
-        self.search_button.setChecked(True)
+        self.search_action.setChecked(True)
 
     @pyqtSlot()
     def show_properties_dialog(self):
@@ -4847,93 +4818,3 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
             title = f"{connection.name} – {title}"
 
         self.setWindowTitle(title)
-
-
-class NGWPanelToolBar(QToolBar):
-    ICON_SIZE = 20
-    BUTTON_SIZE = 28
-    MENU_BUTTON_WIDTH = 40
-    _GEOMETRY_RESET_EVENT_TYPES = (
-        QEvent.Type.StyleChange,
-        QEvent.Type.FontChange,
-        QEvent.Type.LayoutRequest,
-        QEvent.Type.Polish,
-        QEvent.Type.PolishRequest,
-    )
-
-    def __init__(self):
-        super().__init__(None)
-
-        self.__is_fix_icons_size_scheduled = False
-        self.__fix_icons_size_timer = QTimer(self)
-        self.__fix_icons_size_timer.setSingleShot(True)
-        self.__fix_icons_size_timer.timeout.connect(
-            self.__apply_scheduled_fix_icons_size
-        )
-        self.setIconSize(QSize(self.ICON_SIZE, self.ICON_SIZE))
-        self.setSizePolicy(
-            QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed
-        )
-
-    def contextMenuEvent(self, a0: Optional[QContextMenuEvent]) -> None:
-        a0.accept()
-
-    def resizeEvent(self, a0: Optional[QResizeEvent]) -> None:
-        self.fix_icons_size()
-        a0.accept()
-
-    def actionEvent(self, event) -> None:
-        super().actionEvent(event)
-        self.__schedule_fix_icons_size()
-
-    def event(self, event) -> bool:
-        result = super().event(event)
-        if event.type() in self._GEOMETRY_RESET_EVENT_TYPES:
-            self.__schedule_fix_icons_size()
-        return result
-
-    def eventFilter(self, watched, event) -> bool:
-        result = super().eventFilter(watched, event)
-        if (
-            isinstance(watched, QToolButton)
-            and event.type() in self._GEOMETRY_RESET_EVENT_TYPES
-        ):
-            self.__schedule_fix_icons_size()
-        return result
-
-    def __schedule_fix_icons_size(self) -> None:
-        if self.__is_fix_icons_size_scheduled:
-            return
-
-        self.__is_fix_icons_size_scheduled = True
-        self.__fix_icons_size_timer.start(0)
-
-    def __apply_scheduled_fix_icons_size(self) -> None:
-        self.__is_fix_icons_size_scheduled = False
-        self.fix_icons_size()
-
-    def fix_icons_size(self) -> None:
-        icon_size = QSize(self.ICON_SIZE, self.ICON_SIZE)
-        self.setIconSize(icon_size)
-
-        for button in self.findChildren(QToolButton):
-            if button.property("NgConnectPanelToolBarEventFilter") is not True:
-                button.installEventFilter(self)
-                button.setProperty("NgConnectPanelToolBarEventFilter", True)
-
-            button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonIconOnly)
-            button.setIconSize(icon_size)
-            use_menu_width = (
-                button.property("NgConnectPanelUseMenuButtonWidth") is True
-            )
-            width = (
-                self.MENU_BUTTON_WIDTH
-                if use_menu_width
-                or (
-                    button.menu() is not None
-                    and button.popupMode()
-                    != QToolButton.ToolButtonPopupMode.DelayedPopup
-                )
-                else self.BUTTON_SIZE
-            )
-            button.setFixedSize(QSize(width, self.BUTTON_SIZE))
