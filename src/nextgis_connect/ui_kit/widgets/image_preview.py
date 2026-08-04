@@ -90,6 +90,7 @@ class ImagePreviewDialog(QDialog):
     ZOOM_LABEL_FADE_MS = 220
     IMAGE_READY_CHECK_INTERVAL_MS = 150
     IMAGE_READY_MAX_WAIT_MS = 120000
+    BACKGROUND_COLOR = "#202326"
     ACTIVE_ICON_COLOR = "#ffffff"
     UNAVAILABLE_ICON_COLOR = "#8f8f8f"
     ANCHOR_PATTERN = re.compile(
@@ -129,6 +130,7 @@ class ImagePreviewDialog(QDialog):
         self._requested_item_indices: Set[int] = set()
         self._loading_attempts_remaining = 0
 
+        self.setObjectName("imagePreviewDialog")
         self._idle_timer = QTimer(self)
         self._idle_timer.setSingleShot(True)
         self._idle_timer.setInterval(self.MOUSE_IDLE_DELAY_MS)
@@ -151,6 +153,11 @@ class ImagePreviewDialog(QDialog):
         self._update_window_title()
         self.resize(900, 700)
         self.setMouseTracking(True)
+        self.setStyleSheet(
+            "QDialog#imagePreviewDialog {"
+            f"background: {self.BACKGROUND_COLOR};"
+            "}"
+        )
 
         self._load_ui()
         self._setup_shortcuts()
@@ -381,6 +388,15 @@ class ImagePreviewDialog(QDialog):
         self._scroll_area.setWidgetResizable(False)
         self._scroll_area.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._scroll_area.setFrameShape(QFrame.Shape.NoFrame)
+        self._scroll_area.setStyleSheet(
+            f"QScrollArea {{background: {self.BACKGROUND_COLOR};}}"
+        )
+        self._scroll_area.viewport().setStyleSheet(
+            f"background: {self.BACKGROUND_COLOR};"
+        )
+        self._image_label.setStyleSheet(
+            f"background: {self.BACKGROUND_COLOR};"
+        )
         self._scroll_area.viewport().installEventFilter(self)
         self._scroll_area.installEventFilter(self)
         self._scroll_area.viewport().setMouseTracking(True)
@@ -611,7 +627,9 @@ class ImagePreviewDialog(QDialog):
         layout.addWidget(self._overlay)
 
         self._loading_overlay = QWidget(self)
-        self._loading_overlay.setStyleSheet("background: rgba(0, 0, 0, 96);")
+        self._loading_overlay.setStyleSheet(
+            f"background: {self.BACKGROUND_COLOR};"
+        )
         loading_layout = QVBoxLayout(self._loading_overlay)
         loading_layout.addStretch()
         loading_layout.addWidget(

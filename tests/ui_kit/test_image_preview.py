@@ -80,6 +80,25 @@ def test_image_preview_dialog_handles_empty_items(qgis_app) -> None:
         _delete_dialog(dialog)
 
 
+def test_image_preview_dialog_uses_configured_background(qgis_app) -> None:
+    del qgis_app
+
+    dialog = ImagePreviewDialog([ImagePreviewItem(None, "photo.png")], 0)
+    try:
+        background_color = ImagePreviewDialog.BACKGROUND_COLOR
+
+        assert background_color == "#202326"
+        assert dialog.objectName() == "imagePreviewDialog"
+        assert background_color in dialog.styleSheet()
+        assert background_color in dialog._scroll_area.styleSheet()
+        assert background_color in dialog._scroll_area.viewport().styleSheet()
+        assert background_color in dialog._image_label.styleSheet()
+        assert background_color in dialog._loading_overlay.styleSheet()
+        assert background_color not in dialog._panel.styleSheet()
+    finally:
+        _delete_dialog(dialog)
+
+
 def test_image_preview_dialog_counter_fits_two_digit_values(qgis_app) -> None:
     items = [
         ImagePreviewItem(None, f"photo-{index}.png") for index in range(22)
