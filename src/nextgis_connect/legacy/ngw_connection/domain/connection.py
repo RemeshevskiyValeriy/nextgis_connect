@@ -126,6 +126,60 @@ class NgwConnection:
 
         return True
 
+    def url_with_credentials(self, url: Optional[str] = None) -> str:
+        """Embed Basic credentials into a URL handled by this connection."""
+        target_url = self.url if url is None else url
+        if (
+            self.auth_config_id is None
+            or self.method != "Basic"
+            or not self._handles_url(target_url)
+        ):
+            return target_url
+
+        is_loaded, config = (
+            QgsApplication.authManager().loadAuthenticationConfig(
+                self.auth_config_id,
+                QgsAuthMethodConfig(),
+                full=True,
+            )
+        )
+        if not is_loaded:
+            return target_url
+
+        username = quote(config.config("username"), safe="")
+        password = quote(config.config("password"), safe="")
+        parse_result = urlparse(target_url)
+        host = parse_result.netloc.rsplit("@", maxsplit=1)[-1]
+        authenticated_host = f"{username}:{password}@{host}"
+        return parse_result._replace(netloc=authenticated_host).geturl()
+
+    def _handles_url(self, url: str) -> bool:
+        target = urlparse(url)
+        connection = urlparse(self.normalize_url(self.url))
+        try:
+            target_port = target.port
+            connection_port = connection.port
+        except ValueError:
+            return False
+
+        if target_port is None:
+            target_port = self._default_port(target.scheme)
+        if connection_port is None:
+            connection_port = self._default_port(connection.scheme)
+
+        return (
+            target.scheme.lower() == connection.scheme.lower()
+            and target.hostname == connection.hostname
+            and target_port == connection_port
+        )
+
+    @staticmethod
+    def _default_port(scheme: str) -> Optional[int]:
+        return {
+            "http": 80,
+            "https": 443,
+        }.get(scheme.lower())
+
     @classmethod
     def normalize_url(cls, url: str) -> str:
         parse_result = urlparse(url)

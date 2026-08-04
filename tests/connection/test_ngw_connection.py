@@ -37,6 +37,181 @@ class TestNgwConnection(NgConnectTestCase):
         connection = replace(self.ngw_connection, auth_config_id=None)
         self.assertEqual(connection.method, "")
 
+    def test_url_with_credentials_without_auth_config(self):
+        connection = replace(
+            self.ngw_connection,
+            url="https://demo.nextgis.com",
+            auth_config_id=None,
+        )
+
+        self.assertEqual(
+            connection.url_with_credentials(),
+            "https://demo.nextgis.com",
+        )
+
+    @patch.object(QgsApplication, "authManager")
+    def test_url_with_credentials_for_basic_auth(self, mock_auth_manager):
+        connection = replace(
+            self.ngw_connection,
+            url="https://demo.nextgis.com",
+        )
+        auth_manager = mock_auth_manager.return_value
+        auth_manager.configAuthMethodKey.return_value = "Basic"
+        auth_config = MagicMock(spec=QgsAuthMethodConfig)
+        auth_config.config.side_effect = {
+            "username": "user@example.com",
+            "password": "p/a:ss word",
+        }.__getitem__
+        auth_manager.loadAuthenticationConfig.return_value = (
+            True,
+            auth_config,
+        )
+
+        authenticated_url = connection.url_with_credentials(
+            "https://demo.nextgis.com/resource/7155?example=true"
+        )
+
+        self.assertEqual(
+            authenticated_url,
+            "https://user%40example.com:p%2Fa%3Ass%20word@"
+            "demo.nextgis.com/resource/7155?example=true",
+        )
+
+    @patch.object(QgsApplication, "authManager")
+    def test_url_with_credentials_replaces_existing_userinfo(
+        self,
+        mock_auth_manager,
+    ):
+        connection = replace(
+            self.ngw_connection,
+            url="https://demo.nextgis.com",
+        )
+        auth_manager = mock_auth_manager.return_value
+        auth_manager.configAuthMethodKey.return_value = "Basic"
+        auth_config = MagicMock(spec=QgsAuthMethodConfig)
+        auth_config.config.side_effect = {
+            "username": "new-user",
+            "password": "new-password",
+        }.__getitem__
+        auth_manager.loadAuthenticationConfig.return_value = (
+            True,
+            auth_config,
+        )
+
+        authenticated_url = connection.url_with_credentials(
+            "https://old:secret@demo.nextgis.com/resource/7155"
+        )
+
+        self.assertEqual(
+            authenticated_url,
+            "https://new-user:new-password@demo.nextgis.com/resource/7155",
+        )
+
+    @patch.object(QgsApplication, "authManager")
+    def test_url_with_credentials_ignores_other_domain(
+        self,
+        mock_auth_manager,
+    ):
+        connection = replace(
+            self.ngw_connection,
+            url="https://demo.nextgis.com",
+        )
+        auth_manager = mock_auth_manager.return_value
+        auth_manager.configAuthMethodKey.return_value = "Basic"
+
+        authenticated_url = connection.url_with_credentials(
+            "https://example.com/resource/7155"
+        )
+
+        self.assertEqual(
+            authenticated_url,
+            "https://example.com/resource/7155",
+        )
+        auth_manager.loadAuthenticationConfig.assert_not_called()
+
+    @patch.object(QgsApplication, "authManager")
+    def test_url_with_credentials_ignores_scheme_downgrade(
+        self,
+        mock_auth_manager,
+    ):
+        connection = replace(
+            self.ngw_connection,
+            url="https://demo.nextgis.com",
+        )
+        auth_manager = mock_auth_manager.return_value
+        auth_manager.configAuthMethodKey.return_value = "Basic"
+        target_url = "http://demo.nextgis.com/resource/7155"
+
+        authenticated_url = connection.url_with_credentials(target_url)
+
+        self.assertEqual(authenticated_url, target_url)
+        auth_manager.loadAuthenticationConfig.assert_not_called()
+
+    @patch.object(QgsApplication, "authManager")
+    def test_url_with_credentials_accepts_explicit_default_port(
+        self,
+        mock_auth_manager,
+    ):
+        connection = replace(
+            self.ngw_connection,
+            url="https://demo.nextgis.com",
+        )
+        auth_manager = mock_auth_manager.return_value
+        auth_manager.configAuthMethodKey.return_value = "Basic"
+        auth_config = MagicMock(spec=QgsAuthMethodConfig)
+        auth_config.config.side_effect = {
+            "username": "user",
+            "password": "password",
+        }.__getitem__
+        auth_manager.loadAuthenticationConfig.return_value = (
+            True,
+            auth_config,
+        )
+
+        authenticated_url = connection.url_with_credentials(
+            "https://demo.nextgis.com:443/resource/7155"
+        )
+
+        self.assertEqual(
+            authenticated_url,
+            "https://user:password@demo.nextgis.com:443/resource/7155",
+        )
+
+    @patch.object(QgsApplication, "authManager")
+    def test_url_with_credentials_ignores_other_port(
+        self,
+        mock_auth_manager,
+    ):
+        connection = replace(
+            self.ngw_connection,
+            url="https://demo.nextgis.com",
+        )
+        auth_manager = mock_auth_manager.return_value
+        auth_manager.configAuthMethodKey.return_value = "Basic"
+        target_url = "https://demo.nextgis.com:444/resource/7155"
+
+        authenticated_url = connection.url_with_credentials(target_url)
+
+        self.assertEqual(authenticated_url, target_url)
+        auth_manager.loadAuthenticationConfig.assert_not_called()
+
+    @patch.object(QgsApplication, "authManager")
+    def test_url_with_credentials_ignores_non_basic_auth(
+        self,
+        mock_auth_manager,
+    ):
+        connection = replace(
+            self.ngw_connection,
+            url="https://demo.nextgis.com",
+        )
+        auth_manager = mock_auth_manager.return_value
+        auth_manager.configAuthMethodKey.return_value = "OAuth2"
+
+        authenticated_url = connection.url_with_credentials()
+
+        self.assertEqual(authenticated_url, connection.url)
+        auth_manager.loadAuthenticationConfig.assert_not_called()
+
     def test_domain_uuid(self):
         netloc = "demo.nextgis.com"
         http_connection = replace(self.ngw_connection, url=f"http://{netloc}")

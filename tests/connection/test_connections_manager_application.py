@@ -1,8 +1,6 @@
 from dataclasses import dataclass
 from typing import List, Optional, Tuple
 
-import pytest
-
 from nextgis_connect.legacy.ngw_connection.application.connections_manager import (
     ConnectionUpdateState,
     NgwConnectionsManager,
@@ -14,7 +12,6 @@ from nextgis_connect.legacy.ngw_connection.infrastructure.settings_repository im
     ConnectionSettingsSnapshot,
     QgisConnectionSettingsRepository,
 )
-from tests.ng_connect_testcase import start_qgis
 
 
 @dataclass
@@ -54,11 +51,6 @@ class InMemoryConnectionSettingsRepository:
 
     def write_connection(self, connection: NgwConnection) -> None:
         self.written_connections.append(connection)
-
-
-@pytest.fixture()
-def qgis_app() -> None:
-    start_qgis()
 
 
 def test_manager_persists_snapshot_through_repository(qgis_app) -> None:

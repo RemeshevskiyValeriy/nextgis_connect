@@ -17,6 +17,7 @@ from qgis.core import (
     QgsSettings,
 )
 from qgis.gui import QgisInterface, QgsLayerTreeView, QgsMapCanvas
+from qgis.PyQt import sip
 from qgis.PyQt.QtCore import QSize, Qt
 from qgis.PyQt.QtWidgets import QMainWindow, QMenu, QToolBar
 
@@ -128,18 +129,20 @@ def init_interface() -> QgisInterface:
     assert isinstance(iface, Mock)
 
     main_window = iface.mainWindow.return_value
-    if not isinstance(main_window, QMainWindow):
+    if not isinstance(main_window, QMainWindow) or sip.isdeleted(main_window):
         main_window = QMainWindow()
         iface.mainWindow.return_value = main_window
 
     map_canvas = iface.mapCanvas.return_value
-    if not isinstance(map_canvas, QgsMapCanvas):
+    if not isinstance(map_canvas, QgsMapCanvas) or sip.isdeleted(map_canvas):
         map_canvas = QgsMapCanvas(main_window)
         map_canvas.resize(QSize(400, 400))
         iface.mapCanvas.return_value = map_canvas
 
     layer_tree_view = iface.layerTreeView.return_value
-    if not isinstance(layer_tree_view, QgsLayerTreeView):
+    if not isinstance(layer_tree_view, QgsLayerTreeView) or sip.isdeleted(
+        layer_tree_view
+    ):
         layer_tree_view = QgsLayerTreeView(main_window)
         iface.layerTreeView.return_value = layer_tree_view
 
@@ -150,27 +153,33 @@ def init_interface() -> QgisInterface:
     layer_tree_view.setModel(layer_tree_model)
 
     web_menu = iface.webMenu.return_value
-    if not isinstance(web_menu, QMenu):
+    if not isinstance(web_menu, QMenu) or sip.isdeleted(web_menu):
         web_menu = QMenu("Web", main_window)
         iface.webMenu.return_value = web_menu
 
     plugin_help_menu = iface.pluginHelpMenu.return_value
-    if not isinstance(plugin_help_menu, QMenu):
+    if not isinstance(plugin_help_menu, QMenu) or sip.isdeleted(
+        plugin_help_menu
+    ):
         plugin_help_menu = QMenu("Plugins", main_window)
         iface.pluginHelpMenu.return_value = plugin_help_menu
 
     new_layer_menu = iface.newLayerMenu.return_value
-    if not isinstance(new_layer_menu, QMenu):
+    if not isinstance(new_layer_menu, QMenu) or sip.isdeleted(new_layer_menu):
         new_layer_menu = QMenu("New Layer", main_window)
         iface.newLayerMenu.return_value = new_layer_menu
 
     data_source_toolbar = iface.dataSourceManagerToolBar.return_value
-    if not isinstance(data_source_toolbar, QToolBar):
+    if not isinstance(data_source_toolbar, QToolBar) or sip.isdeleted(
+        data_source_toolbar
+    ):
         data_source_toolbar = QToolBar(main_window)
         iface.dataSourceManagerToolBar.return_value = data_source_toolbar
 
     selection_toolbar = iface.selectionToolBar.return_value
-    if not isinstance(selection_toolbar, QToolBar):
+    if not isinstance(selection_toolbar, QToolBar) or sip.isdeleted(
+        selection_toolbar
+    ):
         selection_toolbar = QToolBar(main_window)
         iface.selectionToolBar.return_value = selection_toolbar
 

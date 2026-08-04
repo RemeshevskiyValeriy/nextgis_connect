@@ -64,7 +64,7 @@ class AttachmentDeleteConflictTab(
         super().__init__(parent)
 
         self._unresolved_marker_icon = unresolved_marker_icon
-        self._file_icon = plugin_icon("attachments/no_extension_file.svg")
+        self._file_icon = plugin_icon("attachments/unknown.svg")
 
         self._markers: Dict[_AttachmentField, QLabel] = {}
         self._local_edits: Dict[_AttachmentField, QWidget] = {}

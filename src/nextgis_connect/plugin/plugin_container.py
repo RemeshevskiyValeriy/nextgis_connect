@@ -1,6 +1,6 @@
 import sys
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
 from osgeo import gdal
 from qgis.core import Qgis, QgsRuntimeProfiler, QgsTaskManager
@@ -12,11 +12,13 @@ from qgis.PyQt.QtCore import (
     QEvent,
     QItemSelectionModel,
     QMetaObject,
+    QObject,
     QSysInfo,
     Qt,
 )
 from qgis.PyQt.QtWidgets import QAction, QToolBar
 
+from nextgis_connect.features.resource_browser.domain import ResourceMenuAction
 from nextgis_connect.features.synchronization.infrastructure.storage.cache_maintenance_service import (
     CacheMaintenanceService,
 )
@@ -44,6 +46,9 @@ from nextgis_connect.platform.qgis.errors import (
     NgConnectError,
     NgConnectReloadAfterUpdateWarning,
 )
+from nextgis_connect.platform.qgis.layer_tree_action_registry import (
+    LayerTreeActionRegistry,
+)
 from nextgis_connect.plugin.services import (
     create_detached_editing,
     create_service_container,
@@ -53,7 +58,11 @@ from nextgis_connect.plugin.services import (
 from nextgis_connect.plugin.translator import initialize_translator
 from nextgis_connect.shared.constants import PLUGIN_NAME
 from nextgis_connect.shell.presentation.about.about_dialog import AboutDialog
-from nextgis_connect.ui_kit.icons import plugin_icon, qgis_icon
+from nextgis_connect.ui_kit.icons import (
+    NgwResourceCreationIconFactory,
+    plugin_icon,
+    qgis_icon,
+)
 
 if TYPE_CHECKING:
     from nextgis_connect.plugin.plugin_interface import NgConnectInterface
@@ -93,6 +102,9 @@ class PluginContainer:
         self.__show_ngw_resources_tree_action = None
         self.__action_about = None
         self.__show_help_action = None
+        self.__layer_tree_action_registry = LayerTreeActionRegistry(iface)
+        self.__create_ngw_vector_layer_action: Optional[QAction] = None
+        self.__create_ngw_vector_layer_source_action: Optional[QAction] = None
         self.__options_factory = None
         self.__purge_cache_task = None
 
@@ -309,8 +321,7 @@ class PluginContainer:
             detached_editing.on_connection_updated,
         )
         detached_editing.unload()
-        detached_editing.deleteLater()
-        self.__flush_deferred_deletes()
+        self.__delete_qobject(detached_editing)
         self.__detached_editing = None
 
         logger.debug("Detached editing unloaded")
@@ -335,8 +346,7 @@ class PluginContainer:
         self.iface.removeDockWidget(dock)
         dock.close()
         dock.setParent(None)
-        dock.deleteLater()
-        self.__flush_deferred_deletes()
+        self.__delete_qobject(dock)
         self.__ng_resources_tree_dock = None
 
     def __init_ng_connect_menus(self) -> None:
@@ -435,72 +445,120 @@ class PluginContainer:
             toolbar.hide()
             self.iface.mainWindow().removeToolBar(toolbar)
             toolbar.setParent(None)
-            toolbar.deleteLater()
-            self.__flush_deferred_deletes()
+            self.__delete_qobject(toolbar)
         self.__ng_connect_toolbar = None
 
         if self.__show_ngw_resources_tree_action is not None:
-            self.__show_ngw_resources_tree_action.deleteLater()
+            self.__delete_qobject(self.__show_ngw_resources_tree_action)
         self.__show_ngw_resources_tree_action = None
         if self.__action_about is not None:
-            self.__action_about.deleteLater()
+            self.__delete_qobject(self.__action_about)
         self.__action_about = None
 
         if self.__show_help_action is not None:
             plugin_help_menu = self.iface.pluginHelpMenu()
             assert plugin_help_menu is not None
             plugin_help_menu.removeAction(self.__show_help_action)
-            self.__show_help_action.deleteLater()
+            self.__delete_qobject(self.__show_help_action)
         self.__show_help_action = None
-        self.__flush_deferred_deletes()
 
     def __init_ng_layer_actions(self) -> None:
         # Tools for NGW communicate
-        layer_actions = [
+        ng_layer_actions = (
             self.__ng_resources_tree_dock.actionOpenInNGWFromLayer,
             self.__ng_resources_tree_dock.actionOpenLayerHistoryFromLayer,
             self.__ng_resources_tree_dock.layer_menu_separator,
-            self.__ng_resources_tree_dock.actionUploadSelectedResources,
-            self.__ng_resources_tree_dock.actionUpdateStyle,
-            self.__ng_resources_tree_dock.actionAddStyle,
-        ]
+            self.__ng_resources_tree_dock.add_to_web_gis_action(
+                ResourceMenuAction.UPLOAD_SELECTED
+            ),
+            self.__ng_resources_tree_dock.add_to_web_gis_action(
+                ResourceMenuAction.UPDATE_STYLE
+            ),
+            self.__ng_resources_tree_dock.add_to_web_gis_action(
+                ResourceMenuAction.ADD_STYLE
+            ),
+            self.__ng_resources_tree_dock.add_to_web_gis_action(
+                ResourceMenuAction.OVERWRITE_LAYER
+            ),
+        )
 
-        for action in layer_actions:
+        for action in ng_layer_actions:
             for layer_type in (LayerType.Vector, LayerType.Raster):
-                self.iface.addCustomActionForLayerType(
+                self.__layer_tree_action_registry.register(
                     action,
                     PLUGIN_NAME,
                     layer_type,
-                    allLayers=True,
+                    all_layers=True,
                 )
 
+        self.__create_ngw_vector_layer_source_action = (
+            self.__ng_resources_tree_dock.resource_creation_action(
+                ResourceMenuAction.CREATE_VECTOR_LAYER
+            )
+        )
+        self.__create_ngw_vector_layer_action = QAction(
+            NgwResourceCreationIconFactory().qgis_panel_icon("vector_layer"),
+            self.__create_ngw_vector_layer_source_action.text(),
+            self.iface.mainWindow(),
+        )
+        self.__create_ngw_vector_layer_action.triggered.connect(
+            self.__trigger_ngw_vector_layer_creation
+        )
+        self.__create_ngw_vector_layer_source_action.changed.connect(
+            self.__sync_ngw_vector_layer_creation_action
+        )
+        self.__sync_ngw_vector_layer_creation_action()
         self.iface.newLayerMenu().addAction(
-            self.__ng_resources_tree_dock.actionCreateNgwVectorLayer
+            self.__create_ngw_vector_layer_action
         )
         self.iface.dataSourceManagerToolBar().addAction(
-            self.__ng_resources_tree_dock.actionCreateNgwVectorLayer
+            self.__create_ngw_vector_layer_action
         )
 
     def __unload_ng_layer_actions(self) -> None:
-        self.iface.dataSourceManagerToolBar().removeAction(
-            self.__ng_resources_tree_dock.actionCreateNgwVectorLayer
-        )
-        self.iface.newLayerMenu().removeAction(
-            self.__ng_resources_tree_dock.actionCreateNgwVectorLayer
-        )
+        if self.__create_ngw_vector_layer_action is not None:
+            action = self.__create_ngw_vector_layer_action
+            self.iface.dataSourceManagerToolBar().removeAction(action)
+            self.iface.newLayerMenu().removeAction(action)
+            self.__safe_disconnect(
+                action.triggered,
+                self.__trigger_ngw_vector_layer_creation,
+            )
+            if self.__create_ngw_vector_layer_source_action is not None:
+                self.__safe_disconnect(
+                    self.__create_ngw_vector_layer_source_action.changed,
+                    self.__sync_ngw_vector_layer_creation_action,
+                )
+            self.__delete_qobject(action)
+            self.__create_ngw_vector_layer_action = None
+            self.__create_ngw_vector_layer_source_action = None
 
-        layer_actions = [
-            self.__ng_resources_tree_dock.actionOpenInNGWFromLayer,
-            self.__ng_resources_tree_dock.actionOpenLayerHistoryFromLayer,
-            self.__ng_resources_tree_dock.layer_menu_separator,
-            self.__ng_resources_tree_dock.actionUploadSelectedResources,
-            self.__ng_resources_tree_dock.actionUpdateStyle,
-            self.__ng_resources_tree_dock.actionAddStyle,
-        ]
-        for action in layer_actions:
-            # For vector and raster types
-            self.iface.removeCustomActionForLayerType(action)
-            self.iface.removeCustomActionForLayerType(action)
+        self.__layer_tree_action_registry.clear()
+
+    def __trigger_ngw_vector_layer_creation(self) -> None:
+        if self.__create_ngw_vector_layer_source_action is None:
+            return
+
+        self.__create_ngw_vector_layer_source_action.trigger()
+
+    def __sync_ngw_vector_layer_creation_action(self) -> None:
+        if (
+            self.__create_ngw_vector_layer_action is None
+            or self.__create_ngw_vector_layer_source_action is None
+        ):
+            return
+
+        source_action = self.__create_ngw_vector_layer_source_action
+        self.__create_ngw_vector_layer_action.setEnabled(
+            source_action.isEnabled()
+        )
+        self.__create_ngw_vector_layer_action.setVisible(
+            source_action.isVisible()
+        )
+        self.__create_ngw_vector_layer_action.setText(source_action.text())
+        self.__create_ngw_vector_layer_action.setToolTip(
+            source_action.toolTip() or source_action.text()
+        )
 
     def __init_ng_connect_settings_page(self) -> None:
         self.__options_factory = NgConnectOptionsWidgetFactory()
@@ -543,8 +601,9 @@ class PluginContainer:
         except (RuntimeError, TypeError):
             pass
 
-    def __flush_deferred_deletes(self) -> None:
+    def __delete_qobject(self, qobject: QObject) -> None:
+        qobject.deleteLater()
         QCoreApplication.sendPostedEvents(
-            None,
+            qobject,
             QEvent.Type.DeferredDelete,
         )

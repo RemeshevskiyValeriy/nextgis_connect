@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from qgis.PyQt.QtCore import Qt
+from qgis.PyQt.QtCore import QCoreApplication, QEvent, Qt
 from qgis.PyQt.QtGui import QColor, QImage
 
 from nextgis_connect.ui_kit.widgets.image_preview import (
@@ -14,6 +14,15 @@ def _write_png(path: Path, width: int, height: int) -> None:
     image.fill(QColor("#2f6bb2"))
 
     assert image.save(str(path))
+
+
+def _delete_dialog(dialog: ImagePreviewDialog) -> None:
+    dialog.close()
+    dialog.deleteLater()
+    QCoreApplication.sendPostedEvents(
+        dialog,
+        QEvent.Type.DeferredDelete,
+    )
 
 
 def test_image_preview_dialog_has_no_brand_suffix_by_default(
@@ -33,7 +42,7 @@ def test_image_preview_dialog_has_no_brand_suffix_by_default(
         assert dialog.window_title_suffix == ""
         assert dialog.windowTitle() == "photo.png - 12x8"
     finally:
-        dialog.deleteLater()
+        _delete_dialog(dialog)
 
 
 def test_image_preview_dialog_uses_configured_window_title_suffix(
@@ -58,7 +67,7 @@ def test_image_preview_dialog_uses_configured_window_title_suffix(
 
         assert dialog.windowTitle() == "photo.png - 12x8"
     finally:
-        dialog.deleteLater()
+        _delete_dialog(dialog)
 
 
 def test_image_preview_dialog_handles_empty_items(qgis_app) -> None:
@@ -68,7 +77,7 @@ def test_image_preview_dialog_handles_empty_items(qgis_app) -> None:
     try:
         assert dialog.windowTitle() == "Image preview - Host Plugin"
     finally:
-        dialog.deleteLater()
+        _delete_dialog(dialog)
 
 
 def test_image_preview_dialog_counter_fits_two_digit_values(qgis_app) -> None:
@@ -113,7 +122,7 @@ def test_image_preview_dialog_counter_fits_two_digit_values(qgis_app) -> None:
         assert left_gap >= dialog.NAVIGATION_SPACING
         assert right_gap >= dialog.NAVIGATION_SPACING
     finally:
-        dialog.deleteLater()
+        _delete_dialog(dialog)
 
 
 def test_image_preview_dialog_boundary_buttons_show_status(qgis_app) -> None:
@@ -134,7 +143,7 @@ def test_image_preview_dialog_boundary_buttons_show_status(qgis_app) -> None:
 
         assert dialog._zoom_label_text.text() == "Last image"
     finally:
-        dialog.deleteLater()
+        _delete_dialog(dialog)
 
 
 def test_image_preview_dialog_prefetches_adjacent_items(
@@ -163,7 +172,7 @@ def test_image_preview_dialog_prefetches_adjacent_items(
         assert requested_indices == [2, 3, 1]
         assert dialog._image_ready_check_timer.isActive()
     finally:
-        dialog.deleteLater()
+        _delete_dialog(dialog)
 
 
 def test_image_preview_dialog_loads_file_when_async_request_finishes(
@@ -193,7 +202,7 @@ def test_image_preview_dialog_loads_file_when_async_request_finishes(
         assert dialog.windowTitle() == "photo.png - 12x8"
         assert not dialog._image_ready_check_timer.isActive()
     finally:
-        dialog.deleteLater()
+        _delete_dialog(dialog)
 
 
 def test_image_preview_dialog_keeps_panel_visible_under_cursor(
@@ -211,4 +220,4 @@ def test_image_preview_dialog_keeps_panel_visible_under_cursor(
 
         assert dialog._panel_opacity.opacity() == dialog.ACTIVE_PANEL_OPACITY
     finally:
-        dialog.deleteLater()
+        _delete_dialog(dialog)

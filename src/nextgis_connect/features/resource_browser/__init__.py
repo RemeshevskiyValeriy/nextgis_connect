@@ -1,0 +1,1 @@
+"""Resource browser feature package."""

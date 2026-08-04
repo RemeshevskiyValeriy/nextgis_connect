@@ -39,6 +39,18 @@ def test_plugin_reload_cleans_ui_resources(qgis_iface) -> None:
     main_window = qgis_iface.mainWindow()
     qgis_iface.addDockWidget.side_effect = main_window.addDockWidget
     qgis_iface.removeDockWidget.side_effect = main_window.removeDockWidget
+    initial_layer_action_additions = (
+        qgis_iface.addCustomActionForLayerType.call_count
+    )
+    initial_layer_action_removals = (
+        qgis_iface.removeCustomActionForLayerType.call_count
+    )
+    initial_project_export_additions = (
+        qgis_iface.addProjectExportAction.call_count
+    )
+    initial_project_export_removals = (
+        qgis_iface.removeProjectExportAction.call_count
+    )
 
     for _ in range(2):
         plugin = nextgis_connect.classFactory(qgis_iface)
@@ -54,3 +66,21 @@ def test_plugin_reload_cleans_ui_resources(qgis_iface) -> None:
 
         assert main_window.findChildren(QToolBar, "NgConnectToolBar") == []
         assert main_window.findChildren(NgConnectDock, "NGConnectDock") == []
+
+    layer_action_additions = (
+        qgis_iface.addCustomActionForLayerType.call_count
+        - initial_layer_action_additions
+    )
+    layer_action_removals = (
+        qgis_iface.removeCustomActionForLayerType.call_count
+        - initial_layer_action_removals
+    )
+    assert layer_action_removals == layer_action_additions
+    assert (
+        qgis_iface.addProjectExportAction.call_count
+        - initial_project_export_additions
+    ) == 2
+    assert (
+        qgis_iface.removeProjectExportAction.call_count
+        - initial_project_export_removals
+    ) == 2

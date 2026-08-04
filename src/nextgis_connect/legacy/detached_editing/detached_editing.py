@@ -70,6 +70,8 @@ class DetachedEditing(QObject):
     __is_synchronization_enabled: bool
 
     __timer: QTimer
+    __setup_timer: QTimer
+    __synchronization_timer: QTimer
     __properties_factory: DetachedLayerConfigWidgetFactory
 
     __path_preprocessor: Optional[DetachedEditingPathPreprocessor]
@@ -92,6 +94,14 @@ class DetachedEditing(QObject):
         self.__timer.setInterval(settings.layer_check_period)
         self.__timer.timeout.connect(self.synchronize_layers)
         self.__timer.start()
+
+        self.__setup_timer = QTimer(self)
+        self.__setup_timer.setSingleShot(True)
+        self.__setup_timer.timeout.connect(self.__setup_layers)
+
+        self.__synchronization_timer = QTimer(self)
+        self.__synchronization_timer.setSingleShot(True)
+        self.__synchronization_timer.timeout.connect(self.synchronize_layers)
 
         self.__properties_factory = DetachedLayerConfigWidgetFactory()
         iface = _iface()
@@ -124,7 +134,7 @@ class DetachedEditing(QObject):
         )
         self._identification_manager.load()
 
-        QTimer.singleShot(0, self.__setup_layers)
+        self.__setup_timer.start(0)
 
     def unload(self) -> None:
         if self.__is_unloaded:
@@ -132,7 +142,17 @@ class DetachedEditing(QObject):
 
         self.__is_unloaded = True
         self.__timer.stop()
+        self.__setup_timer.stop()
+        self.__synchronization_timer.stop()
         self.__safe_disconnect(self.__timer.timeout, self.synchronize_layers)
+        self.__safe_disconnect(
+            self.__setup_timer.timeout,
+            self.__setup_layers,
+        )
+        self.__safe_disconnect(
+            self.__synchronization_timer.timeout,
+            self.synchronize_layers,
+        )
 
         project = QgsProject.instance()
         self.__safe_disconnect(project.layersAdded, self.__on_layers_added)
@@ -336,7 +356,7 @@ class DetachedEditing(QObject):
             self.__containers_by_layer_id[layer.id()].add_indicator(node)
 
         # Run after returning to event loop
-        QTimer.singleShot(0, self.synchronize_layers)
+        self.__synchronization_timer.start(0)
 
     def __setup_layer(self, layer: QgsMapLayer) -> bool:
         if (

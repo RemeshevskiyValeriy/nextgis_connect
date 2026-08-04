@@ -69,6 +69,12 @@ class IdentificationManager(QObject):
         self._identify_tool = None
         self._tool_handler = None
         self._results_dialog = None
+        self._toolbar_timer = QTimer(self)
+        self._toolbar_timer.setSingleShot(True)
+        self._toolbar_timer.timeout.connect(self.__add_icon_to_toolbar)
+        self._results_dialog_timer = QTimer(self)
+        self._results_dialog_timer.setSingleShot(True)
+        self._results_dialog_timer.timeout.connect(self._show_results_dialog)
 
     @property
     def _iface(self) -> "QgisInterface":
@@ -81,7 +87,7 @@ class IdentificationManager(QObject):
         self._action = QAction(self.tr("Identify"), self)
         self._action.setIcon(plugin_icon("actions/identify.svg"))
         # Add after toolbar initialization
-        QTimer.singleShot(2, self.__add_icon_to_toolbar)
+        self._toolbar_timer.start(2)
 
         self._identify_tool = IdentificationTool(self._canvas)
         self._identify_tool.geometry_changed.connect(
@@ -142,6 +148,16 @@ class IdentificationManager(QObject):
 
     def unload(self) -> None:
         """Unload identification manager and reset the map tool."""
+        self._toolbar_timer.stop()
+        self._results_dialog_timer.stop()
+        try:
+            self._toolbar_timer.timeout.disconnect(self.__add_icon_to_toolbar)
+            self._results_dialog_timer.timeout.disconnect(
+                self._show_results_dialog
+            )
+        except (RuntimeError, TypeError):
+            pass
+
         if self._results_dialog is not None:
             self._results_dialog.unload()
             self._iface.removeDockWidget(self._results_dialog)
@@ -193,7 +209,7 @@ class IdentificationManager(QObject):
                 Qt.DockWidgetArea.RightDockWidgetArea, self._results_dialog
             )
 
-        QTimer.singleShot(0, self._show_results_dialog)
+        self._results_dialog_timer.start(0)
 
         return self._results_dialog
 

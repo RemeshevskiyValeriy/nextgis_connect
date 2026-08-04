@@ -251,6 +251,7 @@ def test_attachment_icon_painter_resolves_loading_download_icon() -> None:
     )
 
     assert icon_path is not None
+    assert icon_path.parent.name == "custom"
     assert icon_path.name.startswith("download_for_offline_arrow_")
 
 

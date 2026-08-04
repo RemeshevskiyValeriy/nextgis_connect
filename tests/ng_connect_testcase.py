@@ -83,6 +83,8 @@ class NgConnectTestCase(QgisTestCase):
 
     @classmethod
     def tearDownClass(cls):
+        global APPLICATION_INFO
+
         QgsSettings().clear()
         cls._clear_auth_configs()
 
@@ -90,6 +92,12 @@ class NgConnectTestCase(QgisTestCase):
             rm(path)
 
         super().tearDownClass()
+
+        if (
+            APPLICATION_INFO is not None
+            and not APPLICATION_INFO.owns_application
+        ):
+            APPLICATION_INFO = None
 
     @classmethod
     def _clear_auth_configs(cls) -> None:
@@ -289,6 +297,8 @@ def start_qgis() -> None:
     """
     global APPLICATION_INFO
 
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+
     if APPLICATION_INFO is not None:
         return
 
@@ -303,7 +313,8 @@ def start_qgis() -> None:
             owns_application=False,
         )
 
-        init_interface()
+        if getattr(qgis.utils, "iface", None) is None:
+            init_interface()
 
         auth_manager = QgsApplication.authManager()
         assert not auth_manager.isDisabled(), auth_manager.disabledMessage()

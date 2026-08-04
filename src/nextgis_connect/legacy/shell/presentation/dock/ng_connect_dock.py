@@ -29,8 +29,9 @@ import urllib.parse
 import uuid
 from dataclasses import dataclass, replace
 from datetime import datetime, timezone
+from functools import partial
 from pathlib import Path
-from typing import List, Optional, Set, Tuple, cast
+from typing import Callable, Dict, List, Optional, Set, Tuple, cast
 
 from qgis import utils as qgis_utils
 from qgis.core import (
@@ -92,8 +93,28 @@ from qgis.PyQt.QtWidgets import (
 )
 from qgis.PyQt.QtXml import QDomDocument
 
-from nextgis_connect.legacy.action_style_import_or_update import (
-    ActionStyleImportUpdate,
+from nextgis_connect.features.resource_browser.domain import (
+    LayerKind,
+    ResourceImportExtent,
+    ResourceImportMode,
+    ResourceImportRequest,
+    ResourceImportSource,
+    ResourceImportStyle,
+    ResourceKind,
+    ResourceMenuAction,
+    ResourceMenuContext,
+    ResourceMenuItem,
+    ResourceMenuItemAdapter,
+    ResourceTypeBinding,
+)
+from nextgis_connect.features.resource_browser.infrastructure import (
+    QgisLayerImportTarget,
+    QgisMapCanvasExtentApplicator,
+    QgisResourceLayerImporter,
+)
+from nextgis_connect.features.resource_browser.presentation import (
+    ResourceContextMenuController,
+    ResourceTreeBranchController,
 )
 from nextgis_connect.legacy.detached_editing.container.cache_lifecycle import (
     CachedDetachedContainerLifecycle,
@@ -140,6 +161,13 @@ from nextgis_connect.legacy.ngw.core import (
     NGWWmsConnection,
     NGWWmsLayer,
     NGWWmsService,
+)
+from nextgis_connect.legacy.ngw.core.ngw_abstract_vector_resource import (
+    NGWAbstractVectorResource,
+)
+from nextgis_connect.legacy.ngw.core.ngw_webmap import (
+    NGWWebMapGroup,
+    NGWWebMapLayer,
 )
 from nextgis_connect.legacy.ngw.qgis.ngw_resource_model_4qgis import (
     QGISResourceJob,
@@ -206,7 +234,11 @@ from nextgis_connect.legacy.tree_widget.proxy_model import NgConnectProxyModel
 from nextgis_connect.platform.clipboard import Clipboard
 from nextgis_connect.platform.logging import logger
 from nextgis_connect.platform.qgis import utils
-from nextgis_connect.platform.qgis.compat import QGIS_3_32, parse_version
+from nextgis_connect.platform.qgis.compat import (
+    QGIS_3_30,
+    GeometryType,
+    parse_version,
+)
 from nextgis_connect.platform.qgis.errors import (
     ErrorCode,
     NgConnectError,
@@ -245,6 +277,24 @@ class AddLayersCommand:
     allow_demo_project_resolve: bool = True
 
 
+@dataclass(frozen=True)
+class PendingResourceImport:
+    job_uuid: str
+    resource_id: int
+    action_id: ResourceMenuAction
+    target: QgisLayerImportTarget
+
+
+@dataclass(frozen=True)
+class DirectResourceImportConfiguration:
+    linked_resource: NGWResource
+    render_resource_id: Optional[int] = None
+    render_resource_ids: Tuple[int, ...] = ()
+    styles: Tuple[ResourceImportStyle, ...] = ()
+    default_style_name: Optional[str] = None
+    source_extent: Optional[ResourceImportExtent] = None
+
+
 class NgConnectDock(QgsDockWidget, FORM_CLASS):
     iface: QgisInterface
     resource_model: QNGWResourceTreeModel
@@ -270,6 +320,7 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
         self.__promo_banner_container: Optional[QFrame] = None
         self.__search_menu = None
         self.__is_closed = False
+        self.__is_project_export_action_registered = False
         self.__plugin_update_task: Optional[PluginUpdateCheckTask] = None
         self.__active_plugin_update: Optional[PluginUpdate] = None
         self.__skipped_plugin_update_ids: Set[str] = set()
@@ -280,10 +331,22 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
             None
         )
         self.__pending_search_string = ""
-
-        self.actionOpenInNGW = QAction(self.tr("Open in Web GIS"), self)
-        self.actionOpenInNGW.setIcon(plugin_icon("branding/ngw_logo.svg"))
-        self.actionOpenInNGW.triggered.connect(self.open_ngw_resource_page)
+        self.__resource_menu_controller = ResourceContextMenuController(self)
+        self.__resource_menu_controller.action_requested.connect(
+            self.__handle_resource_menu_action
+        )
+        self.__resource_layer_importer = QgisResourceLayerImporter(
+            self,
+            canvas_extent_applicator=QgisMapCanvasExtentApplicator(
+                self.iface.mapCanvas()
+            ),
+        )
+        self.__resource_layer_importer.layer_imported.connect(
+            self.__on_resource_layer_imported
+        )
+        self.__resource_layer_importer.import_failed.connect(
+            self.__on_resource_layer_import_failed
+        )
 
         self.actionOpenInNGWFromLayer = QAction(
             self.tr("Open in Web GIS"), self
@@ -295,12 +358,6 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
             self.open_ngw_resource_page_from_layer
         )
 
-        self.actionOpenLayerHistory = QAction(
-            self.tr("Open layer history"), self
-        )
-        self.actionOpenLayerHistory.setIcon(qgis_icon("mIconHistory.svg"))
-        self.actionOpenLayerHistory.triggered.connect(self.open_layer_history)
-
         self.actionOpenLayerHistoryFromLayer = QAction(
             self.tr("Open layer history"), self
         )
@@ -311,54 +368,20 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
             self.open_layer_history_from_layer
         )
 
-        self.layer_menu_separator = QAction()
+        self.layer_menu_separator = QAction(self)
         self.layer_menu_separator.setSeparator(True)
 
-        self.actionRename = QAction(self.tr("Rename"), self)
-        self.actionRename.triggered.connect(self.rename_ngw_resource)
-
-        self.actionExport = QAction(
-            plugin_icon("actions/export.svg"),
-            self.tr("Add to QGIS"),
-            self,
+        self.menuUpload = (
+            self.__resource_menu_controller.create_add_to_web_gis_menu()
         )
-        self.actionExport.triggered.connect(self.__download_selected)
-
-        self.actionResourceProperties = QAction(
-            self.tr("Resource Properties…"), self
-        )
-        self.actionResourceProperties.setIcon(qgis_icon("attributes.svg"))
-        self.actionResourceProperties.triggered.connect(
-            self.show_properties_dialog
-        )
-
-        self.menuUpload = QMenu(self.tr("Add to Web GIS"), self)
-        self.menuUpload.setIcon(plugin_icon("actions/import.svg"))
+        self.menuUpload.setTitle(self.tr("Add to Web GIS"))
+        self.menuUpload.setIcon(plugin_icon("actions/cloud_upload.svg"))
         self.menuUpload.menuAction().setIconVisibleInMenu(False)
-
-        self.actionUploadSelectedResources = QAction(
-            self.tr("Upload selected"), self.menuUpload
-        )
-        self.actionUploadSelectedResources.triggered.connect(
-            self.upload_selected_resources
-        )
-        self.actionUploadSelectedResources.setEnabled(False)
-
-        if Qgis.versionInt() >= QGIS_3_32:
-            self.iface.layerTreeView().contextMenuAboutToShow.connect(
-                self.__add_upload_selected_action_to_export_menu
-            )
-
-        self.actionUploadProjectResources = QAction(
-            self.tr("Upload all"), self.menuUpload
-        )
-        self.actionUploadProjectResources.triggered.connect(
-            self.upload_project_resources
-        )
 
         self.actionUploadProjectViaImportExportMenu = QAction(
             plugin_icon("branding/nextgis_logo.svg"),
             self.tr("Upload project to NextGIS Web"),
+            self,
         )
         self.actionUploadProjectViaImportExportMenu.triggered.connect(
             self.upload_project_resources
@@ -368,83 +391,7 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
         utils.add_project_export_action(
             self.actionUploadProjectViaImportExportMenu
         )
-
-        self.actionUpdateStyle = ActionStyleImportUpdate(
-            self.tr("Update layer style")
-        )
-        self.actionUpdateStyle.triggered.connect(self.update_style)
-
-        self.actionAddStyle = ActionStyleImportUpdate(
-            self.tr("Add new style to layer")
-        )
-        self.actionAddStyle.triggered.connect(self.add_style)
-
-        self.menuUpload.addAction(self.actionUploadSelectedResources)
-        self.menuUpload.addAction(self.actionUploadProjectResources)
-        self.menuUpload.addAction(self.actionUpdateStyle)
-        self.menuUpload.addAction(self.actionAddStyle)
-
-        self.actionUpdateNGWLayer = QAction(
-            self.tr("Overwrite selected layer"), self.menuUpload
-        )
-        self.actionUpdateNGWLayer.triggered.connect(self.overwrite_ngw_layer)
-        self.actionUpdateNGWLayer.setEnabled(False)
-
-        self.actionCreateWebMap4Layer = QAction(
-            self.tr("Create Web map"), self
-        )
-        self.actionCreateWebMap4Layer.triggered.connect(
-            self.create_web_map_for_layer
-        )
-
-        self.actionCreateWebMap4Style = QAction(
-            self.tr("Create Web map"), self
-        )
-        self.actionCreateWebMap4Style.triggered.connect(
-            self.create_web_map_for_style
-        )
-
-        self.actionDownload = QAction(self.tr("Download as QML"), self)
-        self.actionDownload.triggered.connect(self.downloadQML)
-
-        self.actionCopyStyle = QAction(self.tr("Copy Style"), self)
-        self.actionCopyStyle.triggered.connect(self.copy_style)
-
-        self.actionCreateWFSService = QAction(
-            self.tr("Create WFS service"), self
-        )
-        self.actionCreateWFSService.triggered.connect(
-            lambda: self.create_wfs_or_ogcf_service("WFS")
-        )
-
-        self.actionCreateOgcService = QAction(
-            self.tr("Create OGC API - Features service"), self
-        )
-        self.actionCreateOgcService.triggered.connect(
-            lambda: self.create_wfs_or_ogcf_service("OGC API - Features")
-        )
-
-        self.actionCreateWMSService = QAction(
-            self.tr("Create WMS service"), self
-        )
-        self.actionCreateWMSService.triggered.connect(self.create_wms_service)
-
-        self.actionCopyResource = QAction(self.tr("Duplicate Resource"), self)
-        self.actionCopyResource.triggered.connect(
-            self.copy_curent_ngw_resource
-        )
-
-        self.actionEditMetadata = QAction(self.tr("Edit metadata"), self)
-        self.actionEditMetadata.triggered.connect(self.edit_metadata)
-
-        self.actionDeleteResource = QAction(
-            qgis_icon("mActionDeleteSelected.svg"),
-            self.tr("Delete selected"),
-            self,
-        )
-        self.actionDeleteResource.triggered.connect(
-            self.delete_curent_ngw_resource
-        )
+        self.__is_project_export_action_registered = True
 
         self.actionOpenInBrowser = QAction(
             plugin_icon("actions/open_map.svg"),
@@ -485,15 +432,30 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
         NgConnectInterface.instance().settings_changed.connect(
             self.search_panel.on_settings_changed
         )
+        NgConnectInterface.instance().settings_changed.connect(
+            self.checkImportActionsAvailability
+        )
         self.content.layout().addWidget(self.search_panel)
         self.search_panel.search_requested.connect(self.__on_search_requested)
         self.search_panel.reset_requested.connect(self.__on_search_reset)
         self.search_panel.hide()
 
+        self.menuDownload = (
+            self.__resource_menu_controller.create_resource_import_menu()
+        )
+        self.menuDownload.setTitle(self.tr("Add to QGIS"))
+        self.menuDownload.setIcon(plugin_icon("actions/cloud_download.svg"))
+
         self.toolbuttonDownload = QToolButton()
-        self.toolbuttonDownload.setIcon(plugin_icon("actions/export.svg"))
-        self.toolbuttonDownload.setToolTip(self.tr("Add to QGIS"))
-        self.toolbuttonDownload.clicked.connect(self.__download_selected)
+        self.toolbuttonDownload.setIcon(self.menuDownload.icon())
+        self.toolbuttonDownload.setText(self.menuDownload.title())
+        self.toolbuttonDownload.setToolTip(self.menuDownload.title())
+        self.toolbuttonDownload.clicked.connect(self.__trigger_default_import)
+        self.toolbuttonDownload.setProperty(
+            "NgConnectPanelUseMenuButtonWidth",
+            True,
+        )
+        self.__set_resource_import_menu_visible(False)
         self.main_tool_bar.addWidget(self.toolbuttonDownload)
 
         self.toolbuttonUpload = QToolButton()
@@ -504,6 +466,10 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
         self.toolbuttonUpload.setIcon(self.menuUpload.icon())
         self.toolbuttonUpload.setText(self.menuUpload.title())
         self.toolbuttonUpload.setToolTip(self.menuUpload.title())
+        self.toolbuttonUpload.setProperty(
+            "NgConnectPanelUseMenuButtonWidth",
+            True,
+        )
         self.main_tool_bar.addWidget(self.toolbuttonUpload)
 
         self.main_tool_bar.addSeparator()
@@ -549,6 +515,7 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
         )
 
         self._queue_to_add: List[AddLayersCommand] = []
+        self.__pending_resource_imports: List[PendingResourceImport] = []
 
         self.blocked_jobs = {
             "NGWGroupCreater": self.tr("Creating resource..."),
@@ -599,12 +566,18 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
         # ngw resources view
         self.resources_tree_view = QNGWResourceTreeView(self)
         self.resources_tree_view.setModel(self.proxy_model)
+        self.__resource_tree_branch_controller = ResourceTreeBranchController(
+            self.resources_tree_view
+        )
         self.resource_model.found_resources_changed.connect(
             self.__set_search_empty
         )
 
+        self.__resource_menu_item_adapter = (
+            self.__create_resource_menu_item_adapter()
+        )
         self.resources_tree_view.customContextMenuRequested.connect(
-            self.slotCustomContextMenu
+            self.__show_resource_context_menu
         )
         self.resources_tree_view.itemDoubleClicked.connect(
             self.trvDoubleClickProcess
@@ -637,9 +610,12 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
         self.jobs_count = 0
         self.try_check_https = False
 
-        # update state
-        QTimer.singleShot(0, lambda: self.reinit_tree(force=True))
-        QTimer.singleShot(0, self.__start_plugin_update_check)
+        self.__initialization_timer = QTimer(self)
+        self.__initialization_timer.setSingleShot(True)
+        self.__initialization_timer.timeout.connect(
+            self.__initialize_deferred_state
+        )
+        self.__initialization_timer.start(0)
 
         self.main_tool_bar.fix_icons_size()
 
@@ -671,21 +647,32 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
 
         self.checkImportActionsAvailability()
 
+    def __initialize_deferred_state(self) -> None:
+        if self.__is_closed:
+            return
+
+        self.reinit_tree(force=True)
+        self.__start_plugin_update_check()
+
     def close(self) -> bool:
         if self.__is_closed:
             return super().close()
 
         self.__is_closed = True
-
-        if Qgis.versionInt() >= QGIS_3_32:
-            self.__safe_disconnect(
-                self.iface.layerTreeView().contextMenuAboutToShow,
-                self.__add_upload_selected_action_to_export_menu,
-            )
+        self.__unregister_project_export_action()
+        self.__initialization_timer.stop()
+        self.__safe_disconnect(
+            self.__initialization_timer.timeout,
+            self.__initialize_deferred_state,
+        )
 
         self.__safe_disconnect(
             NgConnectInterface.instance().settings_changed,
             self.search_panel.on_settings_changed,
+        )
+        self.__safe_disconnect(
+            NgConnectInterface.instance().settings_changed,
+            self.checkImportActionsAvailability,
         )
         self.__safe_disconnect(
             self.search_panel.search_requested,
@@ -698,7 +685,11 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
 
         self.__safe_disconnect(
             self.resources_tree_view.customContextMenuRequested,
-            self.slotCustomContextMenu,
+            self.__show_resource_context_menu,
+        )
+        self.__safe_disconnect(
+            self.__resource_menu_controller.action_requested,
+            self.__handle_resource_menu_action,
         )
         self.__safe_disconnect(
             self.resources_tree_view.itemDoubleClicked,
@@ -796,6 +787,23 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
 
         return super().close()
 
+    def __unregister_project_export_action(self) -> None:
+        if not self.__is_project_export_action_registered:
+            return
+
+        if Qgis.versionInt() >= QGIS_3_30:
+            self.iface.removeProjectExportAction(
+                self.actionUploadProjectViaImportExportMenu
+            )
+        else:
+            import_export_menu = utils.get_project_import_export_menu()
+            if import_export_menu is not None:
+                import_export_menu.removeAction(
+                    self.actionUploadProjectViaImportExportMenu
+                )
+
+        self.__is_project_export_action_registered = False
+
     def __safe_disconnect(self, signal, slot) -> None:
         try:
             signal.disconnect(slot)
@@ -850,13 +858,25 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
         self.search_panel.setEnabled(self.resource_model.is_connected)
 
         if not self.resource_model.is_connected:
+            self.__resource_menu_controller.set_resource_import_actions_enabled(
+                False
+            )
+            self.__resource_menu_controller.set_add_to_web_gis_actions_enabled(
+                False
+            )
+            self.__resource_menu_controller.set_resource_creation_actions_enabled(
+                False
+            )
+            self.toolbuttonUpload.setEnabled(False)
+            self.creation_button.setEnabled(False)
+            self.__set_resource_import_menu_visible(False)
+            self.actionUploadProjectViaImportExportMenu.setEnabled(False)
             return
 
         # QGIS layers
         layer_tree_view = self.iface.layerTreeView()
         assert layer_tree_view is not None
         qgis_nodes = layer_tree_view.selectedNodes()
-        has_no_qgis_selection = len(qgis_nodes) == 0
         is_one_qgis_selected = len(qgis_nodes) == 1
         # is_multiple_qgis_selection = len(qgis_nodes) > 1
         is_one_qgis_layer_selected = is_one_qgis_selected and isinstance(
@@ -879,111 +899,38 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
         is_one_ngw_selected = len(selected_ngw_indexes) == 1
         is_multiple_ngw_selection = len(selected_ngw_indexes) > 1
 
-        project = QgsProject.instance()
-        assert project is not None
-
-        # Upload current layer(s)
-        self.actionUploadSelectedResources.setEnabled(
-            not has_no_qgis_selection and is_one_ngw_selected
+        selected_qgis_layer = (
+            cast(QgsLayerTreeLayer, qgis_nodes[0]).layer()
+            if is_one_qgis_layer_selected
+            else None
         )
 
-        # Upload project
-        self.actionUploadProjectResources.setEnabled(
-            not is_multiple_ngw_selection and project.count() != 0
+        resource_menu_context = self.__create_resource_menu_context(
+            selected_ngw_indexes
+        )
+        self.__resource_menu_controller.update_resource_import_actions(
+            resource_menu_context
+        )
+        self.__resource_menu_controller.update_add_to_web_gis_actions(
+            resource_menu_context
+        )
+        self.__resource_menu_controller.update_resource_creation_actions(
+            resource_menu_context
+        )
+        self.toolbuttonUpload.setEnabled(
+            self.__resource_menu_controller.has_available_add_to_web_gis_actions()
         )
         self.actionUploadProjectViaImportExportMenu.setEnabled(
-            self.actionUploadProjectResources.isEnabled()
-        )
-
-        # Overwrite selected layer
-        self.actionUpdateNGWLayer.setEnabled(
-            is_one_qgis_layer_selected
-            and is_one_ngw_selected
-            and (
-                isinstance(
-                    cast(QgsLayerTreeLayer, qgis_nodes[0]).layer(),
-                    QgsVectorLayer,
-                )
-                or isinstance(
-                    cast(QgsLayerTreeLayer, qgis_nodes[0]).layer(),
-                    QgsRasterLayer,
-                )
+            self.__resource_menu_controller.is_add_to_web_gis_action_enabled(
+                ResourceMenuAction.UPLOAD_PROJECT
             )
         )
-
-        if not is_one_ngw_selected or not is_one_qgis_layer_selected:
-            self.actionUpdateStyle.setEnabled(False)
-            self.actionAddStyle.setEnabled(False)
-
-        elif isinstance(
-            ngw_resources[0], (NGWQGISVectorStyle, NGWQGISRasterStyle)
-        ):
-            ngw_layer = (
-                selected_ngw_indexes[0]
-                .parent()
-                .data(QNGWResourceItem.NGWResourceRole)
-            )
-            self.actionUpdateStyle.setEnabledByType(
-                cast(QgsLayerTreeLayer, qgis_nodes[0]).layer(), ngw_layer
-            )
-            self.actionAddStyle.setEnabled(False)
-
-        else:
-            self.actionUpdateStyle.setEnabledByType(
-                cast(QgsLayerTreeLayer, qgis_nodes[0]).layer(),
-                ngw_resources[0],
-            )
-            self.actionAddStyle.setEnabledByType(
-                cast(QgsLayerTreeLayer, qgis_nodes[0]).layer(),
-                ngw_resources[0],
-            )
-
-        upload_actions = [
-            self.actionUploadSelectedResources,
-            self.actionUploadProjectResources,
-            self.actionUpdateStyle,
-            self.actionAddStyle,
-            self.actionUpdateNGWLayer,
-        ]
-        self.toolbuttonUpload.setEnabled(
-            any(action.isEnabled() for action in upload_actions)
+        self.__set_resource_import_menu_visible(
+            self.__resource_menu_controller.has_available_alternative_resource_import_actions()
         )
-
-        # TODO: NEED REFACTORING! Make isCompatible methods!
-        is_download_enabled = (
-            not has_no_ngw_selection
-            and all(
-                ngw_index.parent().isValid()
-                for ngw_index in selected_ngw_indexes
-            )
-            and all(
-                isinstance(
-                    ngw_resource,
-                    (
-                        NGWGroupResource,
-                        NGWWfsService,
-                        NGWWfsLayer,
-                        NGWOgcfService,
-                        NGWWmsService,
-                        NGWWmsConnection,
-                        NGWWmsLayer,
-                        NGWVectorLayer,
-                        NGWRasterLayer,
-                        NGWQGISVectorStyle,
-                        NGWQGISRasterStyle,
-                        NGWBaseMap,
-                        NGWTmsLayer,
-                        # NGWTileset,
-                        NGWTmsConnection,
-                        NGWPostgisLayer,
-                        NGWWebMap,
-                    ),
-                )
-                for ngw_resource in ngw_resources
-            )
+        self.toolbuttonDownload.setEnabled(
+            self.__resource_menu_controller.has_available_resource_import_actions()
         )
-        self.actionExport.setEnabled(is_download_enabled)
-        self.toolbuttonDownload.setEnabled(is_download_enabled)
 
         self.actionOpenInBrowser.setText(
             self.tr("Open Web map in browser")
@@ -996,38 +943,17 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
             and ngw_resources[0].is_preview_supported
         )
 
-        self.creation_button.setEnabled(is_one_ngw_selected)
-        self.actionCreateNgwVectorLayer.setEnabled(is_one_ngw_selected)
-
-        is_not_root = not has_no_ngw_selection and all(
-            index.parent().isValid() for index in selected_ngw_indexes
-        )
-        self.actionDeleteResource.setEnabled(is_not_root)
-
-        self.actionOpenInNGW.setEnabled(is_one_ngw_selected)
-        is_vector_layer_resource = is_one_ngw_selected and isinstance(
-            ngw_resources[0], NGWVectorLayer
-        )
-        is_versioned_resource = (
-            is_vector_layer_resource and ngw_resources[0].is_versioning_enabled  # pyright: ignore[reportAttributeAccessIssue]
-        )
-        self.actionOpenLayerHistory.setVisible(is_vector_layer_resource)
-        self.actionOpenLayerHistory.setEnabled(is_versioned_resource)
-
-        self.actionRename.setEnabled(is_one_ngw_selected)
-        self.actionEditMetadata.setEnabled(is_one_ngw_selected)
-
-        layer = (
-            cast(QgsLayerTreeLayer, qgis_nodes[0]).layer()
-            if is_one_qgis_layer_selected
-            else None
+        self.creation_button.setEnabled(
+            self.__resource_menu_controller.has_available_resource_creation_actions()
         )
 
         open_in_ngw_visible = (
             is_one_qgis_layer_selected
-            and layer is not None
-            and layer.customProperty("ngw_connection_id") is not None
-            and layer.customProperty("ngw_resource_id") is not None
+            and selected_qgis_layer is not None
+            and selected_qgis_layer.customProperty("ngw_connection_id")
+            is not None
+            and selected_qgis_layer.customProperty("ngw_resource_id")
+            is not None
         )
         self.actionOpenInNGWFromLayer.setVisible(open_in_ngw_visible)
         self.layer_menu_separator.setVisible(open_in_ngw_visible)
@@ -1035,10 +961,10 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
         self.actionOpenLayerHistoryFromLayer.setVisible(False)
 
         if open_in_ngw_visible:
-            assert layer is not None
+            assert selected_qgis_layer is not None
 
             plugin = NgConnectInterface.instance()
-            detached_layer = plugin.detached_editing.layer(layer)
+            detached_layer = plugin.detached_editing.layer(selected_qgis_layer)
 
             if detached_layer is not None:
                 self.actionOpenLayerHistoryFromLayer.setVisible(True)
@@ -1048,6 +974,48 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
                 self.actionOpenLayerHistoryFromLayer.setEnabled(
                     is_versioning_enabled
                 )
+
+    @pyqtSlot()
+    def __trigger_default_import(self) -> None:
+        if self.toolbuttonDownload.menu() is not None:
+            return
+
+        action = self.__resource_menu_controller.resource_import_action(
+            ResourceMenuAction.ADD_TO_QGIS
+        )
+        if not action.isVisible() or not action.isEnabled():
+            return
+
+        action.trigger()
+
+    def __set_resource_import_menu_visible(self, visible: bool) -> None:
+        if visible:
+            self.toolbuttonDownload.setPopupMode(
+                QToolButton.ToolButtonPopupMode.InstantPopup
+            )
+            self.toolbuttonDownload.setMenu(self.menuDownload)
+            return
+
+        self.toolbuttonDownload.setMenu(None)
+        self.toolbuttonDownload.setPopupMode(
+            QToolButton.ToolButtonPopupMode.DelayedPopup
+        )
+
+    def __is_style_transfer_compatible(
+        self,
+        qgis_layer: Optional[QgsMapLayer],
+        ngw_layer: object,
+    ) -> bool:
+        if isinstance(qgis_layer, QgsRasterLayer):
+            return isinstance(ngw_layer, NGWRasterLayer)
+
+        if not isinstance(qgis_layer, QgsVectorLayer):
+            return False
+
+        if not isinstance(ngw_layer, NGWAbstractVectorResource):
+            return False
+
+        return qgis_layer.geometryType() == ngw_layer.geometry_type
 
     @pyqtSlot(str, str, Exception)
     def __model_warning_process(
@@ -1105,6 +1073,12 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
             if command.job_uuid == job_uuid:
                 del self._queue_to_add[i]
                 break
+
+        self.__pending_resource_imports = [
+            command
+            for command in self.__pending_resource_imports
+            if command.job_uuid != job_uuid
+        ]
 
         if (
             isinstance(exception, NgwError)
@@ -1651,6 +1625,7 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
             )
 
         self.__add_layers_after_finish(job_uuid)
+        self.__resume_pending_resource_imports(job_uuid)
 
         if len(self.resource_model.jobs) == 1 or all(
             job.getJobId() not in self.blocked_jobs
@@ -1673,15 +1648,16 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
 
     def block_gui(self):
         self.main_tool_bar.setEnabled(False)
-        self.actionCreateNgwVectorLayer.setEnabled(False)
         self.search_panel.setEnabled(False)
-        # TODO (ivanbarsukov): Disable parent action
-        for action in (
-            self.actionUploadSelectedResources,
-            self.actionUpdateStyle,
-            self.actionAddStyle,
-        ):
-            action.setEnabled(False)
+        self.__resource_menu_controller.set_add_to_web_gis_actions_enabled(
+            False
+        )
+        self.__resource_menu_controller.set_resource_import_actions_enabled(
+            False
+        )
+        self.__resource_menu_controller.set_resource_creation_actions_enabled(
+            False
+        )
 
         if HAS_NGSTD and self.__ngstd_connection is not None:
             NGAccess.instance().userInfoUpdated.disconnect(
@@ -1974,16 +1950,21 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
         for widget in (
             self.toolbuttonDownload,
             self.toolbuttonUpload,
-            self.actionCreateNgwVectorLayer,
             self.creation_button,
             self.search_button,
             self.search_panel,
             self.actionOpenInBrowser,
-            self.actionUploadSelectedResources,
-            self.actionUpdateStyle,
-            self.actionAddStyle,
         ):
             widget.setEnabled(False)
+        self.__resource_menu_controller.set_add_to_web_gis_actions_enabled(
+            False
+        )
+        self.__resource_menu_controller.set_resource_import_actions_enabled(
+            False
+        )
+        self.__resource_menu_controller.set_resource_creation_actions_enabled(
+            False
+        )
 
         self.actionRefresh.setEnabled(
             self.resource_model.connection_id is not None
@@ -1995,127 +1976,306 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
             self.iface.mainWindow(), "NextGIS Connect"
         )
 
+    def add_to_web_gis_action(
+        self,
+        action_id: ResourceMenuAction,
+    ) -> QAction:
+        return self.__resource_menu_controller.add_to_web_gis_action(action_id)
+
+    def resource_creation_action(
+        self,
+        action_id: ResourceMenuAction,
+    ) -> QAction:
+        return self.__resource_menu_controller.resource_creation_action(
+            action_id
+        )
+
     def str_to_link(self, text: str, url: str) -> str:
         return f'<a href="{url}"><span style=" text-decoration: underline; color:#0000ff;">{text}</span></a>'
 
-    def slotCustomContextMenu(self, qpoint: QPoint):
+    def __create_resource_menu_item_adapter(
+        self,
+    ) -> ResourceMenuItemAdapter:
+        bindings = (
+            ResourceTypeBinding(
+                ResourceKind.QGIS_VECTOR_STYLE,
+                (NGWQGISVectorStyle,),
+            ),
+            ResourceTypeBinding(
+                ResourceKind.QGIS_RASTER_STYLE,
+                (NGWQGISRasterStyle,),
+            ),
+            ResourceTypeBinding(
+                ResourceKind.RASTER_STYLE,
+                (NGWRasterStyle,),
+            ),
+            ResourceTypeBinding(
+                ResourceKind.MAPSERVER_STYLE,
+                (NGWMapServerStyle,),
+            ),
+            ResourceTypeBinding(ResourceKind.GROUP, (NGWGroupResource,)),
+            ResourceTypeBinding(
+                ResourceKind.VECTOR_LAYER,
+                (NGWVectorLayer,),
+            ),
+            ResourceTypeBinding(
+                ResourceKind.RASTER_LAYER,
+                (NGWRasterLayer,),
+            ),
+            ResourceTypeBinding(
+                ResourceKind.POSTGIS_LAYER,
+                (NGWPostgisLayer,),
+            ),
+            ResourceTypeBinding(ResourceKind.WFS_LAYER, (NGWWfsLayer,)),
+            ResourceTypeBinding(
+                ResourceKind.WFS_SERVICE,
+                (NGWWfsService,),
+            ),
+            ResourceTypeBinding(
+                ResourceKind.OGCF_SERVICE,
+                (NGWOgcfService,),
+            ),
+            ResourceTypeBinding(ResourceKind.WMS_LAYER, (NGWWmsLayer,)),
+            ResourceTypeBinding(
+                ResourceKind.WMS_SERVICE,
+                (NGWWmsService,),
+            ),
+            ResourceTypeBinding(
+                ResourceKind.WMS_CONNECTION,
+                (NGWWmsConnection,),
+            ),
+            ResourceTypeBinding(ResourceKind.BASEMAP, (NGWBaseMap,)),
+            ResourceTypeBinding(ResourceKind.TMS_LAYER, (NGWTmsLayer,)),
+            ResourceTypeBinding(
+                ResourceKind.TMS_CONNECTION,
+                (NGWTmsConnection,),
+            ),
+            ResourceTypeBinding(ResourceKind.WEB_MAP, (NGWWebMap,)),
+            ResourceTypeBinding(
+                ResourceKind.FORM,
+                (),
+                ("formbuilder_form",),
+            ),
+        )
+        return ResourceMenuItemAdapter(bindings)
+
+    def __create_resource_menu_context(
+        self,
+        selected_indexes: List[QModelIndex],
+    ) -> ResourceMenuContext:
+        menu_items: List[ResourceMenuItem] = []
+        resource_indexes: List[QModelIndex] = []
+        resources: List[NGWResource] = []
+        has_inactive_resource_selection = False
+        for index in selected_indexes:
+            if not index.isValid():
+                has_inactive_resource_selection = True
+                continue
+
+            item = index.internalPointer()
+            if getattr(item, "locked", False):
+                has_inactive_resource_selection = True
+                continue
+
+            resource = index.data(QNGWResourceItem.NGWResourceRole)
+            if not isinstance(resource, NGWResource):
+                has_inactive_resource_selection = True
+                continue
+
+            resource_indexes.append(index)
+            resources.append(resource)
+            menu_items.append(
+                self.__resource_menu_item_adapter.adapt(
+                    resource,
+                    is_root=not index.parent().isValid(),
+                    is_preview_supported=resource.is_preview_supported,
+                    is_versioning_enabled=(
+                        isinstance(resource, NGWVectorLayer)
+                        and resource.is_versioning_enabled
+                    ),
+                    has_geometry=self.__resource_has_geometry(resource, index),
+                )
+            )
+
+        if has_inactive_resource_selection:
+            menu_items = []
+            resource_indexes = []
+            resources = []
+
+        current_layer = self.iface.mapCanvas().currentLayer()
+        current_layer_kind = LayerKind.NONE
+        if isinstance(current_layer, QgsVectorLayer):
+            current_layer_kind = LayerKind.VECTOR
+        elif isinstance(current_layer, QgsRasterLayer):
+            current_layer_kind = LayerKind.RASTER
+
+        layer_tree_view = self.iface.layerTreeView()
+        assert layer_tree_view is not None
+        qgis_nodes = layer_tree_view.selectedNodes()
+        is_one_qgis_layer_selected = len(qgis_nodes) == 1 and isinstance(
+            qgis_nodes[0], QgsLayerTreeLayer
+        )
+        selected_qgis_layer = (
+            cast(QgsLayerTreeLayer, qgis_nodes[0]).layer()
+            if is_one_qgis_layer_selected
+            else None
+        )
+
+        can_update_style = False
+        can_add_style = False
+        if len(resources) == 1 and selected_qgis_layer is not None:
+            style_target: object = resources[0]
+            is_style_resource = isinstance(
+                resources[0],
+                (NGWQGISVectorStyle, NGWQGISRasterStyle),
+            )
+            if is_style_resource:
+                style_target = (
+                    resource_indexes[0]
+                    .parent()
+                    .data(QNGWResourceItem.NGWResourceRole)
+                )
+
+            can_update_style = self.__is_style_transfer_compatible(
+                selected_qgis_layer,
+                style_target,
+            )
+            can_add_style = can_update_style and not is_style_resource
+
+        project = QgsProject.instance()
+        assert project is not None
+
+        return ResourceMenuContext(
+            resources=tuple(menu_items),
+            current_layer_kind=current_layer_kind,
+            is_developer_mode=NgConnectSettings().is_developer_mode,
+            has_qgis_selection=len(qgis_nodes) > 0,
+            has_project_layers=project.count() > 0,
+            can_update_style=can_update_style,
+            can_add_style=can_add_style,
+        )
+
+    def __resource_has_geometry(
+        self,
+        resource: NGWResource,
+        resource_index: QModelIndex,
+    ) -> bool:
+        geometry_resource: object = resource
+        if isinstance(resource, NGWQGISVectorStyle):
+            geometry_resource = resource_index.parent().data(
+                QNGWResourceItem.NGWResourceRole
+            )
+
+        return (
+            not isinstance(geometry_resource, NGWAbstractVectorResource)
+            or geometry_resource.geometry_type != GeometryType.Null
+        )
+
+    @pyqtSlot(QPoint)
+    def __show_resource_context_menu(self, qpoint: QPoint) -> None:
         proxy_index = self.resources_tree_view.indexAt(qpoint)
         index = self.proxy_model.mapToSource(proxy_index)
 
         if not index.isValid() or index.internalPointer().locked:
             return
 
+        selection_model = self.resources_tree_view.selectionModel()
+        assert selection_model is not None
         proxy_selected_indexes = self.resources_tree_view.selectedIndexes()
+        if proxy_index not in proxy_selected_indexes:
+            selection_model.setCurrentIndex(
+                proxy_index,
+                QItemSelectionModel.SelectionFlag.ClearAndSelect,
+            )
+            proxy_selected_indexes = [proxy_index]
+
         selected_indexes = [
             self.proxy_model.mapToSource(selected_index)
             for selected_index in proxy_selected_indexes
         ]
-        if index not in selected_indexes:
-            selected_indexes = [index]
-
-        ngw_resources: List[NGWResource] = [
-            ngw_resource
-            for index in selected_indexes
-            if (ngw_resource := index.data(QNGWResourceItem.NGWResourceRole))
-        ]
-        if len(ngw_resources) == 0:
-            return
-
-        getting_actions: List[QAction] = []
-        setting_actions: List[QAction] = []
-        creating_actions: List[QAction] = [self.actionEditMetadata]
-        services_actions: List[QAction] = [
-            self.actionOpenInNGW,
-            self.actionOpenLayerHistory,
-            self.actionRename,
-            self.actionDeleteResource,
-        ]
-        if NgConnectSettings().is_developer_mode:
-            services_actions.append(self.actionResourceProperties)
-
-        if any(
-            isinstance(
-                ngw_resource,
-                (
-                    NGWGroupResource,
-                    NGWVectorLayer,
-                    NGWRasterLayer,
-                    NGWWmsLayer,
-                    NGWWfsService,
-                    NGWWfsLayer,
-                    NGWOgcfService,
-                    NGWWmsService,
-                    NGWWmsConnection,
-                    NGWQGISVectorStyle,
-                    NGWQGISRasterStyle,
-                    # NGWTileset,
-                    NGWBaseMap,
-                    NGWTmsLayer,
-                    NGWTmsConnection,
-                    NGWPostgisLayer,
-                    NGWWebMap,
-                ),
-            )
-            for ngw_resource in ngw_resources
-        ):
-            getting_actions.append(self.actionExport)
-
-        ngw_resource = ngw_resources[0]
-        is_multiple_selection = len(ngw_resources) > 1
-
-        if not is_multiple_selection and isinstance(
-            ngw_resource, (NGWQGISVectorStyle, NGWQGISRasterStyle)
-        ):
-            getting_actions.extend([self.actionDownload, self.actionCopyStyle])
-
-        qgs_map_layer = self.iface.mapCanvas().currentLayer()
-        is_same_type = (
-            isinstance(ngw_resource, NGWVectorLayer)
-            and isinstance(qgs_map_layer, QgsVectorLayer)
-        ) or (
-            isinstance(ngw_resource, NGWRasterLayer)
-            and isinstance(qgs_map_layer, QgsRasterLayer)
+        context = self.__create_resource_menu_context(selected_indexes)
+        global_position = self.resources_tree_view.viewport().mapToGlobal(
+            qpoint
         )
+        self.__resource_menu_controller.show(context, global_position)
 
-        if (
-            not is_multiple_selection
-            and isinstance(ngw_resource, (NGWVectorLayer, NGWRasterLayer))
-            and is_same_type
-        ):
-            setting_actions.append(self.actionUpdateNGWLayer)
+    @pyqtSlot(object)
+    def __handle_resource_menu_action(
+        self,
+        action_id: ResourceMenuAction,
+    ) -> None:
+        handlers: Dict[ResourceMenuAction, Callable[[], None]] = {
+            ResourceMenuAction.ADD_TO_QGIS: self.__download_selected,
+            ResourceMenuAction.ADD_MVT_LAYER: partial(
+                self.__add_selected_resource_directly,
+                ResourceMenuAction.ADD_MVT_LAYER,
+            ),
+            ResourceMenuAction.ADD_TMS_LAYER: partial(
+                self.__add_selected_resource_directly,
+                ResourceMenuAction.ADD_TMS_LAYER,
+            ),
+            ResourceMenuAction.ADD_EXPERIMENTAL_NGW_LAYER: partial(
+                self.__add_selected_resource_directly,
+                ResourceMenuAction.ADD_EXPERIMENTAL_NGW_LAYER,
+            ),
+            ResourceMenuAction.UPLOAD_SELECTED: self.upload_selected_resources,
+            ResourceMenuAction.UPLOAD_PROJECT: self.upload_project_resources,
+            ResourceMenuAction.UPDATE_STYLE: self.update_style,
+            ResourceMenuAction.ADD_STYLE: self.add_style,
+            ResourceMenuAction.OPEN_IN_WEB_GIS: self.open_ngw_resource_page,
+            ResourceMenuAction.VIEW_IN_BROWSER: self.__open_in_web,
+            ResourceMenuAction.OPEN_LAYER_HISTORY: self.open_layer_history,
+            ResourceMenuAction.EXPAND_ALL: (
+                self.__resource_tree_branch_controller.expand_selected
+            ),
+            ResourceMenuAction.COLLAPSE_ALL: (
+                self.__resource_tree_branch_controller.collapse_selected
+            ),
+            ResourceMenuAction.DOWNLOAD_QML: self.download_qml,
+            ResourceMenuAction.DOWNLOAD_NGFP: self.download_ngfp,
+            ResourceMenuAction.COPY_STYLE: self.copy_style,
+            ResourceMenuAction.OVERWRITE_LAYER: self.overwrite_ngw_layer,
+            ResourceMenuAction.DUPLICATE_RESOURCE: (
+                self.duplicate_current_ngw_resource
+            ),
+            ResourceMenuAction.CREATE_GROUP: self.create_group,
+            ResourceMenuAction.CREATE_VECTOR_LAYER: self.create_vector_layer,
+            ResourceMenuAction.CREATE_FORM: (
+                self.__create_form_for_selected_vector_layer
+            ),
+            ResourceMenuAction.CREATE_WEB_MAP: (
+                self.__create_web_map_for_selected_resource
+            ),
+            ResourceMenuAction.CREATE_WFS_SERVICE: partial(
+                self.create_wfs_or_ogcf_service,
+                "WFS",
+            ),
+            ResourceMenuAction.CREATE_OGCF_SERVICE: partial(
+                self.create_wfs_or_ogcf_service,
+                "OGC API - Features",
+            ),
+            ResourceMenuAction.CREATE_WMS_SERVICE: self.create_wms_service,
+            ResourceMenuAction.RENAME_RESOURCE: self.rename_ngw_resource,
+            ResourceMenuAction.SHOW_PROPERTIES: self.show_properties_dialog,
+            ResourceMenuAction.DELETE_RESOURCE: self.delete_current_ngw_resource,
+        }
 
-        if not is_multiple_selection and isinstance(
-            ngw_resource, NGWGroupResource
-        ):
-            creating_actions.append(self.actionCreateNewGroup)
-            creating_actions.append(self.actionCreateNewVectorLayer)
+        try:
+            handler = handlers[action_id]
+        except KeyError as error:
+            raise ValueError(
+                f"Unsupported resource menu action: {action_id}"
+            ) from error
 
-        if not is_multiple_selection:
-            if isinstance(
-                ngw_resource, (NGWVectorLayer, NGWPostgisLayer, NGWWfsLayer)
-            ):
-                creating_actions.extend(
-                    [
-                        self.actionCreateWFSService,
-                        self.actionCreateOgcService,
-                        self.actionCreateWMSService,
-                    ]
-                )
-            elif isinstance(ngw_resource, (NGWRasterLayer, NGWQGISStyle)):
-                creating_actions.append(self.actionCreateWMSService)
+        handler()
 
-        if not is_multiple_selection and isinstance(
-            ngw_resource, (NGWVectorLayer, NGWRasterLayer, NGWWmsLayer)
-        ):
-            creating_actions.append(self.actionCreateWebMap4Layer)
-
-        if not is_multiple_selection and isinstance(
-            ngw_resource, (NGWVectorLayer, NGWRasterLayer)
-        ):
-            creating_actions.append(self.actionCopyResource)
-
-        if not is_multiple_selection and isinstance(
-            ngw_resource,
+    def __create_web_map_for_selected_resource(self) -> None:
+        selected_index = self.proxy_model.mapToSource(
+            self.resources_tree_view.selectionModel().currentIndex()
+        )
+        resource = selected_index.data(QNGWResourceItem.NGWResourceRole)
+        if isinstance(
+            resource,
             (
                 NGWQGISVectorStyle,
                 NGWQGISRasterStyle,
@@ -2123,25 +2283,27 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
                 NGWMapServerStyle,
             ),
         ):
-            creating_actions.append(self.actionCreateWebMap4Style)
+            self.create_web_map_for_style()
+            return
 
-        if not is_multiple_selection and ngw_resource.is_preview_supported:
-            services_actions.append(self.actionOpenInBrowser)
+        self.create_web_map_for_layer()
 
-        menu = QMenu()
-        for actions in [
-            getting_actions,
-            setting_actions,
-            creating_actions,
-            services_actions,
-        ]:
-            if len(actions) == 0:
-                continue
-            for action in actions:
-                menu.addAction(action)
-            menu.addSeparator()
+    def __create_form_for_selected_vector_layer(self) -> None:
+        selected_index = self.proxy_model.mapToSource(
+            self.resources_tree_view.selectionModel().currentIndex()
+        )
+        if not selected_index.isValid():
+            return
 
-        menu.exec(self.resources_tree_view.viewport().mapToGlobal(qpoint))
+        resource = selected_index.data(QNGWResourceItem.NGWResourceRole)
+        if not isinstance(resource, NGWVectorLayer):
+            return
+
+        url = (
+            f"{resource.get_absolute_url().rstrip('/')}"
+            "/create?" + urllib.parse.urlencode({"cls": "formbuilder_form"})
+        )
+        QDesktopServices.openUrl(QUrl(url))
 
     def trvDoubleClickProcess(self, index: QModelIndex) -> None:
         ngw_resource = index.data(QNGWResourceItem.NGWResourceRole)
@@ -2252,6 +2414,424 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
         )
         url = ngw_resource.preview_url
         QDesktopServices.openUrl(QUrl(url))
+
+    def __add_selected_resource_directly(
+        self,
+        action_id: ResourceMenuAction,
+    ) -> None:
+        selected_indexes = self.resources_tree_view.selectedIndexes()
+        if len(selected_indexes) != 1:
+            return
+
+        source_index = self.proxy_model.mapToSource(selected_indexes[0])
+        if not source_index.isValid():
+            return
+
+        resource = source_index.data(QNGWResourceItem.NGWResourceRole)
+        if not isinstance(resource, NGWResource):
+            return
+
+        self.__continue_direct_resource_import(
+            resource.resource_id,
+            action_id,
+            self.__current_resource_import_target(),
+        )
+
+    def __continue_direct_resource_import(
+        self,
+        resource_id: int,
+        action_id: ResourceMenuAction,
+        target: QgisLayerImportTarget,
+    ) -> None:
+        source_index = self.resource_model.index_from_id(resource_id)
+        if source_index is None or not source_index.isValid():
+            return
+
+        resource = source_index.data(QNGWResourceItem.NGWResourceRole)
+        if not isinstance(resource, NGWResource):
+            return
+
+        mode = self.__direct_resource_import_mode(action_id)
+        if mode is None or not self.__is_direct_resource_import_supported(
+            resource,
+            source_index,
+            mode,
+        ):
+            return
+
+        if self.__schedule_direct_import_dependencies(
+            resource,
+            source_index,
+            mode,
+            action_id,
+            target,
+        ):
+            return
+
+        configuration = DirectResourceImportConfiguration(resource)
+        if mode == ResourceImportMode.TMS:
+            tms_configuration = self.__create_tms_import_configuration(
+                resource,
+                source_index,
+            )
+            if tms_configuration is None:
+                return
+            configuration = tms_configuration
+        elif mode == ResourceImportMode.EXPERIMENTAL_NGW:
+            experimental_configuration = (
+                self.__create_experimental_import_configuration(
+                    resource,
+                    source_index,
+                    action_id,
+                    target,
+                )
+            )
+            if experimental_configuration is None:
+                return
+            configuration = experimental_configuration
+
+        request = ResourceImportRequest(
+            mode=mode,
+            source=self.__create_resource_import_source(
+                configuration.linked_resource,
+                with_provider_credentials=(
+                    mode == ResourceImportMode.EXPERIMENTAL_NGW
+                ),
+            ),
+            render_resource_id=configuration.render_resource_id,
+            render_resource_ids=configuration.render_resource_ids,
+            styles=configuration.styles,
+            default_style_name=configuration.default_style_name,
+            source_extent=configuration.source_extent,
+        )
+        self.__resource_layer_importer.import_resource(request, target)
+
+    def __is_direct_resource_import_supported(
+        self,
+        resource: NGWResource,
+        source_index: QModelIndex,
+        mode: ResourceImportMode,
+    ) -> bool:
+        if not self.__resource_has_geometry(resource, source_index):
+            return False
+
+        if (
+            mode == ResourceImportMode.EXPERIMENTAL_NGW
+            and not NgConnectSettings().is_developer_mode
+        ):
+            return False
+
+        return mode not in (
+            ResourceImportMode.MVT,
+            ResourceImportMode.EXPERIMENTAL_NGW,
+        ) or isinstance(resource, NGWVectorLayer)
+
+    def __schedule_direct_import_dependencies(
+        self,
+        resource: NGWResource,
+        source_index: QModelIndex,
+        mode: ResourceImportMode,
+        action_id: ResourceMenuAction,
+        target: QgisLayerImportTarget,
+    ) -> bool:
+        needs_vector_children = mode in (
+            ResourceImportMode.TMS,
+            ResourceImportMode.EXPERIMENTAL_NGW,
+        ) and isinstance(resource, NGWVectorLayer)
+        if not needs_vector_children or not self.resource_model.canFetchMore(
+            source_index
+        ):
+            return False
+
+        job = self.resource_model.fetch_not_expanded([resource.resource_id])
+        if job is None:
+            return False
+
+        self.__schedule_pending_resource_import(
+            job.job_uuid,
+            resource.resource_id,
+            action_id,
+            target,
+        )
+        return True
+
+    def __create_tms_import_configuration(
+        self,
+        resource: NGWResource,
+        source_index: QModelIndex,
+    ) -> Optional[DirectResourceImportConfiguration]:
+        if isinstance(resource, NGWVectorLayer):
+            style_resource = self.__select_vector_layer_style(source_index)
+            if style_resource is None:
+                return None
+            return DirectResourceImportConfiguration(
+                resource,
+                render_resource_id=style_resource.resource_id,
+            )
+
+        if isinstance(resource, NGWQGISStyle):
+            linked_resource = source_index.parent().data(
+                QNGWResourceItem.NGWResourceRole
+            )
+            if not isinstance(linked_resource, NGWResource):
+                return None
+            return DirectResourceImportConfiguration(
+                linked_resource,
+                render_resource_id=resource.resource_id,
+            )
+
+        if isinstance(resource, NGWWebMap):
+            render_resource_ids = self.__webmap_tms_render_resource_ids(
+                resource
+            )
+            if len(render_resource_ids) == 0:
+                self.show_info(self.tr("The Web map has no layers"))
+                return None
+            return DirectResourceImportConfiguration(
+                resource,
+                render_resource_ids=render_resource_ids,
+                source_extent=self.__webmap_import_extent(resource),
+            )
+
+        if isinstance(resource, (NGWRasterLayer, NGWWmsLayer)):
+            return DirectResourceImportConfiguration(resource)
+
+        return None
+
+    def __create_experimental_import_configuration(
+        self,
+        resource: NGWResource,
+        source_index: QModelIndex,
+        action_id: ResourceMenuAction,
+        target: QgisLayerImportTarget,
+    ) -> Optional[DirectResourceImportConfiguration]:
+        style_resources = tuple(
+            child_resource
+            for child_resource in self.resource_model.children_resources(
+                source_index
+            )
+            if isinstance(child_resource, NGWQGISVectorStyle)
+        )
+        missing_style_ids = [
+            style.resource_id
+            for style in style_resources
+            if not style.is_qml_populated
+        ]
+        if len(missing_style_ids) > 0:
+            job = self.resource_model.fetch_missing_styles(missing_style_ids)
+            if job is not None:
+                self.__schedule_pending_resource_import(
+                    job.job_uuid,
+                    resource.resource_id,
+                    action_id,
+                    target,
+                )
+            return None
+
+        default_style_name: Optional[str] = None
+        if len(style_resources) > 1:
+            default_style = self.__select_vector_layer_style(source_index)
+            if default_style is None:
+                return None
+            default_style_name = default_style.display_name
+
+        styles = tuple(
+            ResourceImportStyle(
+                name=style.display_name,
+                qml=style.qml or "",
+            )
+            for style in style_resources
+        )
+        return DirectResourceImportConfiguration(
+            resource,
+            styles=styles,
+            default_style_name=default_style_name,
+        )
+
+    def __webmap_tms_render_resource_ids(
+        self,
+        webmap: NGWWebMap,
+    ) -> Tuple[int, ...]:
+        layers = self.__webmap_tms_layers(webmap)
+        if webmap.draw_order_enabled:
+            layers.sort(key=self.__webmap_draw_order_sort_key)
+
+        layers.reverse()
+        return tuple(
+            layer.layer_style_id
+            for layer in layers
+            if layer.layer_style_id != 0
+        )
+
+    def __webmap_tms_layers(
+        self,
+        webmap: NGWWebMap,
+    ) -> List[NGWWebMapLayer]:
+        layers: List[NGWWebMapLayer] = []
+        for child in webmap.root.children:
+            layers.extend(self.__webmap_item_tms_layers(child))
+
+        return layers
+
+    def __webmap_item_tms_layers(
+        self,
+        item: object,
+    ) -> List[NGWWebMapLayer]:
+        if isinstance(item, NGWWebMapLayer):
+            return [item]
+
+        if isinstance(item, NGWWebMapGroup):
+            layers: List[NGWWebMapLayer] = []
+            for child in item.children:
+                layers.extend(self.__webmap_item_tms_layers(child))
+            return layers
+
+        return []
+
+    def __webmap_draw_order_sort_key(
+        self,
+        layer: NGWWebMapLayer,
+    ) -> Tuple[int, int]:
+        draw_order_position = layer.draw_order_position
+        if draw_order_position is None:
+            return (1, 0)
+
+        return (0, draw_order_position)
+
+    def __webmap_import_extent(
+        self,
+        webmap: NGWWebMap,
+    ) -> Optional[ResourceImportExtent]:
+        extent = webmap.extent
+        if extent is None:
+            return None
+
+        return ResourceImportExtent(
+            x_min=extent.xMinimum(),
+            y_min=extent.yMinimum(),
+            x_max=extent.xMaximum(),
+            y_max=extent.yMaximum(),
+            coordinate_reference_system_auth_id=extent.crs().authid(),
+        )
+
+    def __schedule_pending_resource_import(
+        self,
+        job_uuid: str,
+        resource_id: int,
+        action_id: ResourceMenuAction,
+        target: QgisLayerImportTarget,
+    ) -> None:
+        self.__pending_resource_imports.append(
+            PendingResourceImport(
+                job_uuid=job_uuid,
+                resource_id=resource_id,
+                action_id=action_id,
+                target=target,
+            )
+        )
+
+    def __current_resource_import_target(self) -> QgisLayerImportTarget:
+        insertion_point = self.iface.layerTreeInsertionPoint()
+        return QgisLayerImportTarget(
+            group=insertion_point.group,
+            position=insertion_point.position,
+        )
+
+    def __select_vector_layer_style(
+        self,
+        vector_layer_index: QModelIndex,
+    ) -> Optional[NGWQGISVectorStyle]:
+        styles = [
+            resource
+            for resource in self.resource_model.children_resources(
+                vector_layer_index
+            )
+            if isinstance(resource, NGWQGISVectorStyle)
+        ]
+        if len(styles) == 0:
+            self.show_info(
+                self.tr(
+                    "A QGIS vector style is required to add this layer as TMS"
+                )
+            )
+            return None
+        if len(styles) == 1:
+            return styles[0]
+
+        dialog = NGWLayerStyleChooserDialog(
+            self.tr("Select style"),
+            vector_layer_index,
+            self.resource_model,
+            self,
+        )
+        result = dialog.exec()
+        selected_index = dialog.selectedStyleIndex()
+        dialog.deleteLater()
+        if (
+            result != NGWLayerStyleChooserDialog.DialogCode.Accepted
+            or selected_index is None
+            or not selected_index.isValid()
+        ):
+            return None
+
+        selected_resource = selected_index.data(
+            QNGWResourceItem.NGWResourceRole
+        )
+        if not isinstance(selected_resource, NGWQGISVectorStyle):
+            return None
+        return selected_resource
+
+    def __create_resource_import_source(
+        self,
+        resource: NGWResource,
+        *,
+        with_provider_credentials: bool = False,
+    ) -> ResourceImportSource:
+        connection = resource.connection.connection
+        return ResourceImportSource(
+            connection_url=connection.url,
+            connection_id=connection.id,
+            connection_instance_id=connection.domain_uuid,
+            resource_id=resource.resource_id,
+            display_name=resource.display_name,
+            auth_config_id=connection.auth_config_id,
+            provider_connection_url=(
+                connection.url_with_credentials()
+                if with_provider_credentials
+                else None
+            ),
+        )
+
+    def __direct_resource_import_mode(
+        self,
+        action_id: ResourceMenuAction,
+    ) -> Optional[ResourceImportMode]:
+        if action_id == ResourceMenuAction.ADD_MVT_LAYER:
+            return ResourceImportMode.MVT
+        if action_id == ResourceMenuAction.ADD_TMS_LAYER:
+            return ResourceImportMode.TMS
+        if action_id == ResourceMenuAction.ADD_EXPERIMENTAL_NGW_LAYER:
+            return ResourceImportMode.EXPERIMENTAL_NGW
+        return None
+
+    @pyqtSlot(str)
+    def __on_resource_layer_import_failed(self, message: str) -> None:
+        self.show_error(
+            self.tr("The resource could not be added to QGIS")
+            + f"\n\n{message}"
+        )
+
+    @pyqtSlot(str)
+    def __on_resource_layer_imported(
+        self,
+        layer_id: str,
+    ) -> None:
+        imported_layer = QgsProject.instance().mapLayer(layer_id)
+        if imported_layer is None:
+            return
+
+        imported_layer.triggerRepaint()
+        self.checkImportActionsAvailability()
 
     def __download_selected(self):
         selection_model = self.resources_tree_view.selectionModel()
@@ -3066,7 +3646,7 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
             )
         )
 
-    def delete_curent_ngw_resource(self):
+    def delete_current_ngw_resource(self):
         selection_model = self.resources_tree_view.selectionModel()
         selected_indexes = [
             self.proxy_model.mapToSource(index)
@@ -3270,7 +3850,7 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
 
         return ngw_res
 
-    def copy_curent_ngw_resource(self):
+    def duplicate_current_ngw_resource(self):
         """Copying the selected ngw resource.
         Only GUI stuff here, main part
         in _copy_resource function
@@ -3543,7 +4123,7 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
         self.dwn_qml_file = QFile(path)
         return result
 
-    def downloadQML(self):
+    def download_qml(self):
         selected_index = self.proxy_model.mapToSource(
             self.resources_tree_view.selectionModel().currentIndex()
         )
@@ -3570,6 +4150,59 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
             settings.setValue(
                 "style/lastStyleDir", QFileInfo(filepath).absolutePath()
             )
+
+    def download_ngfp(self) -> None:
+        selected_index = self.proxy_model.mapToSource(
+            self.resources_tree_view.selectionModel().currentIndex()
+        )
+        if not selected_index.isValid():
+            return
+
+        ngw_form = selected_index.data(QNGWResourceItem.NGWResourceRole)
+        if not isinstance(ngw_form, NGWResource):
+            return
+
+        if getattr(ngw_form.common, "cls", None) != "formbuilder_form":
+            return
+
+        settings = QgsSettings()
+        last_used_dir = settings.value("form/lastNgfpDir", QDir.homePath())
+        form_name = ngw_form.display_name
+        path_to_ngfp = os.path.join(last_used_dir, f"{form_name}.ngfp")
+        filepath, _selected_filter = QFileDialog.getSaveFileName(
+            self,
+            caption=self.tr("Save NGFP"),
+            directory=path_to_ngfp,
+            filter=self.tr("NextGIS Form Package") + "(*.ngfp)",
+        )
+        if filepath == "":
+            return
+
+        filepath = QgsFileUtils.ensureFileNameHasExtension(
+            filepath,
+            ["ngfp"],
+        )
+        try:
+            ngw_form.connection.download(
+                f"{ngw_form.get_relative_api_url()}/ngfp",
+                filepath,
+            )
+        except Exception:
+            logger.exception("Failed to download NGFP")
+            error = NgConnectError(
+                user_message=self.tr("NGFP file could not be downloaded")
+            )
+            NgConnectInterface.instance().notifier.display_exception(error)
+            return
+
+        settings.setValue(
+            "form/lastNgfpDir",
+            QFileInfo(filepath).absolutePath(),
+        )
+        self.__msg_in_qgis_mes_bar(
+            self.tr("NGFP file downloaded"),
+            duration=2,
+        )
 
     def copy_style(self):
         # Download style
@@ -3642,6 +4275,27 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
             QMessageBox.Icon.Critical,
             QMessageBox.StandardButton.Ok,
         )
+
+    def __resume_pending_resource_imports(self, job_uuid: str) -> None:
+        commands = [
+            command
+            for command in self.__pending_resource_imports
+            if command.job_uuid == job_uuid
+        ]
+        if len(commands) == 0:
+            return
+
+        self.__pending_resource_imports = [
+            command
+            for command in self.__pending_resource_imports
+            if command.job_uuid != job_uuid
+        ]
+        for command in commands:
+            self.__continue_direct_resource_import(
+                command.resource_id,
+                command.action_id,
+                command.target,
+            )
 
     def __add_layers_after_finish(self, job_uuid: str):
         found_i = -1
@@ -3764,37 +4418,6 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
 
         self.reinit_tree(force=True)
 
-    def __add_upload_selected_action_to_export_menu(self, menu: QMenu) -> None:
-        """
-        Triggered when the layer tree menu is about to show
-        Add action 'Upload to NextGIS Web' to the Export menu of selected layers
-        """
-        menus = [
-            action
-            for action in menu.children()
-            if isinstance(action, QMenu)
-            and action.objectName() == "exportMenu"
-        ]
-
-        if not menus:
-            return
-
-        export_menu = menus[0]
-
-        actionUploadSelectedViaExportMenu = QAction(
-            plugin_icon("branding/nextgis_logo.svg"),
-            self.tr("Upload to NextGIS Web"),
-            export_menu,
-        )
-        actionUploadSelectedViaExportMenu.triggered.connect(
-            self.upload_selected_resources
-        )
-        actionUploadSelectedViaExportMenu.setEnabled(
-            self.actionUploadSelectedResources.isEnabled()
-        )
-
-        export_menu.addAction(actionUploadSelectedViaExportMenu)
-
     def __create_search_button(self) -> None:
         menu = QMenu()
 
@@ -3861,43 +4484,16 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
         self.main_tool_bar.fix_icons_size()
 
     def __create_resource_creation_button(self) -> None:
-        menu = QMenu()
-
-        self.actionCreateNewGroup = QAction(
-            plugin_icon("actions/new_folder.svg"),
-            self.tr("Create resource group"),
-            self,
-        )
-        self.actionCreateNewGroup.triggered.connect(self.create_group)
-        menu.addAction(self.actionCreateNewGroup)
-
-        self.actionCreateNewVectorLayer = QAction(
-            plugin_icon("actions/new_vector_layer.svg"),
-            self.tr("Create vector layer"),
-            self,
-        )
-        self.actionCreateNewVectorLayer.triggered.connect(
-            self.create_vector_layer
-        )
-        menu.addAction(self.actionCreateNewVectorLayer)
-
-        text = self.tr("New NextGIS Web Vector Layer")
-        self.actionCreateNgwVectorLayer = QAction(
-            plugin_icon("actions/new_vector_layer_native.svg"),
-            text,
-            self,
-        )
-        self.actionCreateNgwVectorLayer.setToolTip(f"<b>{text}</b>")
-        self.actionCreateNgwVectorLayer.triggered.connect(
-            self.create_vector_layer
-        )
+        menu = self.__resource_menu_controller.create_resource_creation_menu()
 
         self.creation_button = QToolButton()
         self.creation_button.setPopupMode(
             QToolButton.ToolButtonPopupMode.MenuButtonPopup
         )
         self.creation_button.setMenu(menu)
-        self.creation_button.setDefaultAction(self.actionCreateNewGroup)
+        self.creation_button.setDefaultAction(
+            self.resource_creation_action(ResourceMenuAction.CREATE_GROUP)
+        )
 
     @pyqtSlot(str)
     def __on_search_requested(self, search_string: str) -> None:
@@ -4157,6 +4753,11 @@ class NGWPanelToolBar(QToolBar):
         super().__init__(None)
 
         self.__is_fix_icons_size_scheduled = False
+        self.__fix_icons_size_timer = QTimer(self)
+        self.__fix_icons_size_timer.setSingleShot(True)
+        self.__fix_icons_size_timer.timeout.connect(
+            self.__apply_scheduled_fix_icons_size
+        )
         self.setIconSize(QSize(self.ICON_SIZE, self.ICON_SIZE))
         self.setSizePolicy(
             QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed
@@ -4193,7 +4794,7 @@ class NGWPanelToolBar(QToolBar):
             return
 
         self.__is_fix_icons_size_scheduled = True
-        QTimer.singleShot(0, self.__apply_scheduled_fix_icons_size)
+        self.__fix_icons_size_timer.start(0)
 
     def __apply_scheduled_fix_icons_size(self) -> None:
         self.__is_fix_icons_size_scheduled = False
@@ -4210,11 +4811,17 @@ class NGWPanelToolBar(QToolBar):
 
             button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonIconOnly)
             button.setIconSize(icon_size)
+            use_menu_width = (
+                button.property("NgConnectPanelUseMenuButtonWidth") is True
+            )
             width = (
                 self.MENU_BUTTON_WIDTH
-                if button.menu() is not None
-                and button.popupMode()
-                != QToolButton.ToolButtonPopupMode.DelayedPopup
+                if use_menu_width
+                or (
+                    button.menu() is not None
+                    and button.popupMode()
+                    != QToolButton.ToolButtonPopupMode.DelayedPopup
+                )
                 else self.BUTTON_SIZE
             )
             button.setFixedSize(QSize(width, self.BUTTON_SIZE))

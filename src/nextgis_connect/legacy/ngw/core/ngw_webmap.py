@@ -68,6 +68,10 @@ class NGWWebMap(NGWResource):
 
         return self.__basemaps
 
+    @property
+    def draw_order_enabled(self) -> bool:
+        return bool(self._json[self.type_id].get("draw_order_enabled"))
+
     @staticmethod
     def to_webmap_extent(
         rectangle: QgsReferencedRectangle,
@@ -146,6 +150,7 @@ class NGWWebMap(NGWResource):
             transparency=layer_item.get("layer_transparency"),
             legend=legend_value,
             style_parent_id=layer_id,
+            draw_order_position=layer_item.get("draw_order_position"),
         )
 
     def __extract_group(self, group_item: Dict[str, Any]) -> "NGWWebMapGroup":
@@ -309,6 +314,7 @@ class NGWWebMapLayer(NGWWebMapItem):
         transparency: Optional[float],
         legend: Optional[bool],
         style_parent_id: Optional[int] = None,
+        draw_order_position: Optional[int] = None,
     ):
         super().__init__(NGWWebMapItem.ITEM_TYPE_LAYER)
         self.layer_style_id = layer_style_id
@@ -317,6 +323,7 @@ class NGWWebMapLayer(NGWWebMapItem):
         self.transparency = transparency
         self.legend = legend
         self.style_parent_id = style_parent_id
+        self.draw_order_position = draw_order_position
 
     def __repr__(self) -> str:
         class_name = self.__class__.__name__
@@ -336,6 +343,7 @@ class NGWWebMapLayer(NGWWebMapItem):
             layer_min_scale_denom=None,
             layer_transparency=self.transparency,
             legend_symbols=legend,
+            draw_order_position=self.draw_order_position,
         )
 
 

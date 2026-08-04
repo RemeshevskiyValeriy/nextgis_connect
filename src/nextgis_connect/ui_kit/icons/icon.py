@@ -158,14 +158,19 @@ def plugin_icon_file_path(icon_path: Union[Path, str]) -> Path:
     return filesystem_path
 
 
+NGW_RESOURCE_ICON_SIZE = 128
+
+
 def ngw_resource_type_icon(
     resource_class: Optional[str] = None,
     resource_type: Optional[str] = None,
+    size: int = NGW_RESOURCE_ICON_SIZE,
 ) -> QIcon:
     """Return an NGW resource icon from plugin assets.
 
     :param resource_class: Concrete NGW resource class.
     :param resource_type: Fallback NGW resource type.
+    :param size: Rendered icon size in pixels.
     :return: QIcon instance for the NGW resource.
     """
     names: List[str] = []
@@ -179,9 +184,9 @@ def ngw_resource_type_icon(
         icon_path = f"ngw_resources/{name}.svg"
         _, result_path = _plugin_icon_source(icon_path)
         if result_path is not None:
-            return plugin_icon(icon_path)
+            return plugin_icon(icon_path, size=size)
 
-    return plugin_icon("ngw_resources/resource.svg")
+    return plugin_icon("ngw_resources/resource.svg", size=size)
 
 
 def ngw_resource_icon(ngw_resource: object) -> QIcon:
@@ -196,6 +201,68 @@ def ngw_resource_icon(ngw_resource: object) -> QIcon:
     return ngw_resource_type_icon(resource_class, resource_type)
 
 
+class NgwResourceCreationIconFactory:
+    """Create NGW resource icons decorated with creation overlays."""
+
+    ICON_SIZE = NGW_RESOURCE_ICON_SIZE
+    PLUGIN_PANEL_OVERLAY = "overlay_plugin_new"
+    QGIS_PANEL_OVERLAY = "overlay_qgis_new"
+
+    def __init__(self) -> None:
+        self._icons: Dict[Tuple[str, str], QIcon] = {}
+
+    def plugin_panel_icon(
+        self,
+        resource_class: str,
+    ) -> QIcon:
+        """Return an icon for plugin-panel creation commands."""
+        return self.icon(resource_class, self.PLUGIN_PANEL_OVERLAY)
+
+    def qgis_panel_icon(
+        self,
+        resource_class: str,
+    ) -> QIcon:
+        """Return an icon for QGIS-panel creation commands."""
+        return self.icon(resource_class, self.QGIS_PANEL_OVERLAY)
+
+    def icon(
+        self,
+        resource_class: str,
+        overlay_class: str,
+    ) -> QIcon:
+        """Return a resource icon decorated by the requested overlay."""
+        cache_key = (resource_class, overlay_class)
+        cached_icon = self._icons.get(cache_key)
+        if cached_icon is not None:
+            return cached_icon
+
+        icon_size = QSize(self.ICON_SIZE, self.ICON_SIZE)
+        pixmap = QPixmap(icon_size)
+        pixmap.fill(Qt.GlobalColor.transparent)
+
+        painter = QPainter(pixmap)
+        try:
+            painter.drawPixmap(
+                0,
+                0,
+                ngw_resource_type_icon(resource_class).pixmap(icon_size),
+            )
+            painter.drawPixmap(
+                0,
+                0,
+                plugin_icon(
+                    f"ngw_resources/{overlay_class}.svg",
+                    size=self.ICON_SIZE,
+                ).pixmap(icon_size),
+            )
+        finally:
+            painter.end()
+
+        icon = QIcon(pixmap)
+        self._icons[cache_key] = icon
+        return icon
+
+
 def material_icon_path(name: str) -> Optional[Path]:
     """Return a material SVG path from plugin assets.
 
@@ -204,15 +271,23 @@ def material_icon_path(name: str) -> Optional[Path]:
     """
     material_icons_path = _plugin_path() / "assets" / "icons" / "material"
 
-    for path in sorted(material_icons_path.glob(f"{name}*")):
-        if not path.is_file() or path.suffix.lower() != ".svg":
-            continue
+    for icon_directory in (
+        material_icons_path,
+        material_icons_path / "custom",
+    ):
+        for path in sorted(icon_directory.glob(f"{name}*")):
+            if not path.is_file() or path.suffix.lower() != ".svg":
+                continue
 
-        suffix = path.name[len(name) :]
-        if suffix == ".svg":
-            return path
-        if suffix.startswith("_") and len(suffix) > 1 and suffix[1].isdigit():
-            return path
+            suffix = path.name[len(name) :]
+            if suffix == ".svg":
+                return path
+            if (
+                suffix.startswith("_")
+                and len(suffix) > 1
+                and suffix[1].isdigit()
+            ):
+                return path
 
     return None
 
