@@ -311,10 +311,9 @@ class FeatureDeleteConflictTab(
                 else ""
             )
         elif isinstance(
-            edit_widget, (QgsDateEdit, QgsDateTimeEdit, QgsTimeEdit)
+            edit_widget, (QgsTimeEdit, QgsDateEdit, QgsDateTimeEdit)
         ):
             edit_widget.setReadOnly(is_read_only)
-            edit_widget.setShowClearButton(not is_read_only)
         elif isinstance(edit_widget, QgsFilterLineEdit):
             edit_widget.setReadOnly(is_read_only)
             edit_widget.setShowClearButton(not is_read_only)
