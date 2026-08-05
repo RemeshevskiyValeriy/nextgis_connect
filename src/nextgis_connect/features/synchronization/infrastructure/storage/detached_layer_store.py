@@ -146,6 +146,16 @@ class DetachedLayerStore:
         )
         return entry
 
+    def remove_container_entry(self, layer_key: LayerKey) -> None:
+        """Remove detached container index entry if it exists."""
+        layer_entry = self._storage_index.layer_entry(layer_key)
+        if layer_entry is None:
+            return
+
+        self._storage_index.delete_entry(
+            int(layer_entry["container_entry_id"])
+        )
+
     def mark_used_by_project(self, layer_key: LayerKey, used: bool) -> None:
         """Update project usage protection for a layer container."""
         self._update_layer_flags(layer_key, is_used_by_project=used)

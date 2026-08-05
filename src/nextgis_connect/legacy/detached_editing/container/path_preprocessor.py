@@ -186,7 +186,10 @@ class DetachedEditingPathPreprocessor(QObject):
             return False
 
         self._create_empty_container(
-            connection_id, resource_id, cached_layer_path
+            domain_uuid,
+            connection_id,
+            resource_id,
+            cached_layer_path,
         )
 
         return True
@@ -281,7 +284,11 @@ class DetachedEditingPathPreprocessor(QObject):
         ]
 
     def _create_empty_container(
-        self, connection_id: str, resource_id: int, cached_layer_path: Path
+        self,
+        domain_uuid: str,
+        connection_id: str,
+        resource_id: int,
+        cached_layer_path: Path,
     ) -> None:
         ngw_connection = QgsNgwConnection(connection_id)
         resources_factory = NGWResourceFactory(ngw_connection)
@@ -289,12 +296,23 @@ class DetachedEditingPathPreprocessor(QObject):
         assert isinstance(ngw_layer, NGWVectorLayer)
 
         detached_factory = DetachedContainerFactory()
+        storage_service = DetachedStorageServiceFactory.create()
         cached_layer_path.parent.mkdir(exist_ok=True, parents=True)
-        detached_factory.create_initial_container(ngw_layer, cached_layer_path)
-        metadata = container_metadata(cached_layer_path)
-        DetachedStorageServiceFactory.create().register_detached_container(
-            metadata.instance_id,
-            metadata.resource_id,
-            connection_id=metadata.connection_id,
-            container_path=cached_layer_path,
-        )
+        try:
+            detached_factory.create_initial_container(
+                ngw_layer,
+                cached_layer_path,
+            )
+            metadata = container_metadata(cached_layer_path)
+            storage_service.register_detached_container(
+                metadata.instance_id,
+                metadata.resource_id,
+                connection_id=metadata.connection_id,
+                container_path=cached_layer_path,
+            )
+        except Exception:
+            storage_service.remove_layer_container_cache(
+                domain_uuid,
+                resource_id,
+            )
+            raise

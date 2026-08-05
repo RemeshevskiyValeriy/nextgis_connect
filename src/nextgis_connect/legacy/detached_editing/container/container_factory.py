@@ -89,10 +89,11 @@ class DetachedContainerFactory:
                 connection.commit()
 
         except NgConnectError:
+            self.__remove_container_files(container_path)
             raise
 
         except Exception as error:
-            container_path.unlink(missing_ok=True)
+            self.__remove_container_files(container_path)
             message = "Failed to create container"
             code = ErrorCode.ContainerCreationError
             raise ContainerError(message, code=code) from error
@@ -100,6 +101,18 @@ class DetachedContainerFactory:
         else:
             logger.debug(
                 "Container successfully created and filled with metadata"
+            )
+
+    def __remove_container_files(self, container_path: Path) -> None:
+        try:
+            for service_file in container_path.parent.glob(
+                f"{container_path.name}-*"
+            ):
+                service_file.unlink(missing_ok=True)
+            container_path.unlink(missing_ok=True)
+        except Exception:
+            logger.exception(
+                f"Could not remove broken detached container {container_path}"
             )
 
     def __ensure_no_geometry_supported(
@@ -176,7 +189,7 @@ class DetachedContainerFactory:
 
     def __create_container(
         self, ngw_layer: NGWVectorLayer, container_path: Path
-    ) -> bool:
+    ) -> None:
         project = QgsProject.instance()
         assert project is not None
 
@@ -202,18 +215,18 @@ class DetachedContainerFactory:
         )
         assert writer is not None
 
-        is_success = False
         if writer.hasError() != QgsVectorFileWriter.WriterError.NoError:
-            logger.error(
-                f"Failed to create GPKG container: {writer.errorMessage()}"
+            error_message = writer.errorMessage()
+            logger.error(f"Failed to create GPKG container: {error_message}")
+            writer = None
+            raise ContainerError(
+                "Failed to create GPKG container",
+                detail=error_message,
+                code=ErrorCode.ContainerCreationError,
             )
-        else:
-            logger.debug("Empty container successfully created")
-            is_success = True
 
         writer = None
-
-        return is_success
+        logger.debug("Empty container successfully created")
 
     def __update_container_extent(
         self,

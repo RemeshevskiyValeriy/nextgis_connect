@@ -198,6 +198,25 @@ class DetachedStorageService:
         )
         return True
 
+    def remove_layer_container_cache(
+        self,
+        instance_uuid: str,
+        resource_id: Union[int, str],
+    ) -> None:
+        """Remove a detached layer container file and its index entry."""
+        layer_key = LayerKey(instance_uuid, int(resource_id))
+        try:
+            self.detached_layers.remove_container_entry(layer_key)
+
+            container_path = self.container_path(instance_uuid, resource_id)
+            for service_file in container_path.parent.glob(
+                f"{container_path.name}-*"
+            ):
+                service_file.unlink(missing_ok=True)
+            container_path.unlink(missing_ok=True)
+        except Exception:
+            logger.exception("Could not remove detached layer container cache")
+
     def attachment_directory(
         self,
         instance_uuid: str,

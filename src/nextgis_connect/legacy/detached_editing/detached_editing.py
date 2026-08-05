@@ -742,7 +742,11 @@ class DetachedEditing(QObject):
 
         if not container_path.exists():
             return (
-                self.__create_empty_container(ngw_layer, container_path),
+                self.__create_empty_container(
+                    ngw_layer,
+                    container_path,
+                    connection.domain_uuid,
+                ),
                 True,
             )
 
@@ -775,9 +779,13 @@ class DetachedEditing(QObject):
         return ngw_layer
 
     def __create_empty_container(
-        self, ngw_layer: NGWVectorLayer, container_path: Path
+        self,
+        ngw_layer: NGWVectorLayer,
+        container_path: Path,
+        instance_uuid: str,
     ) -> bool:
         detached_factory = DetachedContainerFactory()
+        storage_service = DetachedStorageServiceFactory.create()
         container_path.parent.mkdir(parents=True, exist_ok=True)
 
         try:
@@ -785,7 +793,7 @@ class DetachedEditing(QObject):
                 ngw_layer, container_path
             )
             metadata = utils.container_metadata(container_path)
-            DetachedStorageServiceFactory.create().register_detached_container(
+            storage_service.register_detached_container(
                 metadata.instance_id,
                 metadata.resource_id,
                 connection_id=metadata.connection_id,
@@ -793,6 +801,10 @@ class DetachedEditing(QObject):
             )
         except Exception:
             logger.exception("Could not create missing detached container")
+            storage_service.remove_layer_container_cache(
+                instance_uuid,
+                ngw_layer.resource_id,
+            )
             return False
 
         return True

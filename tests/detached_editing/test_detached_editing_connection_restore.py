@@ -15,6 +15,7 @@
 # with this program; if not, see <https://www.gnu.org/licenses/>.
 
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 from uuid import uuid4
 
@@ -69,6 +70,37 @@ def test_layer_matches_connection_by_domain_cache_path() -> None:
         _Layer({}),
         container_path,
         connection,
+    )
+
+
+def test_failed_empty_container_creation_removes_cache_placeholder(
+    tmp_path,
+) -> None:
+    detached_editing = DetachedEditing.__new__(DetachedEditing)
+    ngw_layer = SimpleNamespace(resource_id=123)
+    container_path = tmp_path / "cache" / "123.gpkg"
+    instance_uuid = str(uuid4())
+
+    with patch(
+        "nextgis_connect.legacy.detached_editing.detached_editing.DetachedContainerFactory"
+    ) as factory_class, patch(
+        "nextgis_connect.legacy.detached_editing.detached_editing.DetachedStorageServiceFactory"
+    ) as storage_factory:
+        factory_class.return_value.create_initial_container.side_effect = (
+            RuntimeError("broken container")
+        )
+        storage_service = storage_factory.create.return_value
+
+        result = detached_editing._DetachedEditing__create_empty_container(
+            ngw_layer,
+            container_path,
+            instance_uuid,
+        )
+
+    assert result is False
+    storage_service.remove_layer_container_cache.assert_called_once_with(
+        instance_uuid,
+        ngw_layer.resource_id,
     )
 
 

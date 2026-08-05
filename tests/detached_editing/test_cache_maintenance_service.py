@@ -279,6 +279,35 @@ class TestCacheMaintenanceService(NgConnectTestCase):
         )
         self.assertIsNotNone(container_entry.sha256)
 
+    def test_remove_layer_container_cache_removes_file_and_index(self) -> None:
+        resource = self.resource(TestData.Points)
+        connection = self.connection(TestConnection.SandboxGuest)
+        container_path = self.storage_service.ensure_container_placeholder(
+            connection.domain_uuid,
+            resource.resource_id,
+            connection_id=connection.id,
+        )
+        container_path.parent.mkdir(parents=True, exist_ok=True)
+        container_path.write_bytes(b"broken")
+        service_file = container_path.parent / f"{container_path.name}-wal"
+        service_file.write_bytes(b"wal")
+        storage_index = self.__storage_index()
+        layer_key = LayerKey(connection.domain_uuid, resource.resource_id)
+        layer_entry = storage_index.layer_entry(layer_key)
+        self.assertIsNotNone(layer_entry)
+        assert layer_entry is not None
+        container_entry_id = int(layer_entry["container_entry_id"])
+
+        self.storage_service.remove_layer_container_cache(
+            connection.domain_uuid,
+            resource.resource_id,
+        )
+
+        self.assertFalse(container_path.exists())
+        self.assertFalse(service_file.exists())
+        self.assertIsNone(storage_index.layer_entry(layer_key))
+        self.assertIsNone(storage_index.find_entry_by_id(container_entry_id))
+
     @mock_container(TestData.Points)
     def test_reassign_connection_updates_index_metadata(
         self,

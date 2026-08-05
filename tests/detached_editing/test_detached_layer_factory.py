@@ -44,6 +44,7 @@ from nextgis_connect.legacy.ngw.resources.ngw_fields import NgwFields
 from nextgis_connect.legacy.ngw_connection import NgwConnection
 from nextgis_connect.legacy.settings import NgConnectSettings
 from nextgis_connect.platform.qgis.compat import FieldType
+from nextgis_connect.platform.qgis.errors import ContainerError
 from nextgis_connect.platform.qgis.extent_calculator import ExtentCalculator
 from tests.ng_connect_testcase import (
     NgConnectTestCase,
@@ -217,6 +218,37 @@ class TestDetachedContainerFactory(NgConnectTestCase):
             metadata_columns = {row[1] for row in cursor.fetchall()}
 
         self.assertNotIn("old_connection_ids", metadata_columns)
+
+    def test_create_initial_container_removes_broken_container(self) -> None:
+        connection = self.connection(TestConnection.SandboxGuest)
+        layer_json = self.resource_json(TestData.Points)
+        field = layer_json["feature_layer"]["fields"][0]
+        duplicated_keyname = str(field["keyname"]).upper()
+        layer_json["feature_layer"]["fields"].append(
+            {
+                "id": 50000,
+                "keyname": duplicated_keyname,
+                "datatype": field["datatype"],
+                "display_name": duplicated_keyname,
+            }
+        )
+        ngw_layer = cast(
+            NGWVectorLayer,
+            self.resource(layer_json, connection),
+        )
+        container_path = self.create_temp_file(".gpkg")
+
+        with self.assertRaises(ContainerError):
+            DetachedContainerFactory().create_initial_container(
+                ngw_layer,
+                container_path,
+            )
+
+        self.assertFalse(container_path.exists())
+        self.assertEqual(
+            list(container_path.parent.glob(f"{container_path.name}-*")),
+            [],
+        )
 
     def test_create_initial_container_sets_gpkg_extent(self) -> None:
         connection = self.connection(TestConnection.SandboxGuest)
