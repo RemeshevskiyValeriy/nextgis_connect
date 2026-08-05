@@ -659,6 +659,68 @@ class TestIdentificationResultsWidget:
             tab.deleteLater()
             _restore_plugin_mock(previous_plugin)
 
+    def test_refresh_existing_attachments_preserves_selection(
+        self,
+        qgis_app: QgsApplication,
+    ) -> None:
+        del qgis_app
+
+        _plugin, previous_plugin = _install_plugin_mock()
+        tab = AttachmentsTab()
+        first_attachment = AttachmentMetadata(
+            fid=1,
+            aid=1,
+            name="a.pdf",
+        )
+        second_attachment = AttachmentMetadata(
+            fid=1,
+            aid=2,
+            name="b.pdf",
+            description="old",
+        )
+        updated_second_attachment = AttachmentMetadata(
+            fid=1,
+            aid=2,
+            name="z.pdf",
+            description="new",
+        )
+        tab._attachments_model.set_attachments(
+            [first_attachment, second_attachment]
+        )
+        source_index = tab._attachments_model.index_for_attachment_id(2)
+        proxy_index = tab._attachments_proxy.mapFromSource(source_index)
+        selection_model = tab.view.selectionModel()
+        selection_model.select(
+            proxy_index,
+            selection_model.SelectionFlag.ClearAndSelect,
+        )
+        tab.view.setCurrentIndex(proxy_index)
+
+        try:
+            tab._attachments_model.refresh_attachments(
+                [first_attachment, updated_second_attachment]
+            )
+
+            selected_indexes = selection_model.selectedIndexes()
+            selected_attachments = [
+                index.data(tab._attachments_model.Roles.ATTACHMENT)
+                for index in selected_indexes
+            ]
+
+            assert len(selected_attachments) == 1
+            assert selected_attachments[0].aid == 2
+            assert selected_attachments[0].description == "new"
+            assert (
+                tab.view.currentIndex()
+                .data(tab._attachments_model.Roles.ATTACHMENT)
+                .aid
+                == 2
+            )
+        finally:
+            tab.close()
+            tab.deleteLater()
+            _restore_plugin_mock(previous_plugin)
+
     def test_download_task_finish_opens_pending_attachment(
         self,
         qgis_app: QgsApplication,

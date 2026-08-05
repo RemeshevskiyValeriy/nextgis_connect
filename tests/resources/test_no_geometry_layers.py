@@ -49,7 +49,7 @@ from nextgis_connect.platform.qgis.compat import (
     GeometryType,
     LayerType,
 )
-from nextgis_connect.platform.qgis.errors import ContainerError
+from nextgis_connect.platform.qgis.errors import ContainerError, NgwError
 from tests.ng_connect_testcase import NgConnectTestCase, TestData
 
 
@@ -120,6 +120,18 @@ class TestNoGeometryLayers(NgConnectTestCase):
         self.assertEqual(query["format"], ["GPKG"])
         self.assertEqual(query["fid"], ["fid"])
         self.assertEqual(query["zipped"], ["false"])
+
+    def test_no_geometry_layer_rejects_qml_style_upload(self) -> None:
+        layer = self._make_ngw_no_geometry_layer()
+        connection = layer.res_factory.connection
+
+        with self.assertRaises(NgwError):
+            layer.create_qml_style(
+                "/tmp/style.qml",
+                lambda *_args: None,
+            )
+
+        connection.upload_file.assert_not_called()
 
     def test_export_without_geometry_requires_supported_ngw_version(
         self,

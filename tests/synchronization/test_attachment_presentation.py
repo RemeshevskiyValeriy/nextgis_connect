@@ -17,9 +17,21 @@
 from pathlib import Path
 
 import pytest
-from qgis.PyQt.QtCore import QRect, QRectF, QSize, Qt
-from qgis.PyQt.QtGui import QColor, QIcon, QPainter, QPalette, QPixmap
-from qgis.PyQt.QtWidgets import QListView, QStyleOptionViewItem
+from qgis.PyQt.QtCore import QEvent, QRect, QRectF, QSize, Qt
+from qgis.PyQt.QtGui import (
+    QColor,
+    QIcon,
+    QKeyEvent,
+    QPainter,
+    QPalette,
+    QPixmap,
+)
+from qgis.PyQt.QtWidgets import (
+    QApplication,
+    QLineEdit,
+    QListView,
+    QStyleOptionViewItem,
+)
 
 from nextgis_connect.features.synchronization.presentation.attachments import (
     attachment_delegate as attachment_delegate_module,
@@ -133,6 +145,7 @@ def test_attachments_model_exposes_loading_display_state(
         description="Description",
         mime_type="application/pdf",
         file_path=attachment_path,
+        size=2048,
     )
     model = AttachmentsModel([attachment])
     index = model.index(0)
@@ -140,7 +153,7 @@ def test_attachments_model_exposes_loading_display_state(
     state = AttachmentDisplayState.from_index(index)
     editor_state = AttachmentDisplayState.from_index(index, for_editor=True)
 
-    assert state.title.startswith("report.pdf")
+    assert state.title == "report.pdf"
     assert editor_state.title == "report.pdf"
     assert state.description == "Description"
     assert state.mime_type == "application/pdf"
@@ -195,6 +208,33 @@ def test_attachments_model_exposes_preview_loading_kind(
     assert state.loading_kind == AttachmentLoadingKind.PREVIEW.value
     assert state.is_preview_loading
     assert state.icon_value is None
+
+
+def test_attachments_model_uses_local_image_as_unsent_preview(
+    qgis_app,
+    tmp_path: Path,
+) -> None:
+    del qgis_app
+
+    attachment_path = tmp_path / "photo.png"
+    pixmap = QPixmap(4, 4)
+    pixmap.fill(QColor("#ff0000"))
+    assert pixmap.save(str(attachment_path))
+    attachment = AttachmentMetadata(
+        fid=1,
+        aid=-1,
+        name="photo.png",
+        description="",
+        mime_type="image/png",
+        file_path=attachment_path,
+        thumbnail_path=None,
+    )
+    model = AttachmentsModel([attachment])
+
+    decoration = model.index(0).data(Qt.ItemDataRole.DecorationRole)
+
+    assert isinstance(decoration, QPixmap)
+    assert not decoration.isNull()
 
 
 def test_attachments_model_keeps_cache_state_stable_while_loading(
@@ -469,6 +509,93 @@ def test_attachment_delegate_omits_placeholder_for_loading_icon(
 
         assert painter.draw_text_calls == []
     finally:
+        view.close()
+        view.deleteLater()
+
+
+def test_attachment_delegate_preserves_editor_cursor_on_sync(
+    qgis_app,
+) -> None:
+    del qgis_app
+
+    attachment = AttachmentMetadata(
+        fid=1,
+        aid=2,
+        name="image.jpg",
+        description="middle text",
+    )
+    model = AttachmentsModel([attachment])
+    view = QListView()
+    view.setModel(model)
+    delegate = AttachmentDelegate(view)
+    index = model.index(0, 0)
+    option = QStyleOptionViewItem()
+    option.rect = QRect(0, 0, 240, 64)
+    option.font = view.font()
+    option.palette = view.palette()
+    editor = delegate.createEditor(view.viewport(), option, index)
+    desc_edit = editor.findChild(QLineEdit, "editorDescription")
+
+    try:
+        assert desc_edit is not None
+
+        desc_edit.setCursorPosition(3)
+        delegate.setEditorData(editor, index)
+
+        assert desc_edit.cursorPosition() == 3
+    finally:
+        editor.close()
+        editor.deleteLater()
+        view.close()
+        view.deleteLater()
+
+
+def test_attachment_delegate_handles_description_enter_in_editor(
+    qgis_app,
+) -> None:
+    del qgis_app
+
+    attachment = AttachmentMetadata(
+        fid=1,
+        aid=2,
+        name="image.jpg",
+        description="caption",
+    )
+    model = AttachmentsModel([attachment])
+    view = QListView()
+    view.setModel(model)
+    delegate = AttachmentDelegate(view)
+    index = model.index(0, 0)
+    option = QStyleOptionViewItem()
+    option.rect = QRect(0, 0, 240, 64)
+    option.font = view.font()
+    option.palette = view.palette()
+    editor = delegate.createEditor(view.viewport(), option, index)
+    desc_edit = editor.findChild(QLineEdit, "editorDescription")
+    closed_editors = []
+    committed_editors = []
+    delegate.closeEditor.connect(
+        lambda editor, _hint: closed_editors.append(editor)
+    )
+    delegate.commitData.connect(committed_editors.append)
+
+    try:
+        assert desc_edit is not None
+
+        event = QKeyEvent(
+            QEvent.Type.KeyPress,
+            Qt.Key.Key_Return,
+            Qt.KeyboardModifier.NoModifier,
+        )
+
+        QApplication.sendEvent(desc_edit, event)
+
+        assert event.isAccepted()
+        assert closed_editors == [editor]
+        assert committed_editors == [editor]
+    finally:
+        editor.close()
+        editor.deleteLater()
         view.close()
         view.deleteLater()
 

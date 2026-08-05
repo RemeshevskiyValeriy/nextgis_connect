@@ -549,9 +549,11 @@ class DetachedEditing(QObject):
             container_path,
         )
         if not is_prepared:
+            self.__set_layer_edit_allowed(layer, False)
             return None
 
         if not utils.is_ngw_container(container_path, check_metadata=True):
+            self.__set_layer_edit_allowed(layer, False)
             return None
 
         if (
@@ -574,6 +576,7 @@ class DetachedEditing(QObject):
 
         metadata = container.metadata
         if metadata is None:
+            self.__set_layer_edit_allowed(layer, False)
             return None
 
         current_connection_id = metadata.connection_id
@@ -600,6 +603,17 @@ class DetachedEditing(QObject):
             return container_path
 
         return None
+
+    def __set_layer_edit_allowed(
+        self,
+        layer: QgsMapLayer,
+        is_edit_allowed: bool,
+    ) -> None:
+        container = self.__containers_by_layer_id.get(layer.id())
+        if container is None:
+            return
+
+        container.set_edit_allowed(is_edit_allowed)
 
     def __restore_related_layer_sources(
         self,

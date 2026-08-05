@@ -23,6 +23,7 @@ from qgis.PyQt.QtCore import (
     QEvent,
     QItemSelectionModel,
     QModelIndex,
+    QObject,
     QPersistentModelIndex,
     QRect,
     QSize,
@@ -36,6 +37,7 @@ from qgis.PyQt.QtGui import (
     QFont,
     QFontMetrics,
     QIcon,
+    QKeyEvent,
     QPainter,
     QPalette,
     QPixmap,
@@ -805,6 +807,7 @@ class AttachmentDelegate(WidgetItemDelegate):
             lambda _: self.commitData.emit(container)
         )
         title_edit.returnPressed.connect(self.close_current_editor)
+        title_edit.installEventFilter(self)
 
         # Keep default frame/padding to indicate edit mode
         # Use bold font to match display
@@ -831,6 +834,7 @@ class AttachmentDelegate(WidgetItemDelegate):
         desc_edit.setFont(QFont(option.font))
         desc_edit.textEdited.connect(lambda _: self.commitData.emit(container))
         desc_edit.returnPressed.connect(self.close_current_editor)
+        desc_edit.installEventFilter(self)
 
         # Tool button with actions menu
         tool_button = QToolButton(container)
@@ -944,9 +948,70 @@ class AttachmentDelegate(WidgetItemDelegate):
         title_edit = editor.findChild(QLineEdit, "editorTitle")
         desc_edit = editor.findChild(QLineEdit, "editorDescription")
         if title_edit is not None:
-            title_edit.setText(title)
+            self._set_line_edit_text_preserving_cursor(title_edit, title)
         if desc_edit is not None:
-            desc_edit.setText(description)
+            self._set_line_edit_text_preserving_cursor(
+                desc_edit,
+                description,
+            )
+
+    def eventFilter(self, watched: QObject, event: QEvent) -> bool:  # type: ignore[override]
+        if self._is_editor_return_key_event(watched, event):
+            editor = cast(QLineEdit, watched).parentWidget()
+            if editor is not None:
+                self.commitData.emit(editor)
+
+            self.close_current_editor()
+            event.accept()
+            return True
+
+        return super().eventFilter(watched, event)
+
+    @staticmethod
+    def _set_line_edit_text_preserving_cursor(
+        line_edit: QLineEdit,
+        text: str,
+    ) -> None:
+        if line_edit.text() == text:
+            return
+
+        cursor_position = line_edit.cursorPosition()
+        selection_start = line_edit.selectionStart()
+        selected_text_length = len(line_edit.selectedText())
+        was_modified = line_edit.isModified()
+
+        line_edit.setText(text)
+
+        if selection_start >= 0 and selected_text_length > 0:
+            safe_selection_start = min(selection_start, len(text))
+            line_edit.setSelection(
+                safe_selection_start,
+                min(selected_text_length, len(text) - safe_selection_start),
+            )
+        else:
+            line_edit.setCursorPosition(min(cursor_position, len(text)))
+
+        line_edit.setModified(was_modified)
+
+    @staticmethod
+    def _is_editor_return_key_event(
+        watched: QObject,
+        event: QEvent,
+    ) -> bool:
+        if not isinstance(watched, QLineEdit):
+            return False
+
+        if watched.objectName() not in {"editorTitle", "editorDescription"}:
+            return False
+
+        if event.type() != QEvent.Type.KeyPress:
+            return False
+
+        key_event = cast(QKeyEvent, event)
+        return key_event.key() in (
+            Qt.Key.Key_Return,
+            Qt.Key.Key_Enter,
+        )
 
     def setModelData(self, editor: QWidget, model, index: QModelIndex) -> None:
         """Store edited values back to the model.

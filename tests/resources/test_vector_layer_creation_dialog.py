@@ -55,9 +55,19 @@ class _LineEdit:
 class _CheckBox:
     def __init__(self, is_checked: bool) -> None:
         self._is_checked = is_checked
+        self._is_enabled = True
 
     def isChecked(self) -> bool:
         return self._is_checked
+
+    def setChecked(self, is_checked: bool) -> None:
+        self._is_checked = is_checked
+
+    def isEnabled(self) -> bool:
+        return self._is_enabled
+
+    def setEnabled(self, is_enabled: bool) -> None:
+        self._is_enabled = is_enabled
 
 
 class _ComboBox:
@@ -66,6 +76,24 @@ class _ComboBox:
 
     def currentData(self) -> Any:
         return self._current_data
+
+
+class _GeometryComboBox(_ComboBox):
+    def __init__(self) -> None:
+        super().__init__(None)
+        self._items: List[Any] = []
+
+    def addItem(self, *arguments: Any) -> None:
+        self._items.append(arguments[-1])
+
+    def findData(self, data: Any) -> int:
+        try:
+            return self._items.index(data)
+        except ValueError:
+            return -1
+
+    def setCurrentIndex(self, index: int) -> None:
+        self._current_data = self._items[index]
 
 
 class _Fields:
@@ -182,6 +210,46 @@ def test_build_resource_disables_versioning_explicitly(qgis_app) -> None:
     assert resource["feature_layer"]["versioning"] == {"enabled": False}
 
     dialog.deleteLater()
+
+
+def test_build_resource_creates_layer_without_geometry(qgis_app) -> None:
+    del qgis_app
+
+    dialog, _ = _creation_dialog(
+        geometry_type=WkbType.NoGeometry,
+        include_z=True,
+    )
+
+    resource = dialog._VectorLayerCreationDialog__build_resource()
+
+    assert resource["vector_layer"] == {
+        "geometry_type": "NONE",
+        "fields": [],
+    }
+
+    dialog.deleteLater()
+
+
+def test_enable_no_geometry_type_disables_z_checkbox(qgis_app) -> None:
+    del qgis_app
+
+    dialog = VectorLayerCreationDialog.__new__(VectorLayerCreationDialog)
+    dialog.geometry_combobox = _GeometryComboBox()
+    dialog.z_checkbox = _CheckBox(True)
+    dialog._VectorLayerCreationDialog__has_no_geometry_support = False
+
+    dialog.enable_no_geometry_layer_type()
+    no_geometry_index = dialog.geometry_combobox.findData(
+        int(WkbType.NoGeometry)
+    )
+
+    assert no_geometry_index >= 0
+
+    dialog.geometry_combobox.setCurrentIndex(no_geometry_index)
+    dialog._VectorLayerCreationDialog__update_geometry_controls()
+
+    assert not dialog.z_checkbox.isEnabled()
+    assert not dialog.z_checkbox.isChecked()
 
 
 def test_upload_vector_layer_does_not_send_versioning_flag() -> None:
@@ -312,6 +380,8 @@ def test_upload_vector_layer_skips_empty_creation_metadata() -> None:
 
 def _creation_dialog(
     versioning_mode: VersioningMode = VersioningMode.AUTO,
+    geometry_type: WkbType = WkbType.Point,
+    include_z: bool = False,
 ) -> Tuple[VectorLayerCreationDialog, LoadingPushButton]:
     dialog = VectorLayerCreationDialog.__new__(VectorLayerCreationDialog)
     QDialog.__init__(dialog)
@@ -320,8 +390,8 @@ def _creation_dialog(
     dialog.layer_name_lineedit = _LineEdit("Created layer")
     dialog.fields_view = _FieldsView()
     dialog.versioning_combobox = _ComboBox(versioning_mode.value)
-    dialog.geometry_combobox = _ComboBox(int(WkbType.Point))
-    dialog.z_checkbox = _CheckBox(False)
+    dialog.geometry_combobox = _ComboBox(int(geometry_type))
+    dialog.z_checkbox = _CheckBox(include_z)
     dialog.add_to_project_checkbox = _CheckBox(True)
     dialog.button_box = QDialogButtonBox(
         QDialogButtonBox.StandardButton.Cancel,

@@ -635,7 +635,10 @@ class AttachmentsTab(QWidget):
             self._view_wrapper.end_loading()
             return
 
-        self._attachments_model.set_attachments(task.attachments)
+        if task.keep_existing:
+            self._attachments_model.refresh_attachments(task.attachments)
+        else:
+            self._attachments_model.set_attachments(task.attachments)
         self._connect_attachment_signals(task.detached_layer)
         self._update_action_buttons_availability()
         self._view_wrapper.end_loading()

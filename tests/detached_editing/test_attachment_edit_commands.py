@@ -110,6 +110,36 @@ def test_new_attachment_description_update_stays_in_added_collection(
     ]
 
 
+def test_attachment_update_log_uses_aid_before_fid(
+    qgis_app,
+    monkeypatch,
+) -> None:
+    del qgis_app
+
+    detached_layer = _DetachedLayer()
+    old_attachment = AttachmentMetadata(fid=1, aid=-1, name="photo.jpg")
+    new_attachment = AttachmentMetadata(fid=1, aid=-1, name="image.jpg")
+    debug_calls = []
+    monkeypatch.setattr(
+        "nextgis_connect.legacy.detached_editing.container.editing.commands."
+        "attachment_update.logger.debug",
+        lambda *args: debug_calls.append(args),
+    )
+
+    command = AttachmentUpdateCommand(
+        detached_layer,
+        old_attachment,
+        new_attachment,
+    )
+    command.redo()
+
+    assert debug_calls[-1] == (
+        "Applied attachment %s update command for feature %s",
+        -1,
+        1,
+    )
+
+
 def test_new_attachment_remove_drops_added_attachment_only(qgis_app) -> None:
     del qgis_app
 

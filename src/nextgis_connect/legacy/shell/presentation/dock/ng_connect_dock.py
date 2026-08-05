@@ -2900,7 +2900,54 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
             return
 
         imported_layer.triggerRepaint()
+        self.__select_qgis_layers((layer_id,))
         self.checkImportActionsAvailability()
+
+    def __select_qgis_layers(self, layer_ids: Tuple[str, ...]) -> None:
+        if len(layer_ids) == 0:
+            return
+
+        layer_tree_view = self.iface.layerTreeView()
+        selection_model = layer_tree_view.selectionModel()
+        layer_tree_model = layer_tree_view.layerTreeModel()
+        view_model = layer_tree_view.model()
+        if (
+            selection_model is None
+            or layer_tree_model is None
+            or view_model is None
+        ):
+            return
+
+        selection_model.clearSelection()
+        current_index = QModelIndex()
+        project = QgsProject.instance()
+        selection_flags = (
+            QItemSelectionModel.SelectionFlag.Select
+            | QItemSelectionModel.SelectionFlag.Rows
+        )
+
+        for layer_id in layer_ids:
+            layer = project.mapLayer(layer_id)
+            if layer is None:
+                continue
+
+            layer_node = project.layerTreeRoot().findLayer(layer.id())
+            if layer_node is None:
+                continue
+
+            source_index = layer_tree_model.node2index(layer_node)
+            layer_index = view_model.mapFromSource(source_index)
+            if not layer_index.isValid():
+                continue
+
+            selection_model.select(layer_index, selection_flags)
+            current_index = layer_index
+
+        if current_index.isValid():
+            selection_model.setCurrentIndex(
+                current_index,
+                QItemSelectionModel.SelectionFlag.NoUpdate,
+            )
 
     def __create_resource_batch_importer(
         self,
@@ -3015,7 +3062,9 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
         QApplication.processEvents()
 
         try:
-            importer.execute()
+            result = importer.execute()
+            if result.is_success:
+                self.__select_qgis_layers(result.added_layer_ids)
         finally:
             self.unblock_gui()
             self.resources_tree_view.removeBlockedJob(
@@ -3087,6 +3136,10 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
             dialog.enable_boolean_field_type()
         if connection.has_support_for_feature(NgwServerFeature.JSON_TYPE):
             dialog.enable_json_field_type()
+        if connection.has_support_for_feature(
+            NgwServerFeature.NO_GEOMETRY_LAYERS
+        ):
+            dialog.enable_no_geometry_layer_type()
 
         def create_resource(resource):
             response = self.resource_model.createVectorLayer(
@@ -4435,7 +4488,9 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
         QApplication.processEvents()
 
         try:
-            importer.execute()
+            result = importer.execute()
+            if result.is_success:
+                self.__select_qgis_layers(result.added_layer_ids)
         finally:
             self.unblock_gui()
             self.resources_tree_view.removeBlockedJob(

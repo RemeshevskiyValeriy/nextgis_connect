@@ -279,6 +279,10 @@ class DetachedContainer(QObject):
     def refresh_additional_data(self) -> bool:
         return self.synchronize(update_additional_only=True)
 
+    def set_edit_allowed(self, is_edit_allowed: bool) -> None:
+        self.__is_edit_allowed = is_edit_allowed
+        self.__unlock_layers()
+
     def update_connection(
         self, connection_id: str, instance_id: Optional[str]
     ) -> bool:

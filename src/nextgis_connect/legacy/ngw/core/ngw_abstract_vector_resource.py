@@ -28,6 +28,7 @@ from nextgis_connect.legacy.ngw.core.ngw_qgis_style import NGWQGISVectorStyle
 from nextgis_connect.legacy.ngw.resources.ngw_field import NgwField
 from nextgis_connect.legacy.ngw.resources.ngw_fields import NgwFields
 from nextgis_connect.platform.qgis.compat import GeometryType, WkbType
+from nextgis_connect.platform.qgis.errors import ErrorCode, NgwError
 
 from .ngw_resource import NGWResource
 
@@ -169,6 +170,12 @@ class NGWAbstractVectorResource(ABC, NGWResource):
         qml - full path to qml file
         callback - upload file callback
         """
+        if self.geom_name == "NONE":
+            raise NgwError(
+                "QML styles cannot be uploaded for layers without geometry",
+                code=ErrorCode.AddingError,
+            )
+
         connection = self.res_factory.connection
         if not style_name:
             style_name = self.display_name

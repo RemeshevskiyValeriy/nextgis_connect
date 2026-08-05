@@ -77,6 +77,7 @@ class VersioningMode(Enum):
 
 
 class VectorLayerCreationDialog(QDialog, VectorLayerCreationDialogBase):
+    NO_GEOMETRY_TYPE = "NONE"
     SUPPORTED_WKB_TYPES: ClassVar[List[WkbType]] = [
         WkbType.Point,
         WkbType.LineString,
@@ -106,6 +107,7 @@ class VectorLayerCreationDialog(QDialog, VectorLayerCreationDialogBase):
         self.__is_creating = False
         self.__has_boolean_support = False
         self.__has_json_support = False
+        self.__has_no_geometry_support = False
         self.__setup_ui()
 
     def accept(self) -> None:
@@ -128,16 +130,24 @@ class VectorLayerCreationDialog(QDialog, VectorLayerCreationDialogBase):
         versioning_mode = VersioningMode(
             self.versioning_combobox.currentData()
         )
-        geometry_type = WkbType(self.geometry_combobox.currentData())
-        if self.z_checkbox.isChecked():
+        geometry_type = self.__current_geometry_type()
+        assert geometry_type is not None
+        if geometry_type != WkbType.NoGeometry and self.z_checkbox.isChecked():
             geometry_type = QgsWkbTypes.addZ(geometry_type)
-        geometry_type = QgsWkbTypes.displayString(geometry_type).upper()
+        geometry_type_name = self.__ngw_geometry_type(geometry_type)
 
         feature_layer: Dict[str, Any] = dict(fields=fields)
         if versioning_mode != VersioningMode.AUTO:
             feature_layer["versioning"] = dict(
                 enabled=versioning_mode == VersioningMode.ENABLED
             )
+
+        vector_layer: Dict[str, Any] = dict(
+            geometry_type=geometry_type_name,
+            fields=[],
+        )
+        if geometry_type != WkbType.NoGeometry:
+            vector_layer["srs"] = dict(id=3857)
 
         resource = dict(
             resource=dict(
@@ -146,11 +156,7 @@ class VectorLayerCreationDialog(QDialog, VectorLayerCreationDialogBase):
                 display_name=display_name,
             ),
             feature_layer=feature_layer,
-            vector_layer=dict(
-                srs=dict(id=3857),
-                geometry_type=geometry_type,
-                fields=[],
-            ),
+            vector_layer=vector_layer,
         )
         ResourceCreator._add_metadata(
             resource,
@@ -193,6 +199,13 @@ class VectorLayerCreationDialog(QDialog, VectorLayerCreationDialogBase):
             NgwDataType.JSON.qt_value,
         )
 
+    def enable_no_geometry_layer_type(self) -> None:
+        if self.__has_no_geometry_support:
+            return
+
+        self.__has_no_geometry_support = True
+        self.__add_geometry_type(WkbType.NoGeometry)
+
     def keyPressEvent(self, a0: Optional[QKeyEvent]) -> None:
         assert a0 is not None
         if a0.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
@@ -218,6 +231,9 @@ class VectorLayerCreationDialog(QDialog, VectorLayerCreationDialogBase):
         )
         self.layer_name_lineedit.textChanged.connect(self.__validate)
         self.geometry_combobox.currentIndexChanged.connect(self.__validate)
+        self.geometry_combobox.currentIndexChanged.connect(
+            self.__update_geometry_controls
+        )
 
         # Init parent
         self.parent_combobox.setModel(self.__resources_model)
@@ -239,14 +255,11 @@ class VectorLayerCreationDialog(QDialog, VectorLayerCreationDialogBase):
         self.layer_name_warning_label.hide()
 
         for geometry_type in self.SUPPORTED_WKB_TYPES:
-            self.geometry_combobox.addItem(
-                wkb_type_icon(geometry_type),
-                QgsWkbTypes.translatedDisplayString(geometry_type),
-                int(geometry_type),
-            )
+            self.__add_geometry_type(geometry_type)
 
         # Set invalid geometry type for conscious choice
         self.geometry_combobox.setCurrentIndex(-1)
+        self.__update_geometry_controls()
 
         versioning_tooltip = self.tr(
             "In auto mode, NextGIS Web decides whether to enable feature "
@@ -618,6 +631,35 @@ class VectorLayerCreationDialog(QDialog, VectorLayerCreationDialogBase):
         self.validity_changed.emit(
             geometry_id_valid and layer_name_is_valid and layer_name_is_unique
         )
+
+    def __add_geometry_type(self, geometry_type: WkbType) -> None:
+        self.geometry_combobox.addItem(
+            wkb_type_icon(geometry_type),
+            QgsWkbTypes.translatedDisplayString(geometry_type),
+            int(geometry_type),
+        )
+
+    def __update_geometry_controls(self) -> None:
+        geometry_type = self.__current_geometry_type()
+        has_geometry = (
+            geometry_type is None or geometry_type != WkbType.NoGeometry
+        )
+        self.z_checkbox.setEnabled(has_geometry)
+        if not has_geometry:
+            self.z_checkbox.setChecked(False)
+
+    def __current_geometry_type(self) -> Optional[WkbType]:
+        geometry_type = self.geometry_combobox.currentData()
+        if geometry_type is None:
+            return None
+
+        return WkbType(geometry_type)
+
+    def __ngw_geometry_type(self, geometry_type: WkbType) -> str:
+        if geometry_type == WkbType.NoGeometry:
+            return self.NO_GEOMETRY_TYPE
+
+        return QgsWkbTypes.displayString(geometry_type).upper()
 
     def __add_field(self):
         if not self.add_field_button.isEnabled():

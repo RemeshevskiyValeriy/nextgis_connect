@@ -46,7 +46,6 @@ from nextgis_connect.legacy.detached_editing.identification.settings import (
 )
 from nextgis_connect.legacy.detached_editing.utils import AttachmentMetadata
 from nextgis_connect.platform.logging import logger
-from nextgis_connect.platform.qgis.utils import human_readable_size
 from nextgis_connect.shared.types import AttachmentId
 
 
@@ -157,10 +156,7 @@ class AttachmentsModel(QAbstractListModel):
         attachment = self._attachments[index.row()]
 
         if role == Qt.ItemDataRole.DisplayRole:
-            display_text = attachment.name or ""
-            if attachment.size:
-                display_text += f" ({human_readable_size(attachment.size)})"
-            return display_text
+            return attachment.name or ""
         if role == Qt.ItemDataRole.ToolTipRole:
             return attachment.description
         if role == Qt.ItemDataRole.DecorationRole:
@@ -280,6 +276,41 @@ class AttachmentsModel(QAbstractListModel):
         self.update_cached_states(emit_changes=False)
         self.endResetModel()
 
+    def refresh_attachments(
+        self,
+        attachments: List[AttachmentMetadata],
+    ) -> None:
+        """Synchronize attachments without resetting existing model indexes.
+
+        :param attachments: Fresh attachment list from the layer.
+        """
+        attachment_by_id = {
+            attachment.aid: attachment for attachment in attachments
+        }
+
+        for row in range(len(self._attachments) - 1, -1, -1):
+            attachment = self._attachments[row]
+            if attachment.aid in attachment_by_id:
+                continue
+
+            self._remove_attachment_row(row, emit_attachment_removed=False)
+
+        for attachment in attachments:
+            index = self.index_for_attachment_id(attachment.aid)
+            if index.isValid():
+                self._update_attachment_row(
+                    index.row(),
+                    attachment,
+                    emit_attachment_updated=False,
+                )
+            else:
+                self._insert_attachment(
+                    attachment,
+                    emit_attachment_added=False,
+                )
+
+        self._is_initialized = True
+
     def clear_attachments(self) -> None:
         """Reset the model by clearing all attachments and cached states."""
         self.beginResetModel()
@@ -296,17 +327,7 @@ class AttachmentsModel(QAbstractListModel):
 
         :param attachment: Attachment to add.
         """
-        position = len(self._attachments)
-        self.beginInsertRows(QModelIndex(), position, position)
-        self._attachments.append(attachment)
-        self._is_cached[attachment.aid] = (
-            attachment.file_path.exists()
-            if attachment.file_path is not None
-            else False
-        )
-        self.endInsertRows()
-
-        self.attachment_added.emit(attachment.aid)
+        self._insert_attachment(attachment, emit_attachment_added=True)
 
     def update_attachment(self, attachment: AttachmentMetadata) -> None:
         """Update an existing attachment in the model.
@@ -315,16 +336,11 @@ class AttachmentsModel(QAbstractListModel):
         """
         for row, existing_attachment in enumerate(self._attachments):
             if existing_attachment.aid == attachment.aid:
-                self._icons_cache.pop(attachment.aid, None)
-                self._attachments[row] = attachment
-                self._is_cached[attachment.aid] = (
-                    attachment.file_path.exists()
-                    if attachment.file_path is not None
-                    else False
+                self._update_attachment_row(
+                    row,
+                    attachment,
+                    emit_attachment_updated=True,
                 )
-                index = self.index(row)
-                self.dataChanged.emit(index, index)
-                self.attachment_updated.emit(attachment.aid)
                 return
 
     def remove_attachment(self, attachment_id: AttachmentId) -> None:
@@ -334,21 +350,82 @@ class AttachmentsModel(QAbstractListModel):
         """
         for row, attachment in enumerate(self._attachments):
             if attachment.aid == attachment_id:
-                self.removeRow(row)
+                self._remove_attachment_row(
+                    row,
+                    emit_attachment_removed=True,
+                )
                 return
 
     def removeRow(self, row: int, parent: QModelIndex = QModelIndex()) -> bool:  # noqa: B008
+        del parent
+        self._remove_attachment_row(row, emit_attachment_removed=True)
+        return True
+
+    def _insert_attachment(
+        self,
+        attachment: AttachmentMetadata,
+        *,
+        emit_attachment_added: bool,
+    ) -> None:
+        position = len(self._attachments)
+        self.beginInsertRows(QModelIndex(), position, position)
+        self._attachments.append(attachment)
+        self._is_cached[attachment.aid] = self._attachment_is_cached(
+            attachment
+        )
+        self.endInsertRows()
+
+        if emit_attachment_added:
+            self.attachment_added.emit(attachment.aid)
+
+    def _update_attachment_row(
+        self,
+        row: int,
+        attachment: AttachmentMetadata,
+        *,
+        emit_attachment_updated: bool,
+    ) -> None:
+        previous_attachment = self._attachments[row]
+        is_cached = self._attachment_is_cached(attachment)
+        was_cached = self._is_cached.get(attachment.aid, False)
+
+        if previous_attachment == attachment and was_cached == is_cached:
+            return
+
+        self._icons_cache.pop(attachment.aid, None)
+        self._attachments[row] = attachment
+        self._is_cached[attachment.aid] = is_cached
+        index = self.index(row)
+        self.dataChanged.emit(index, index)
+
+        if emit_attachment_updated:
+            self.attachment_updated.emit(attachment.aid)
+
+    def _remove_attachment_row(
+        self,
+        row: int,
+        *,
+        emit_attachment_removed: bool,
+    ) -> None:
         self.beginRemoveRows(QModelIndex(), row, row)
         attachment_id = self._attachments[row].aid
         del self._attachments[row]
-        del self._is_cached[attachment_id]
+        self._is_cached.pop(attachment_id, None)
+        self._icons_cache.pop(attachment_id, None)
         self._loading_progress_by_attachment_id.pop(attachment_id, None)
         self._loading_kind_by_attachment_id.pop(attachment_id, None)
         self.endRemoveRows()
 
-        self.attachment_removed.emit(attachment_id)
+        if emit_attachment_removed:
+            self.attachment_removed.emit(attachment_id)
 
-        return True
+    @staticmethod
+    def _attachment_is_cached(attachment: AttachmentMetadata) -> bool:
+        return (
+            attachment.file_path.exists()
+            if attachment.file_path is not None
+            else False
+        )
 
     @pyqtSlot()
     def clear(self) -> None:
@@ -492,13 +569,14 @@ class AttachmentsModel(QAbstractListModel):
         if not self._is_image(attachment):
             return None
 
-        if (
-            attachment.thumbnail_path is None
-            or not attachment.thumbnail_path.exists()
-        ):
+        image_path = attachment.thumbnail_path
+        if image_path is None or not image_path.exists():
+            image_path = attachment.file_path
+
+        if image_path is None or not image_path.exists():
             return None
 
-        pixmap = QPixmap(str(attachment.thumbnail_path))
+        pixmap = QPixmap(str(image_path))
         if pixmap.isNull():
             return None
 

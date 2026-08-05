@@ -115,8 +115,8 @@ class AttachmentRemoveCommand(DetachedLayerBaseCommand):
 
         logger.debug(
             "Reverted attachment %s removal command for feature %s",
-            self._attachment.fid,
             self._attachment.aid,
+            self._attachment.fid,
         )
 
     def redo(self) -> None:
@@ -158,8 +158,8 @@ class AttachmentRemoveCommand(DetachedLayerBaseCommand):
 
         logger.debug(
             "Applied attachment %s removal command for feature %s",
-            self._attachment.fid,
             self._attachment.aid,
+            self._attachment.fid,
         )
 
     def id(self) -> int:

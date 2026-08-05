@@ -247,6 +247,43 @@ class TestDetachedEditingConnectionRestore(NgConnectTestCase):
         )
         container.refresh_additional_data.assert_called_once_with()
 
+    def test_connection_update_locks_layer_when_resource_is_unavailable(
+        self,
+    ) -> None:
+        connection = NgwConnection(
+            "current-id",
+            "Current",
+            "https://current.nextgis.com/",
+            None,
+        )
+        source_path = Path("/tmp/current-id/123.gpkg")
+        layer = self.__memory_layer("restricted", connection.domain_uuid)
+        layer.setCustomProperty("ngw_connection_id", connection.id)
+        container = MagicMock()
+        detached_editing = DetachedEditing.__new__(DetachedEditing)
+        detached_editing._DetachedEditing__containers_by_layer_id = {
+            layer.id(): container
+        }
+        detached_editing._DetachedEditing__layer_container_path = (
+            lambda _layer: source_path
+        )
+        detached_editing._DetachedEditing__restored_container_path = (
+            lambda *_args: source_path
+        )
+        detached_editing._DetachedEditing__prepare_connection_container = (
+            lambda *_args: (False, False)
+        )
+
+        handle_connection_updated = detached_editing._DetachedEditing__handle_connection_updated_for_layer
+        restored_path = handle_connection_updated(
+            layer,
+            connection,
+            False,
+        )
+
+        self.assertIsNone(restored_path)
+        container.set_edit_allowed.assert_called_once_with(False)
+
     def test_missing_container_is_restored_to_connection_cache_path(
         self,
     ) -> None:

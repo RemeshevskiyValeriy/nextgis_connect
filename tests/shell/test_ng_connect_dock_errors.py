@@ -17,7 +17,8 @@
 from types import SimpleNamespace
 
 import pytest
-from qgis.core import Qgis
+import qgis.utils
+from qgis.core import Qgis, QgsLayerTreeLayer, QgsProject, QgsVectorLayer
 from qgis.PyQt.QtCore import QModelIndex
 from qgis.PyQt.QtWidgets import QTreeView
 
@@ -127,3 +128,33 @@ def test_create_group_cancel_refreshes_lazy_parent_branch(
 
     tree_view.deleteLater()
     proxy_model.deleteLater()
+
+
+def test_select_qgis_layers_selects_added_layers(qgis_app) -> None:
+    del qgis_app
+
+    project = QgsProject.instance()
+    first_layer = QgsVectorLayer("Point?crs=EPSG:4326", "First", "memory")
+    second_layer = QgsVectorLayer("Point?crs=EPSG:4326", "Second", "memory")
+    project.addMapLayers([first_layer, second_layer])
+    dock = NgConnectDock.__new__(NgConnectDock)
+    dock.iface = qgis.utils.iface
+
+    try:
+        dock._NgConnectDock__select_qgis_layers(
+            (first_layer.id(), second_layer.id())
+        )
+
+        layer_tree_view = qgis.utils.iface.layerTreeView()
+        selected_layer_ids = {
+            node.layerId()
+            for node in layer_tree_view.selectedNodes()
+            if isinstance(node, QgsLayerTreeLayer)
+        }
+        current_node = layer_tree_view.currentNode()
+
+        assert selected_layer_ids == {first_layer.id(), second_layer.id()}
+        assert isinstance(current_node, QgsLayerTreeLayer)
+        assert current_node.layerId() == second_layer.id()
+    finally:
+        project.removeMapLayers([first_layer.id(), second_layer.id()])
