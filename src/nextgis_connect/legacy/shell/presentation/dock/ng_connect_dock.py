@@ -3029,9 +3029,8 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
 
     @pyqtSlot()
     def create_group(self) -> None:
-        sel_index = self.proxy_model.mapToSource(
-            self.resources_tree_view.selectionModel().currentIndex()
-        )
+        proxy_index = self.resources_tree_view.selectionModel().currentIndex()
+        sel_index = self.proxy_model.mapToSource(proxy_index)
         if sel_index is None or not sel_index.isValid():
             self.show_info(
                 self.tr(
@@ -3049,6 +3048,9 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
             flags=Qt.WindowType.Dialog,
         )
         if not ok or new_group_name == "":
+            self.resource_model.refresh_lazy_children_state(sel_index)
+            if proxy_index.isValid():
+                self.resources_tree_view.setCurrentIndex(proxy_index)
             return
 
         self.create_group_resp = self.resource_model.tryCreateNGWGroup(

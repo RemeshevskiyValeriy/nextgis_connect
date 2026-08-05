@@ -134,10 +134,8 @@ class ResourceTreeBranchController(QObject):
             return
 
         persistent_index = QPersistentModelIndex(index)
-        if persistent_index in self._pending_fetches:
-            return
-
-        self._pending_fetches.append(persistent_index)
+        if persistent_index not in self._pending_fetches:
+            self._pending_fetches.append(persistent_index)
         model.fetchMore(index)
 
     @pyqtSlot(QModelIndex, int, int)

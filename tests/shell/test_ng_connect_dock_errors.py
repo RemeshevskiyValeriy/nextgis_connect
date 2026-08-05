@@ -18,10 +18,17 @@ from types import SimpleNamespace
 
 import pytest
 from qgis.core import Qgis
+from qgis.PyQt.QtCore import QModelIndex
+from qgis.PyQt.QtWidgets import QTreeView
 
+from nextgis_connect.legacy.shell.presentation.dock import ng_connect_dock
 from nextgis_connect.legacy.shell.presentation.dock.ng_connect_dock import (
     NgConnectDock,
 )
+from nextgis_connect.legacy.tree_widget.item import QNGWResourceItem
+from nextgis_connect.legacy.tree_widget.model import QNGWResourceTreeModelBase
+from nextgis_connect.legacy.tree_widget.proxy_model import NgConnectProxyModel
+from nextgis_connect.platform.qgis import utils
 from nextgis_connect.platform.qgis.errors import NgwError
 
 
@@ -48,3 +55,75 @@ def test_reset_model_error_stops_root_loading(job_name) -> None:
     )
 
     assert calls == ["unblock", ("root_error", error)]
+
+
+def test_create_group_cancel_refreshes_lazy_parent_branch(
+    qgis_app,
+    monkeypatch,
+) -> None:
+    del qgis_app
+
+    model = QNGWResourceTreeModelBase()
+    model.support_status = utils.SupportStatus.SUPPORTED
+    resource = SimpleNamespace(
+        display_name="Group",
+        common=SimpleNamespace(cls="resource_group", children=True),
+        icon_path="",
+        resource_id=1,
+        type_id="resource_group",
+        connection=SimpleNamespace(server_url=""),
+        children_count=None,
+    )
+    item = QNGWResourceItem(resource)
+    model.root_item.addChild(item)
+    source_index = model.index(0, 0, QModelIndex())
+
+    proxy_model = NgConnectProxyModel(None)
+    proxy_model.setSourceModel(model)
+    tree_view = QTreeView()
+    tree_view.setModel(proxy_model)
+    proxy_index = proxy_model.mapFromSource(source_index)
+    tree_view.setCurrentIndex(proxy_index)
+
+    refreshed_indexes = []
+
+    def refresh_lazy_children_state(index: QModelIndex) -> None:
+        refreshed_indexes.append(index)
+
+    def fail_create_group(*args, **kwargs) -> None:
+        del args
+        del kwargs
+        raise AssertionError("Create group job must not start after cancel")
+
+    monkeypatch.setattr(
+        ng_connect_dock.QInputDialog,
+        "getText",
+        lambda *args, **kwargs: ("", False),
+    )
+    monkeypatch.setattr(
+        model,
+        "refresh_lazy_children_state",
+        refresh_lazy_children_state,
+    )
+    monkeypatch.setattr(
+        model,
+        "tryCreateNGWGroup",
+        fail_create_group,
+        raising=False,
+    )
+    dock = SimpleNamespace(
+        proxy_model=proxy_model,
+        resources_tree_view=tree_view,
+        resource_model=model,
+        show_info=lambda message: None,
+        tr=lambda text: text,
+    )
+
+    NgConnectDock.create_group(dock)
+
+    assert len(refreshed_indexes) == 1
+    assert refreshed_indexes[0].internalPointer() is item
+    assert tree_view.currentIndex() == proxy_index
+
+    tree_view.deleteLater()
+    proxy_model.deleteLater()

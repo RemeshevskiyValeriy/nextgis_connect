@@ -19,6 +19,7 @@ from types import SimpleNamespace
 
 from qgis.PyQt.QtCore import QModelIndex, Qt
 from qgis.PyQt.QtGui import QBrush, QColor, QIcon, QPalette
+from qgis.PyQt.QtTest import QSignalSpy
 
 from nextgis_connect.legacy.tree_widget.item import QNGWResourceItem
 from nextgis_connect.legacy.tree_widget.model import (
@@ -27,6 +28,7 @@ from nextgis_connect.legacy.tree_widget.model import (
 )
 from nextgis_connect.legacy.tree_widget.proxy_model import NgConnectProxyModel
 from nextgis_connect.legacy.tree_widget.view import QNGWResourceTreeView
+from nextgis_connect.platform.qgis import utils
 from nextgis_connect.platform.qgis.errors import NgwError
 from nextgis_connect.plugin.plugin_interface import NgConnectInterface
 from nextgis_connect.ui_kit.graphics import (
@@ -187,6 +189,85 @@ def test_failed_group_fetch_collapses_expanded_item_for_retry(
 
     view.deleteLater()
     proxy_model.deleteLater()
+
+
+def test_canceled_group_fetch_can_be_repeated_after_expansion(
+    qgis_app,
+    monkeypatch,
+) -> None:
+    del qgis_app
+    monkeypatch.setattr(
+        NgConnectInterface,
+        "instance",
+        classmethod(
+            lambda cls: SimpleNamespace(path=Path("src/nextgis_connect"))
+        ),
+    )
+
+    model = QNGWResourceTreeModelBase()
+    resource = _resource()
+    resource.common.children = True
+    resource.children_count = None
+    item = QNGWResourceItem(resource)
+    model.root_item.addChild(item)
+    index = model.index(0, 0, QModelIndex())
+    error = NgwError("Request was canceled")
+    job = _FailedFetchJob(error)
+
+    proxy_model = NgConnectProxyModel(None)
+    proxy_model.setSourceModel(model)
+    view = QNGWResourceTreeView(None)
+    view.setModel(proxy_model)
+    proxy_index = proxy_model.mapFromSource(index)
+    view.expand(proxy_index)
+
+    model._lockIndexByJob([index], job)
+    model._unlockIndexesByJob(job)
+
+    assert not view.isExpanded(proxy_index)
+
+    model.support_status = utils.SupportStatus.SUPPORTED
+    retry_index = model.index(0, 0, QModelIndex())
+    assert model.canFetchMore(retry_index)
+    assert proxy_model.hasChildren(proxy_index)
+    assert proxy_model.canFetchMore(proxy_index)
+
+    fetched_indexes = []
+    monkeypatch.setattr(model, "fetchMore", fetched_indexes.append)
+
+    retry_failed_fetch = view._QNGWResourceTreeView__retry_failed_fetch
+    retry_failed_fetch(proxy_index)
+
+    assert len(fetched_indexes) == 1
+    assert fetched_indexes[0].internalPointer() is item
+
+    view.deleteLater()
+    proxy_model.deleteLater()
+
+
+def test_canceled_group_fetch_notifies_view_to_restore_expander(
+    qgis_app,
+) -> None:
+    del qgis_app
+
+    model = QNGWResourceTreeModelBase()
+    model.support_status = utils.SupportStatus.SUPPORTED
+    resource = _resource()
+    resource.common.children = True
+    resource.children_count = None
+    item = QNGWResourceItem(resource)
+    model.root_item.addChild(item)
+    index = model.index(0, 0, QModelIndex())
+    error = NgwError("Request was canceled")
+    job = _FailedFetchJob(error)
+    rows_inserted = QSignalSpy(model.rowsInserted)
+
+    model._lockIndexByJob([index], job)
+    model._unlockIndexesByJob(job)
+
+    assert len(rows_inserted) == 1
+    assert model.hasChildren(index)
+    assert model.canFetchMore(index)
 
 
 def test_resource_tree_loading_indicator_uses_readable_colors(

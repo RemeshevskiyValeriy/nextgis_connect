@@ -46,6 +46,21 @@ class _LazyTreeModel(QStandardItemModel):
             item.appendRow(QStandardItem(child_text))
 
 
+class _CancelableLazyTreeModel(QStandardItemModel):
+    def __init__(self) -> None:
+        super().__init__()
+        self.fetch_count = 0
+        self.appendRow(QStandardItem("Root"))
+
+    def canFetchMore(self, parent: QModelIndex) -> bool:
+        item = self.itemFromIndex(parent)
+        return item is not None and item.text() == "Root"
+
+    def fetchMore(self, parent: QModelIndex) -> None:
+        del parent
+        self.fetch_count += 1
+
+
 class TestResourceTreeBranchController:
     def test_expands_deduplicated_selected_branches(self, qgis_app) -> None:
         del qgis_app
@@ -94,6 +109,24 @@ class TestResourceTreeBranchController:
         assert leaf.isValid()
         assert tree.isExpanded(root)
         assert tree.isExpanded(branch)
+
+        tree.deleteLater()
+
+    def test_retries_canceled_child_fetch(
+        self,
+        qgis_app,
+    ) -> None:
+        del qgis_app
+        model = _CancelableLazyTreeModel()
+        tree = QTreeView()
+        tree.setModel(model)
+        controller = ResourceTreeBranchController(tree)
+        root = model.index(0, 0)
+
+        controller._fetch_children(root)
+        controller._fetch_children(root)
+
+        assert model.fetch_count == 2
 
         tree.deleteLater()
 

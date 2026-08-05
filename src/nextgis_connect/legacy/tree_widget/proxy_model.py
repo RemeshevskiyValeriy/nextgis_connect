@@ -41,6 +41,33 @@ class NgConnectProxyModel(QSortFilterProxyModel):
     def expanded_resources(self) -> List[int]:
         return self.__expandex_resources
 
+    def hasChildren(
+        self,
+        parent: QModelIndex = QModelIndex(),  # noqa: B008
+    ) -> bool:
+        source_model = self.sourceModel()
+        if source_model is None:
+            return False
+
+        source_parent = self.mapToSource(parent)
+        return super().hasChildren(parent) or source_model.canFetchMore(
+            source_parent
+        )
+
+    def canFetchMore(self, parent: QModelIndex) -> bool:
+        source_model = self.sourceModel()
+        if source_model is None:
+            return False
+
+        return source_model.canFetchMore(self.mapToSource(parent))
+
+    def fetchMore(self, parent: QModelIndex) -> None:
+        source_model = self.sourceModel()
+        if source_model is None:
+            return
+
+        source_model.fetchMore(self.mapToSource(parent))
+
     def filterAcceptsRow(
         self, source_row: int, source_parent: QModelIndex
     ) -> bool:

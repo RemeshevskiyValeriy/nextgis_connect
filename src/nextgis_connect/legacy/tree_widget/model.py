@@ -1070,6 +1070,7 @@ class QNGWResourceTreeModelBase(QAbstractItemModel):
         for index in failed_fetch_indexes:
             self.fetchErrorReadyForRetry.emit(index)
             self.clear_fetch_error(index)
+            self.__emit_has_children_changed(index)
 
     def _isIndexLockedByJob(self, index):
         for indexes in self.__indexes_locked_by_jobs.values():
@@ -1087,6 +1088,19 @@ class QNGWResourceTreeModelBase(QAbstractItemModel):
         :return: ``True`` if a failed request was registered for the index.
         """
         return self.__indexes_locked_by_job_errors.pop(index, None) is not None
+
+    def refresh_lazy_children_state(self, index: QModelIndex) -> None:
+        if not index.isValid() or not self.hasChildren(index):
+            return
+
+        self.__emit_has_children_changed(index)
+
+    def __emit_has_children_changed(self, index: QModelIndex) -> None:
+        if not index.isValid():
+            return
+
+        self.beginInsertRows(index, 0, 0)
+        self.endInsertRows()
 
     def __retry_fetch(
         self,
