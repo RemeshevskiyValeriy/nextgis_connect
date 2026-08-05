@@ -33,6 +33,7 @@ from qgis.PyQt.QtWidgets import QLabel
 
 from nextgis_connect.platform.logging import logger
 from nextgis_connect.shared.constants import PACKAGE_NAME
+from nextgis_connect.ui_kit.graphics.svg_renderer import CustomSvgRenderer
 
 
 def _plugin_path() -> Path:
@@ -392,17 +393,26 @@ def render_svg_content_icon(
         raise ValueError(message)
 
     target_size = renderer.defaultSize() if size is None else QSize(size, size)
-    pixmap = QPixmap(target_size)
-    pixmap.fill(Qt.GlobalColor.transparent)
+    result_icon = QIcon()
+    for device_pixel_ratio in (1.0, 2.0):
+        physical_size = QSize(
+            round(target_size.width() * device_pixel_ratio),
+            round(target_size.height() * device_pixel_ratio),
+        )
+        pixmap = QPixmap(physical_size)
+        pixmap.fill(Qt.GlobalColor.transparent)
 
-    painter = QPainter(pixmap)
-    renderer.render(
-        painter,
-        QRectF(0, 0, target_size.width(), target_size.height()),
-    )
-    painter.end()
+        painter = QPainter(pixmap)
+        renderer.render(
+            painter,
+            QRectF(0, 0, physical_size.width(), physical_size.height()),
+        )
+        painter.end()
 
-    return QIcon(pixmap)
+        pixmap.setDevicePixelRatio(device_pixel_ratio)
+        result_icon.addPixmap(pixmap)
+
+    return result_icon
 
 
 def render_svg_icon(
@@ -442,16 +452,63 @@ def render_svg_icon(
     )
 
 
-def draw_icon(label: QLabel, icon: QIcon, *, size: int = 24) -> None:
+def draw_icon(label: QLabel, icon: QIcon, *, size: int = 24) -> QPixmap:
     """Draw an icon on a QLabel with specified size.
 
     :param label: QLabel to draw the icon on.
     :param icon: QIcon to be drawn.
     :param size: Size of the icon in pixels.
+    :return: Rendered pixmap assigned to the label.
     """
-    pixmap = icon.pixmap(icon.actualSize(QSize(size, size)))
+    device_pixel_ratio = max(1.0, label.devicePixelRatioF())
+    physical_size = QSize(
+        round(size * device_pixel_ratio),
+        round(size * device_pixel_ratio),
+    )
+    pixmap = icon.pixmap(physical_size)
+    pixmap.setDevicePixelRatio(device_pixel_ratio)
     label.setPixmap(pixmap)
     label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+    return pixmap
+
+
+def draw_svg_icon(
+    label: QLabel,
+    svg_path: Union[Path, str],
+    *,
+    size: int = 24,
+) -> QPixmap:
+    """Render an SVG icon on a QLabel with device pixel ratio support.
+
+    :param label: QLabel to draw the icon on.
+    :param svg_path: Path to SVG icon.
+    :param size: Logical icon size in pixels.
+    :return: Rendered pixmap assigned to the label.
+    """
+    renderer = CustomSvgRenderer(svg_path, label)
+    if not renderer.is_valid():
+        label.clear()
+        return QPixmap()
+
+    device_pixel_ratio = max(1.0, label.devicePixelRatioF())
+    physical_size = QSize(
+        round(size * device_pixel_ratio),
+        round(size * device_pixel_ratio),
+    )
+    pixmap = QPixmap(physical_size)
+    pixmap.fill(Qt.GlobalColor.transparent)
+
+    painter = QPainter(pixmap)
+    renderer.render(
+        painter,
+        QRectF(0, 0, physical_size.width(), physical_size.height()),
+    )
+    painter.end()
+
+    pixmap.setDevicePixelRatio(device_pixel_ratio)
+    label.setPixmap(pixmap)
+    label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+    return pixmap
 
 
 def icon_to_base64(icon: QIcon, size: Optional[int] = None) -> str:

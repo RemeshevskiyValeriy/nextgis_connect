@@ -44,8 +44,9 @@ from nextgis_connect.legacy.detached_editing.utils import AttachmentMetadata
 from nextgis_connect.shared.types import Unset, UnsetType
 from nextgis_connect.ui_kit.icons import (
     draw_icon,
+    draw_svg_icon,
     material_icon,
-    plugin_icon,
+    plugin_icon_file_path,
 )
 
 
@@ -73,7 +74,7 @@ class AttachmentDataConflictTab(
         super().__init__(parent)
         self._unresolved_marker_icon = unresolved_marker_icon
         self._resolved_marker_icon = resolved_marker_icon
-        self._file_icon = plugin_icon("attachments/unknown.svg")
+        self._file_icon_path = plugin_icon_file_path("attachments/unknown.svg")
 
         self._is_filling = False
         self._markers: Dict[_AttachmentField, QLabel] = {}
@@ -283,7 +284,7 @@ class AttachmentDataConflictTab(
             icon_label.clear()
             return
 
-        icon_label.setPixmap(self._file_icon.pixmap(64, 64))
+        draw_svg_icon(icon_label, self._file_icon_path, size=64)
 
     def _attachment_name(
         self, attachment: Optional[AttachmentMetadata]

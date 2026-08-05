@@ -18,6 +18,7 @@ from nextgis_connect.ui_kit.icons.cursor import NgConnectCursor, create_cursor
 from nextgis_connect.ui_kit.icons.icon import (
     NgwResourceCreationIconFactory,
     draw_icon,
+    draw_svg_icon,
     field_type_icon,
     icon_from_pixmap,
     icon_to_base64,

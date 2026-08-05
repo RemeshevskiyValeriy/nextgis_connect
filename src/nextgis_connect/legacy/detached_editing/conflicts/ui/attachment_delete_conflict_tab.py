@@ -55,7 +55,11 @@ from nextgis_connect.legacy.detached_editing.sync.versioned.actions import (
 from nextgis_connect.legacy.detached_editing.utils import AttachmentMetadata
 from nextgis_connect.platform.logging import logger
 from nextgis_connect.shared.types import UnsetType
-from nextgis_connect.ui_kit.icons import draw_icon, plugin_icon
+from nextgis_connect.ui_kit.icons import (
+    draw_icon,
+    draw_svg_icon,
+    plugin_icon_file_path,
+)
 
 
 class _AttachmentField(str, Enum):
@@ -80,7 +84,7 @@ class AttachmentDeleteConflictTab(
         super().__init__(parent)
 
         self._unresolved_marker_icon = unresolved_marker_icon
-        self._file_icon = plugin_icon("attachments/unknown.svg")
+        self._file_icon_path = plugin_icon_file_path("attachments/unknown.svg")
 
         self._markers: Dict[_AttachmentField, QLabel] = {}
         self._local_edits: Dict[_AttachmentField, QWidget] = {}
@@ -376,7 +380,7 @@ class AttachmentDeleteConflictTab(
         if icon_label is None:
             return
 
-        icon_label.setPixmap(self._file_icon.pixmap(64, 64))
+        draw_svg_icon(icon_label, self._file_icon_path, size=64)
 
     def _clear_file_icon(self, file_widget: QWidget) -> None:
         icon_label = file_widget.findChild(QLabel, "FileIconLabel")
