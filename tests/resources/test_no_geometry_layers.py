@@ -140,6 +140,26 @@ class TestNoGeometryLayers(NgConnectTestCase):
 
         connection.upload_file.assert_not_called()
 
+    def test_add_style_skips_layer_without_geometry(self) -> None:
+        ngw_layer = self._make_ngw_no_geometry_layer()
+        qgis_layer = QgsVectorLayer("None", "attributes_only", "memory")
+        self.assertTrue(qgis_layer.isValid())
+
+        style_manager = qgis_layer.styleManager()
+        self.assertIsNotNone(style_manager)
+        assert style_manager is not None
+
+        job = QGISResourceJob()
+
+        ngw_style = job.addStyle(
+            ngw_layer,
+            qgis_layer,
+            style_manager.currentStyle(),
+        )
+
+        self.assertIsNone(ngw_style)
+        ngw_layer.res_factory.connection.upload_file.assert_not_called()
+
     def test_export_without_geometry_requires_supported_ngw_version(
         self,
     ) -> None:

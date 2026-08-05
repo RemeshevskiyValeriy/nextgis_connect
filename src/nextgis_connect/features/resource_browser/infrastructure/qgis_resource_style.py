@@ -20,12 +20,14 @@ from qgis.core import (
     QgsMapLayer,
     QgsMapLayerStyle,
     QgsMapLayerStyleManager,
+    QgsVectorLayer,
 )
 from qgis.PyQt.QtXml import QDomDocument
 
 from nextgis_connect.features.resource_browser.domain import (
     ResourceImportStyle,
 )
+from nextgis_connect.platform.qgis.compat import GeometryType
 
 
 class QgisResourceLayerStyleApplicator:
@@ -41,6 +43,8 @@ class QgisResourceLayerStyleApplicator:
     ) -> bool:
         """Replace the provider style and select the detached-style default."""
         if len(styles) == 0:
+            return False
+        if self._is_geometryless_vector_layer(layer):
             return False
 
         prepared_styles = self._prepare_styles(styles)
@@ -132,6 +136,12 @@ class QgisResourceLayerStyleApplicator:
         return (
             bool(is_valid) and document.documentElement().tagName() == "qgis"
         )
+
+    def _is_geometryless_vector_layer(self, layer: QgsMapLayer) -> bool:
+        if not isinstance(layer, QgsVectorLayer):
+            return False
+
+        return layer.geometryType() == GeometryType.Null
 
     def _validate_names(
         self,

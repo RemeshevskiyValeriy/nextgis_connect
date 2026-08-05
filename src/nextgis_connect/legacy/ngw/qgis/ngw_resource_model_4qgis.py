@@ -1002,6 +1002,11 @@ class QGISResourceJob(NGWResourceModelJob):
     ) -> Optional[NGWQGISStyle]:
         if not isinstance(qgs_map_layer, (QgsVectorLayer, QgsRasterLayer)):
             return None
+        if (
+            isinstance(ngw_layer_resource, NGWVectorLayer)
+            and ngw_layer_resource.geometry_type == GeometryType.Null
+        ):
+            return None
 
         style_manager = qgs_map_layer.styleManager()
         assert style_manager is not None

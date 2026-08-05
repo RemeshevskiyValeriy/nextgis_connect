@@ -862,6 +862,33 @@ class TestQgisResourceLayerStyleApplicator:
 
         assert layer.styleManager().currentStyle() == "Selected"
 
+    def test_skips_styles_for_geometryless_vector_layer(
+        self,
+        qgis_app,
+    ) -> None:
+        del qgis_app
+        styled_layer = QgsVectorLayer(
+            "Point?crs=EPSG:3857",
+            "Styled layer",
+            "memory",
+        )
+        layer = QgsVectorLayer("None", "Attributes only", "memory")
+        style_manager = layer.styleManager()
+        original_styles = style_manager.styles()
+        original_current_style = style_manager.currentStyle()
+        styles = (
+            ResourceImportStyle(
+                name="Remote style",
+                qml=self._layer_qml(styled_layer),
+            ),
+        )
+
+        is_applied = QgisResourceLayerStyleApplicator().apply(styles, layer)
+
+        assert is_applied is False
+        assert style_manager.styles() == original_styles
+        assert style_manager.currentStyle() == original_current_style
+
     def test_rejects_invalid_style_without_modifying_layer(
         self,
         qgis_app,
