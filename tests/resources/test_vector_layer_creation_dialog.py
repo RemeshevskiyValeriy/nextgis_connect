@@ -17,6 +17,7 @@
 from typing import Any, List, Tuple
 from unittest import mock
 
+import pytest
 from qgis.PyQt.QtCore import QModelIndex, QObject, pyqtSignal
 from qgis.PyQt.QtGui import QStandardItem, QStandardItemModel
 from qgis.PyQt.QtWidgets import (
@@ -29,6 +30,15 @@ from nextgis_connect.legacy.ngw.core.ngw_resource_creator import (
     ResourceCreator,
 )
 from nextgis_connect.legacy.ngw.core.ngw_vector_layer import NGWVectorLayer
+from nextgis_connect.legacy.ngw.qgis.qgis_ngw_connection import (
+    NgwServerFeature,
+)
+from nextgis_connect.legacy.ngw.qt.qt_ngw_resource_model_job import (
+    NGWCreateVectorLayer,
+)
+from nextgis_connect.legacy.ngw.qt.qt_ngw_resource_model_job_error import (
+    JobError,
+)
 from nextgis_connect.legacy.ngw.resources.creation.vector_layer_creation_dialog import (
     VectorLayerCreationDialog,
     VersioningMode,
@@ -250,6 +260,32 @@ def test_enable_no_geometry_type_disables_z_checkbox(qgis_app) -> None:
 
     assert not dialog.z_checkbox.isEnabled()
     assert not dialog.z_checkbox.isChecked()
+
+
+def test_create_no_geometry_versioned_layer_requires_dev8(qgis_app) -> None:
+    del qgis_app
+
+    parent_resource = mock.Mock()
+    parent_resource.connection.has_support_for_feature.return_value = False
+    vector_layer = {
+        "feature_layer": {
+            "versioning": {
+                "enabled": True,
+            },
+        },
+        "vector_layer": {
+            "geometry_type": "NONE",
+        },
+    }
+    job = NGWCreateVectorLayer(parent_resource, vector_layer)
+
+    with pytest.raises(JobError, match=r"5\.5\.0\.dev8"):
+        job._do()
+
+    parent_resource.connection.has_support_for_feature.assert_called_once_with(
+        NgwServerFeature.NO_GEOMETRY_LAYER_VERSIONING
+    )
+    parent_resource.get_api_collection_url.assert_not_called()
 
 
 def test_upload_vector_layer_does_not_send_versioning_flag() -> None:

@@ -269,16 +269,20 @@ class QGISResourceJob(NGWResourceModelJob):
         self,
         qgs_vector_layer: QgsVectorLayer,
         connection: QgsNgwConnection,
+        *,
+        requires_versioning: bool = False,
     ) -> None:
         if qgs_vector_layer.geometryType() != GeometryType.Null:
             return
 
-        if connection.has_support_for_feature(
-            NgwServerFeature.NO_GEOMETRY_LAYERS
-        ):
+        required_feature = NgwServerFeature.NO_GEOMETRY_LAYERS
+        if requires_versioning:
+            required_feature = NgwServerFeature.NO_GEOMETRY_LAYER_VERSIONING
+
+        if connection.has_support_for_feature(required_feature):
             return
 
-        required_version = NgwServerFeature.NO_GEOMETRY_LAYERS.required_version
+        required_version = required_feature.required_version
         raise JobError(
             f'Layer "{qgs_vector_layer.name()}" without geometry '
             f"requires NextGIS Web {required_version} or newer"
@@ -1980,6 +1984,7 @@ class NGWUpdateVectorLayer(QGISResourceJob):
         self._ensure_no_geometry_supported(
             self.qgis_layer,
             self.ngw_layer.res_factory.connection,
+            requires_versioning=self.ngw_layer.is_versioning_enabled,
         )
 
         if (

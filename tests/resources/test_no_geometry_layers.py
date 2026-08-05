@@ -54,8 +54,15 @@ from tests.ng_connect_testcase import NgConnectTestCase, TestData
 
 
 class TestNoGeometryLayers(NgConnectTestCase):
-    def _make_ngw_no_geometry_layer(self) -> NGWVectorLayer:
+    def _make_ngw_no_geometry_layer(
+        self,
+        *,
+        is_versioning_enabled: bool = False,
+    ) -> NGWVectorLayer:
         layer_json = deepcopy(self.resource_json(TestData.Points))
+        layer_json["feature_layer"]["versioning"] = {
+            "enabled": is_versioning_enabled,
+        }
         layer_json["vector_layer"] = {
             "srs": None,
             "geometry_type": "NONE",
@@ -252,4 +259,28 @@ class TestNoGeometryLayers(NgConnectTestCase):
         self.assertIn("5.5.0", str(error_context.exception))
         ngw_layer.res_factory.connection.has_support_for_feature.assert_called_once_with(
             NgwServerFeature.NO_GEOMETRY_LAYERS
+        )
+
+    def test_detached_container_without_geometry_with_versioning_requires_dev8(
+        self,
+    ) -> None:
+        ngw_layer = self._make_ngw_no_geometry_layer(
+            is_versioning_enabled=True
+        )
+        ngw_layer.res_factory.connection.has_support_for_feature.return_value = False
+
+        container_path = self.create_temp_file(".gpkg")
+
+        with self.assertRaises(ContainerError) as error_context:
+            DetachedContainerFactory().create_initial_container(
+                ngw_layer, container_path
+            )
+
+        self.assertEqual(
+            error_context.exception.code,
+            error_context.exception.code.ContainerCreationError,
+        )
+        self.assertIn("5.5.0.dev8", str(error_context.exception))
+        ngw_layer.res_factory.connection.has_support_for_feature.assert_called_once_with(
+            NgwServerFeature.NO_GEOMETRY_LAYER_VERSIONING
         )

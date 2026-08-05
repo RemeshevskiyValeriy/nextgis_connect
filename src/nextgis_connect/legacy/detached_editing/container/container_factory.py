@@ -122,22 +122,31 @@ class DetachedContainerFactory:
             return
 
         connection = ngw_layer.res_factory.connection
-        if connection.has_support_for_feature(
-            NgwServerFeature.NO_GEOMETRY_LAYERS
-        ):
+        required_feature = NgwServerFeature.NO_GEOMETRY_LAYERS
+        if ngw_layer.is_versioning_enabled:
+            required_feature = NgwServerFeature.NO_GEOMETRY_LAYER_VERSIONING
+
+        if connection.has_support_for_feature(required_feature):
             return
 
-        required_version = NgwServerFeature.NO_GEOMETRY_LAYERS.required_version
+        required_version = required_feature.required_version
+        user_message = (
+            "The connected NextGIS Web version does not support "
+            "layers without geometry."
+        )
+        if ngw_layer.is_versioning_enabled:
+            user_message = (
+                "The connected NextGIS Web version does not support "
+                "versioning for layers without geometry."
+            )
+
         message = (
             f'Layer "{ngw_layer.display_name}" without geometry '
             f"requires NextGIS Web {required_version} or newer"
         )
         raise ContainerError(
             message,
-            user_message=(
-                "The connected NextGIS Web version does not support "
-                "layers without geometry."
-            ),
+            user_message=user_message,
             detail=(
                 f'Layer "{ngw_layer.display_name}" requires '
                 f"NextGIS Web {required_version} or newer."

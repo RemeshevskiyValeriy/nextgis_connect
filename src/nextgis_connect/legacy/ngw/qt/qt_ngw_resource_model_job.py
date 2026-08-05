@@ -43,6 +43,7 @@ from nextgis_connect.legacy.ngw.core.ngw_webmap import (
     NGWWebMapRoot,
 )
 from nextgis_connect.legacy.ngw.qgis.qgis_ngw_connection import (
+    NgwServerFeature,
     QgsNgwConnection,
 )
 from nextgis_connect.legacy.ngw.resources.utils import generate_unique_name
@@ -52,6 +53,7 @@ from nextgis_connect.platform.qgis.errors import NgConnectError
 from nextgis_connect.platform.qgis.extent_calculator import ExtentCalculator
 
 from .qt_ngw_resource_model_job_error import (
+    JobError,
     JobNGWError,
     JobServerRequestError,
     NGWResourceModelJobError,
@@ -426,6 +428,15 @@ class NGWResourceDeletePreviewLoader(NGWResourceModelJob):
 
 
 class NGWCreateVectorLayer(NGWResourceModelJob):
+    _NO_GEOMETRY_TYPES = frozenset(
+        {
+            "NONE",
+            "NOGEOMETRY",
+            "NO_GEOMETRY",
+            "NO GEOMETRY",
+        }
+    )
+
     def __init__(
         self,
         parent_resource: NGWGroupResource,
@@ -436,12 +447,40 @@ class NGWCreateVectorLayer(NGWResourceModelJob):
         self.vector_layer = vector_layer
 
     def _do(self):
+        self._ensure_no_geometry_versioning_supported()
+
         vector_resource = ResourceCreator.create_empty_vector_layer(
             self.parent_resource, self.vector_layer
         )
 
         self.putAddedResourceToResult(vector_resource, is_main=True)
         self.parent_resource.update()
+
+    def _ensure_no_geometry_versioning_supported(self) -> None:
+        if not self._is_no_geometry_versioning_requested():
+            return
+
+        required_feature = NgwServerFeature.NO_GEOMETRY_LAYER_VERSIONING
+        if self.parent_resource.connection.has_support_for_feature(
+            required_feature
+        ):
+            return
+
+        required_version = required_feature.required_version
+        raise JobError(
+            "Vector layer without geometry and with feature versioning "
+            f"requires NextGIS Web {required_version} or newer"
+        )
+
+    def _is_no_geometry_versioning_requested(self) -> bool:
+        vector_layer = self.vector_layer.get(NGWVectorLayer.type_id, {})
+        geometry_type = str(vector_layer.get("geometry_type", "")).upper()
+        if geometry_type not in self._NO_GEOMETRY_TYPES:
+            return False
+
+        feature_layer = self.vector_layer.get("feature_layer", {})
+        versioning = feature_layer.get("versioning", {})
+        return versioning.get("enabled") is True
 
 
 class NGWCreateWfsOrOgcfService(NGWResourceModelJob):

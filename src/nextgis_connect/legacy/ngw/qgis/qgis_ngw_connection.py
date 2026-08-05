@@ -87,6 +87,10 @@ def is_lunkwill_reply(reply: QNetworkReply) -> bool:
 class NgwServerFeature(Enum):
     BOOLEAN_TYPE = ("nextgisweb", parse_version("5.5.0.dev0"))
     NO_GEOMETRY_LAYERS = ("nextgisweb", parse_version("5.5.0.dev0"))
+    NO_GEOMETRY_LAYER_VERSIONING = (
+        "nextgisweb",
+        parse_version("5.5.0.dev8"),
+    )
     REQUIRED_FIELDS = ("nextgisweb", parse_version("5.5.0.dev0"))
     JSON_TYPE = ("nextgisweb", parse_version("5.5.0.dev0"))
 

@@ -24,6 +24,13 @@ from nextgis_connect.legacy.ngw.core.ngw_vector_layer import NGWVectorLayer
 from nextgis_connect.legacy.ngw.qgis.ngw_resource_model_4qgis import (
     NGWUpdateVectorLayer,
 )
+from nextgis_connect.legacy.ngw.qgis.qgis_ngw_connection import (
+    NgwServerFeature,
+)
+from nextgis_connect.legacy.ngw.qt.qt_ngw_resource_model_job_error import (
+    JobError,
+)
+from nextgis_connect.platform.qgis.compat import GeometryType
 
 
 def test_set_versioning_enabled_puts_minimal_payload(qgis_app) -> None:
@@ -126,8 +133,30 @@ def test_update_vector_layer_does_not_toggle_disabled_versioning(
     assert put_calls[0].kwargs["is_lunkwill"] is True
 
 
+def test_update_no_geometry_versioned_layer_requires_dev8(qgis_app) -> None:
+    del qgis_app
+
+    ngw_layer, connection = _vector_layer(
+        is_versioning_enabled=True,
+        geometry_type="NONE",
+    )
+    connection.has_support_for_feature.return_value = False
+    qgis_layer = _qgis_layer()
+    qgis_layer.geometryType.return_value = GeometryType.Null
+    job = NGWUpdateVectorLayer(ngw_layer, qgis_layer)
+
+    with pytest.raises(JobError, match=r"5\.5\.0\.dev8"):
+        job._do()
+
+    connection.has_support_for_feature.assert_called_once_with(
+        NgwServerFeature.NO_GEOMETRY_LAYER_VERSIONING
+    )
+    connection.tus_upload_file.assert_not_called()
+
+
 def _vector_layer(
     is_versioning_enabled: bool,
+    geometry_type: str = "POINT",
 ) -> Tuple[NGWVectorLayer, mock.Mock]:
     connection = mock.Mock()
     connection.connection_id = "test-connection"
@@ -160,7 +189,7 @@ def _vector_layer(
                 "srs": {
                     "id": 3857,
                 },
-                "geometry_type": "POINT",
+                "geometry_type": geometry_type,
             },
         },
     )

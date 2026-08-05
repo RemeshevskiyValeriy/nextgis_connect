@@ -184,6 +184,35 @@ class TestQgsNgwConnection(NgConnectTestCase):
 
                 connection.invalidate_cached_ngw_components()
 
+    def test_has_support_for_no_geometry_layer_versioning_requires_dev8(
+        self,
+    ) -> None:
+        connection_id = self.connection_id(TestConnection.SandboxGuest)
+
+        versions = {
+            "5.5.0.dev7": False,
+            "5.5.0.dev8": True,
+            "5.5.0": True,
+        }
+
+        for version, expected in versions.items():
+            with self.subTest(version=version), patch.object(
+                self.qgs_ngw_connection_class,
+                "get",
+                autospec=True,
+                return_value={"nextgisweb": version},
+            ):
+                connection = self.qgs_ngw_connection_class(connection_id)
+
+                self.assertEqual(
+                    connection.has_support_for_feature(
+                        self.ngw_feature_class.NO_GEOMETRY_LAYER_VERSIONING
+                    ),
+                    expected,
+                )
+
+                connection.invalidate_cached_ngw_components()
+
     def test_has_support_for_required_fields_requires_550(self) -> None:
         connection_id = self.connection_id(TestConnection.SandboxGuest)
 
