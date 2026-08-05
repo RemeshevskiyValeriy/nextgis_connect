@@ -113,6 +113,17 @@ class NGWResourceModelJobResult:
             UploadedLayerResource(qgs_map_layer, ngw_resource)
         )
 
+    def clear(self) -> None:
+        self.added_resources = []
+        self.deleted_resources = []
+        self.edited_resources = []
+        self.dangling_resources = []
+        self.found_resources = None
+        self.not_permitted_resources = []
+        self.resource_delete_preview = None
+        self.uploaded_layer_resources = []
+        self.main_resource_id = -1
+
     def is_empty(self):
         return (
             len(self.added_resources) == 0
@@ -264,6 +275,15 @@ class NGWResourceModelJob(QObject):
 
         self._feedback.cancel()
 
+    def _is_canceled(self) -> bool:
+        return self._feedback is not None and self._feedback.isCanceled()
+
+    def _raise_if_canceled(self) -> None:
+        if not self._is_canceled():
+            return
+
+        raise NgConnectError("Request was canceled")
+
     def _do(self):
         pass
 
@@ -312,19 +332,29 @@ class NGWResourceUpdater(NGWResourceModelJob):
         self.recursive = recursive
 
     def _do(self):
-        for ngw_resource in self.ngw_resources:
-            self.__get_children(ngw_resource)
+        try:
+            self._raise_if_canceled()
+            for ngw_resource in self.ngw_resources:
+                self.__get_children(ngw_resource)
 
-        for ngw_resource in self.dangling_resources:
-            self.__get_children(ngw_resource, dangling=True)
+            for ngw_resource in self.dangling_resources:
+                self.__get_children(ngw_resource, dangling=True)
+            self._raise_if_canceled()
+        except Exception:
+            if self._is_canceled():
+                self.result.clear()
+            raise
 
     def __get_children(
         self, ngw_resource: NGWResource, dangling: bool = False
     ):
+        self._raise_if_canceled()
         ngw_resource_children = ngw_resource.get_children(
             feedback=self._feedback
         )
+        self._raise_if_canceled()
         for ngw_resource_child in ngw_resource_children:
+            self._raise_if_canceled()
             if dangling:
                 self.result.dangling_resources.append(ngw_resource_child)
             else:
@@ -334,6 +364,7 @@ class NGWResourceUpdater(NGWResourceModelJob):
                 ngw_resource_child, NGWGroupResource
             ):
                 self.__get_children(ngw_resource_child, dangling=dangling)
+        self._raise_if_canceled()
 
 
 class NGWGroupCreater(NGWResourceModelJob):

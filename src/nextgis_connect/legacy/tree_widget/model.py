@@ -1191,6 +1191,9 @@ class QNGWResourceTreeModelBase(QAbstractItemModel):
             # TODO Exception
             return
 
+        if job.error() is not None:
+            return
+
         if job.model_response is not None:
             job.model_response.uploaded_layers = list(
                 job_result.uploaded_layer_resources
