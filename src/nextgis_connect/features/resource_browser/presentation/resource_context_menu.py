@@ -264,7 +264,7 @@ class ResourceContextMenuFactory(QObject):
             ResourceMenuAction.UPDATE_STYLE: self.tr("Update layer style"),
             ResourceMenuAction.ADD_STYLE: self.tr("Add new style to layer"),
             ResourceMenuAction.OPEN_IN_WEB_GIS: self.tr("Open resource page"),
-            ResourceMenuAction.VIEW_IN_BROWSER: self.tr("Preview"),
+            ResourceMenuAction.VIEW_IN_BROWSER: self.tr("View in browser"),
             ResourceMenuAction.OPEN_LAYER_HISTORY: self.tr("Layer history"),
             ResourceMenuAction.EXPAND_ALL: self.tr("Expand recursively"),
             ResourceMenuAction.COLLAPSE_ALL: self.tr("Collapse recursively"),

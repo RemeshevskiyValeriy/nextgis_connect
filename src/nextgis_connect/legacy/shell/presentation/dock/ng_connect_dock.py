@@ -352,7 +352,7 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
         )
 
         self.actionOpenInNGWFromLayer = QAction(
-            self.tr("Open in Web GIS"), self
+            self.tr("Open resource page"), self
         )
         self.actionOpenInNGWFromLayer.setIcon(
             plugin_icon("branding/ngw_logo.svg")
@@ -890,7 +890,6 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
             for index in selected_ngw_indexes
         ]
         has_no_ngw_selection = len(selected_ngw_indexes) == 0
-        is_one_ngw_selected = len(selected_ngw_indexes) == 1
         is_multiple_ngw_selection = len(selected_ngw_indexes) > 1
 
         selected_qgis_layer = (
@@ -926,11 +925,7 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
             self.__resource_menu_controller.has_available_resource_import_actions()
         )
 
-        self.actionOpenInBrowser.setText(
-            self.tr("Open Web map in browser")
-            if is_one_ngw_selected and isinstance(ngw_resources[0], NGWWebMap)
-            else self.tr("View in browser")
-        )
+        self.actionOpenInBrowser.setText(self.tr("View in browser"))
         self.actionOpenInBrowser.setEnabled(
             not is_multiple_ngw_selection
             and not has_no_ngw_selection

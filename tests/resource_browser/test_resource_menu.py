@@ -723,7 +723,7 @@ class TestResourceContextMenuFactory:
             "Add to Web GIS",
             "<separator>",
             "Open resource page",
-            "Preview",
+            "View in browser",
             "<separator>",
             "Create",
             "Duplicate resource",
