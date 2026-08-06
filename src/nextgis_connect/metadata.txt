@@ -56,6 +56,21 @@ deprecated=False
 supportsQt6=True
 
 changelog=
+	4.0.0
+		- Added a welcome screen for new users
+		- Redesigned the connection settings dialog
+		- Redesigned progress handling with cancellation support for long-running operations
+		- Redesigned resource menus, toolbar actions, and updated the plugin icon
+		- Added update checks on QGIS startup
+		- Added bulk resource deletion with impact calculation before confirmation
+		- Added an identify tool for synchronized vector layers with field editing and attachment management
+		- Added support for bool, json fields, and geometryless layers
+		- Added raster overwrite support and improved raster uploads with RAT, PAM, JPEG, and PNG support
+		- Added connection diagnostics for certificates, users, root access, server version, and transfer speed
+		- Improved bulk resource loading by allowing problematic resources to be skipped
+		- Improved search with autocomplete, value suggestions
+		- Moved cache to the user profile
+		! Supported NGW versions: 5.3.0 - 5.6.0
 	3.6.1
 		- Fixed plugin launching in QGIS 3.32
 		! Supported NGW versions: 5.2.0 - 5.5.0
