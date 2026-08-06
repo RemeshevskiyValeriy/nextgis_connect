@@ -18,12 +18,15 @@ import os
 import shutil
 import tempfile
 from contextlib import closing
+from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import (
     TYPE_CHECKING,
     Any,
+    Callable,
     Dict,
+    List,
     Optional,
     Sequence,
     Union,
@@ -37,6 +40,7 @@ from qgis.core import (
     QgsVectorLayer,
 )
 from qgis.gui import QgisInterface
+from qgis.PyQt import sip
 from qgis.PyQt.QtCore import QObject, Qt, pyqtSignal, pyqtSlot
 from qgis.utils import iface
 
@@ -126,6 +130,13 @@ if TYPE_CHECKING:
     assert isinstance(iface, QgisInterface)
 
 
+@dataclass(frozen=True)
+class _TaskSignalConnection:
+    task: DetachedEditingTask
+    signal: Any
+    slot: Callable[..., None]
+
+
 class DetachedContainer(QObject):
     __path: Path
     __detached_layers: Dict[str, DetachedLayer]
@@ -140,7 +151,9 @@ class DetachedContainer(QObject):
     __indicator: Optional[DetachedLayerTreeIndicator]
     __indicator_presenter: Optional[DetachedLayerIndicatorPresenter]
     __sync_task: Optional[DetachedEditingTask]
+    __sync_task_signal_connections: List[_TaskSignalConnection]
     __is_silent_sync: bool
+    __is_destroyed: bool
 
     __check_date: Optional[datetime]
     __polling_policy: LayerUpdatePollingPolicy
@@ -174,7 +187,9 @@ class DetachedContainer(QObject):
         self.__indicator = None
         self.__indicator_presenter = None
         self.__sync_task = None
+        self.__sync_task_signal_connections = []
         self.__is_silent_sync = False
+        self.__is_destroyed = False
 
         self.__check_date = None
         self.__polling_policy = LayerUpdatePollingPolicy()
@@ -182,6 +197,7 @@ class DetachedContainer(QObject):
         self.__additional_data_fetch_date = None
         self.__is_edit_allowed = True
         self.__is_project_container = parent is not None
+        self.destroyed.connect(self.__on_destroyed)
         self.state_changed.connect(self.__refresh_indicator_presenter)
 
         self.__update_state(is_full_update=True)
@@ -280,12 +296,18 @@ class DetachedContainer(QObject):
         return self.synchronize(update_additional_only=True)
 
     def set_edit_allowed(self, is_edit_allowed: bool) -> None:
+        if self.__is_qobject_deleted():
+            return
+
         self.__is_edit_allowed = is_edit_allowed
         self.__unlock_layers()
 
     def update_connection(
         self, connection_id: str, instance_id: Optional[str]
     ) -> bool:
+        if self.__is_qobject_deleted():
+            return False
+
         if self.metadata is None:
             return False
 
@@ -421,6 +443,9 @@ class DetachedContainer(QObject):
         is_manual: bool = False,
         update_additional_only: bool = False,
     ) -> bool:
+        if self.__is_qobject_deleted():
+            return False
+
         if self.is_edit_mode_enabled:
             if update_additional_only:
                 self.__additional_data_fetch_date = None
@@ -451,8 +476,16 @@ class DetachedContainer(QObject):
             sync_task = FetchAdditionalDataTask(
                 self.path, need_update_structure=True
             )
-            sync_task.taskCompleted.connect(self.__on_additional_data_fetched)
-            sync_task.taskTerminated.connect(self.__on_additional_data_fetched)
+            self.__connect_sync_task_signal(
+                sync_task,
+                sync_task.taskCompleted,
+                self.__on_additional_data_fetched,
+            )
+            self.__connect_sync_task_signal(
+                sync_task,
+                sync_task.taskTerminated,
+                self.__on_additional_data_fetched,
+            )
         elif is_manual:
             self.__additional_data_fetch_date = None
             sync_task = self.__init_sync_task()
@@ -497,13 +530,16 @@ class DetachedContainer(QObject):
         self.__lock_layers()
 
         self.__state = DetachedLayerState.Synchronization
-        self.state_changed.emit(self.__state)
+        self.__emit_state_changed()
 
         self.__start_sync(sync_task)
 
         return True
 
     def reset_container(self) -> None:
+        if self.__is_qobject_deleted():
+            return
+
         logger.debug(f"<b>Start layer {self.metadata} reset</b>")
 
         self.__reset_error()
@@ -609,6 +645,9 @@ class DetachedContainer(QObject):
         self.synchronize(is_manual=True)
 
     def __update_state(self, is_full_update: bool = False) -> None:
+        if self.__is_qobject_deleted():
+            return
+
         try:
             self.__metadata = utils.container_metadata(self.path)
             self.__update_storage_index_state()
@@ -626,7 +665,7 @@ class DetachedContainer(QObject):
             self.__is_edit_allowed = False
             self.__lock_layers()
 
-            self.state_changed.emit(self.__state)
+            self.__emit_state_changed()
             return
 
         except Exception:
@@ -638,7 +677,7 @@ class DetachedContainer(QObject):
             self.__is_edit_allowed = False
             self.__lock_layers()
 
-            self.state_changed.emit(self.__state)
+            self.__emit_state_changed()
             return
 
         self.__is_not_initialized = self.__metadata.is_not_initialized
@@ -649,7 +688,7 @@ class DetachedContainer(QObject):
             if is_full_update:
                 self.__changes = utils.container_changes(self.path)
             self.__additional_data_fetch_date = None
-            self.state_changed.emit(self.__state)
+            self.__emit_state_changed()
             return
 
         if self.__metadata.is_not_initialized:
@@ -663,7 +702,7 @@ class DetachedContainer(QObject):
             self.__additional_data_fetch_date = None
             self.__is_edit_allowed = False
             self.__lock_layers()
-            self.state_changed.emit(self.__state)
+            self.__emit_state_changed()
             return
 
         if self.__sync_task is not None:
@@ -689,7 +728,7 @@ class DetachedContainer(QObject):
 
         self.__reset_error()
 
-        self.state_changed.emit(self.__state)
+        self.__emit_state_changed()
 
     def __update_storage_index_state(self) -> None:
         try:
@@ -722,8 +761,16 @@ class DetachedContainer(QObject):
             sync_task = FetchAdditionalDataTask(
                 self.path, need_update_structure=True
             )
-            sync_task.taskCompleted.connect(self.__on_additional_data_fetched)
-            sync_task.taskTerminated.connect(self.__on_additional_data_fetched)
+            self.__connect_sync_task_signal(
+                sync_task,
+                sync_task.taskCompleted,
+                self.__on_additional_data_fetched,
+            )
+            self.__connect_sync_task_signal(
+                sync_task,
+                sync_task.taskTerminated,
+                self.__on_additional_data_fetched,
+            )
 
         return sync_task
 
@@ -735,11 +782,17 @@ class DetachedContainer(QObject):
             sync_task = UploadChangesTask(self.path)
 
         if sync_task is not None:
-            sync_task.taskCompleted.connect(
-                lambda: self.__on_synchronization_finished(True)
+            self.__connect_sync_task_signal(
+                sync_task,
+                sync_task.taskCompleted,
+                self.__on_synchronization_finished,
+                True,
             )
-            sync_task.taskTerminated.connect(
-                lambda: self.__on_synchronization_finished(False)
+            self.__connect_sync_task_signal(
+                sync_task,
+                sync_task.taskTerminated,
+                self.__on_synchronization_finished,
+                False,
             )
 
         return sync_task
@@ -750,21 +803,38 @@ class DetachedContainer(QObject):
 
         if self.is_not_initialized:
             sync_task = FillLayerWithVersioningTask(self.path)
-            sync_task.taskCompleted.connect(
-                lambda: self.__on_fill_finished(True)
+            self.__connect_sync_task_signal(
+                sync_task,
+                sync_task.taskCompleted,
+                self.__on_fill_finished,
+                True,
             )
-            sync_task.taskTerminated.connect(
-                lambda: self.__on_fill_finished(False)
+            self.__connect_sync_task_signal(
+                sync_task,
+                sync_task.taskTerminated,
+                self.__on_fill_finished,
+                False,
             )
             return sync_task
 
         sync_task = FetchDeltaTask(self.path)
-        sync_task.taskCompleted.connect(self.__on_fetch_finished)
-        sync_task.taskTerminated.connect(self.__on_fetch_finished)
+        self.__connect_sync_task_signal(
+            sync_task,
+            sync_task.taskCompleted,
+            self.__on_fetch_finished,
+        )
+        self.__connect_sync_task_signal(
+            sync_task,
+            sync_task.taskTerminated,
+            self.__on_fetch_finished,
+        )
         return sync_task
 
     @pyqtSlot(bool)
     def __on_synchronization_finished(self, result: bool) -> None:
+        if self.__is_qobject_deleted() or self.__sync_task is None:
+            return
+
         self.__check_date = datetime.now()
 
         assert self.__sync_task is not None
@@ -818,12 +888,23 @@ class DetachedContainer(QObject):
 
         # After first sync
         task = FetchAdditionalDataTask(self.path, need_update_structure=True)
-        task.taskCompleted.connect(self.__on_additional_data_fetched)
-        task.taskTerminated.connect(self.__on_additional_data_fetched)
+        self.__connect_sync_task_signal(
+            task,
+            task.taskCompleted,
+            self.__on_additional_data_fetched,
+        )
+        self.__connect_sync_task_signal(
+            task,
+            task.taskTerminated,
+            self.__on_additional_data_fetched,
+        )
         self.__start_sync(task)
 
     @pyqtSlot()
     def __on_additional_data_fetched(self) -> None:
+        if self.__is_qobject_deleted() or self.__sync_task is None:
+            return
+
         result = self.__sync_task.status() == QgsTask.TaskStatus.Complete
         assert isinstance(self.__sync_task, FetchAdditionalDataTask)
         if result:
@@ -873,6 +954,9 @@ class DetachedContainer(QObject):
 
     @pyqtSlot()
     def __on_fetch_finished(self) -> None:
+        if self.__is_qobject_deleted() or self.__sync_task is None:
+            return
+
         assert isinstance(self.__sync_task, FetchDeltaTask)
         result = self.__sync_task.status() == QgsTask.TaskStatus.Complete
         if not result:
@@ -913,8 +997,16 @@ class DetachedContainer(QObject):
                 fetch_delta_task.timestamp,
                 delta,
             )
-            task.taskCompleted.connect(self.__on_apply_finished)
-            task.taskTerminated.connect(self.__on_apply_finished)
+            self.__connect_sync_task_signal(
+                task,
+                task.taskCompleted,
+                self.__on_apply_finished,
+            )
+            self.__connect_sync_task_signal(
+                task,
+                task.taskTerminated,
+                self.__on_apply_finished,
+            )
             self.__start_sync(task)
             return
 
@@ -923,8 +1015,16 @@ class DetachedContainer(QObject):
                 VersioningSynchronizationState.UploadingChanges
             )
             task = UploadChangesTask(self.path)
-            task.taskCompleted.connect(self.__on_versioned_uploading_finished)
-            task.taskTerminated.connect(self.__on_versioned_uploading_finished)
+            self.__connect_sync_task_signal(
+                task,
+                task.taskCompleted,
+                self.__on_versioned_uploading_finished,
+            )
+            self.__connect_sync_task_signal(
+                task,
+                task.taskTerminated,
+                self.__on_versioned_uploading_finished,
+            )
             self.__start_sync(task)
             return
 
@@ -932,6 +1032,9 @@ class DetachedContainer(QObject):
 
     @pyqtSlot()
     def __on_apply_finished(self) -> None:
+        if self.__is_qobject_deleted() or self.__sync_task is None:
+            return
+
         result = self.__sync_task.status() == QgsTask.TaskStatus.Complete
         if not result:
             self.__on_synchronization_finished(False)
@@ -948,12 +1051,23 @@ class DetachedContainer(QObject):
             VersioningSynchronizationState.UploadingChanges
         )
         task = UploadChangesTask(self.path)
-        task.taskCompleted.connect(self.__on_versioned_uploading_finished)
-        task.taskTerminated.connect(self.__on_versioned_uploading_finished)
+        self.__connect_sync_task_signal(
+            task,
+            task.taskCompleted,
+            self.__on_versioned_uploading_finished,
+        )
+        self.__connect_sync_task_signal(
+            task,
+            task.taskTerminated,
+            self.__on_versioned_uploading_finished,
+        )
         self.__start_sync(task)
 
     @pyqtSlot(bool)
     def __on_fill_finished(self, result: bool) -> None:
+        if self.__is_qobject_deleted() or self.__sync_task is None:
+            return
+
         if not result:
             self.__on_synchronization_finished(False)
             return
@@ -965,6 +1079,9 @@ class DetachedContainer(QObject):
 
     @pyqtSlot()
     def __on_versioned_uploading_finished(self) -> None:
+        if self.__is_qobject_deleted() or self.__sync_task is None:
+            return
+
         result = self.__sync_task.status() == QgsTask.TaskStatus.Complete
         if not result:
             self.__on_synchronization_finished(False)
@@ -974,14 +1091,53 @@ class DetachedContainer(QObject):
         self.__update_state()
 
         task = FetchDeltaTask(self.path)
-        task.taskCompleted.connect(self.__on_fetch_finished)
-        task.taskTerminated.connect(self.__on_fetch_finished)
+        self.__connect_sync_task_signal(
+            task,
+            task.taskCompleted,
+            self.__on_fetch_finished,
+        )
+        self.__connect_sync_task_signal(
+            task,
+            task.taskTerminated,
+            self.__on_fetch_finished,
+        )
         self.__versioning_state = (
             VersioningSynchronizationState.FetchingChanges
         )
         self.__start_sync(task)
 
+    def __connect_sync_task_signal(
+        self,
+        task: DetachedEditingTask,
+        signal: Any,
+        slot: Callable[..., None],
+        *slot_arguments: Any,
+    ) -> None:
+        if self.__is_qobject_deleted():
+            return
+
+        def guarded_slot() -> None:
+            if not self.__can_handle_sync_task_result(task):
+                return
+
+            slot(*slot_arguments)
+
+        signal.connect(guarded_slot)
+        self.__sync_task_signal_connections.append(
+            _TaskSignalConnection(task, signal, guarded_slot)
+        )
+
+    def __can_handle_sync_task_result(self, task: DetachedEditingTask) -> bool:
+        return not self.__is_qobject_deleted() and self.__sync_task is task
+
     def __start_sync(self, task: DetachedEditingTask) -> None:
+        if self.__is_qobject_deleted():
+            self.__disconnect_sync_task_signals(task)
+            return
+
+        if self.__sync_task is not None and self.__sync_task is not task:
+            self.__disconnect_sync_task_signals(self.__sync_task)
+
         if self.__is_silent_sync:
             logger.debug("<b>Resync</b> attempt <b>started<b>")
         self.__sync_task = task
@@ -992,8 +1148,12 @@ class DetachedContainer(QObject):
         task_manager.addTask(self.__sync_task)
 
     def __finish_sync(self) -> None:
+        self.__disconnect_sync_task_signals(self.__sync_task)
         self.__sync_task = None
         self.__is_silent_sync = False
+
+        if self.__is_qobject_deleted():
+            return
 
         self.__update_state(is_full_update=True)
         self.__unlock_layers()
@@ -1002,6 +1162,47 @@ class DetachedContainer(QObject):
 
         # Start next layer update
         NgConnectInterface.instance().synchronize_layers()
+
+    def __disconnect_sync_task_signals(
+        self, task: Optional[DetachedEditingTask] = None
+    ) -> None:
+        remaining_connections: List[_TaskSignalConnection] = []
+        for connection in self.__sync_task_signal_connections:
+            if task is not None and connection.task is not task:
+                remaining_connections.append(connection)
+                continue
+
+            self.__safe_disconnect(connection.signal, connection.slot)
+
+        self.__sync_task_signal_connections = remaining_connections
+
+    def __safe_disconnect(
+        self, signal: Any, slot: Callable[..., None]
+    ) -> None:
+        try:
+            signal.disconnect(slot)
+        except (RuntimeError, TypeError):
+            pass
+
+    def __on_destroyed(self, *_: object) -> None:
+        self.__is_destroyed = True
+        self.__disconnect_sync_task_signals()
+        self.__sync_task = None
+
+    def __is_qobject_deleted(self) -> bool:
+        if self.__is_destroyed:
+            return True
+
+        try:
+            return sip.isdeleted(self)
+        except RuntimeError:
+            return True
+
+    def __emit_state_changed(self) -> None:
+        if self.__is_qobject_deleted():
+            return
+
+        self.state_changed.emit(self.__state)
 
     def __lock_layers(self) -> None:
         for detached_layer in self.__detached_layers.values():

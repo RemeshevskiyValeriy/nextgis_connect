@@ -17,6 +17,8 @@
 from unittest.mock import MagicMock, patch
 
 from qgis.core import QgsVectorLayer
+from qgis.PyQt import sip
+from qgis.PyQt.QtCore import QCoreApplication, QEvent
 
 from nextgis_connect.legacy.detached_editing.container.container import (
     DetachedContainer,
@@ -121,6 +123,27 @@ class TestDetachedEditingTask(NgConnectTestCase):
         assert (
             f"Container path: {container_mock.path}" in diagnostic_information
         )
+
+    @mock_container(TestData.Points)
+    def test_stale_additional_data_callback_is_ignored_after_container_delete(
+        self,
+        container_mock: MagicMock,
+        qgs_layer: QgsVectorLayer,
+    ) -> None:
+        del qgs_layer
+
+        container = DetachedContainer(container_mock.path)
+        callback = container._DetachedContainer__on_additional_data_fetched
+
+        container.deleteLater()
+        QCoreApplication.sendPostedEvents(
+            None,
+            QEvent.Type.DeferredDelete,
+        )
+
+        assert sip.isdeleted(container)
+
+        callback()
 
     @mock_container(TestData.Points)
     def test_additional_data_error_has_human_readable_message(
