@@ -2604,7 +2604,21 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
         if mode == ResourceImportMode.EXPERIMENTAL_NGW:
             return isinstance(resource, NGWVectorLayer)
 
-        return True
+        if mode == ResourceImportMode.TMS:
+            return isinstance(
+                resource,
+                (
+                    NGWVectorLayer,
+                    NGWPostgisLayer,
+                    NGWQGISStyle,
+                    NGWWebMap,
+                    NGWRasterLayer,
+                    NGWWmsLayer,
+                    NGWTileset,
+                ),
+            )
+
+        return False
 
     def __schedule_direct_import_dependencies(
         self,
