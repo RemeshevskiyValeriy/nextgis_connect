@@ -446,6 +446,7 @@ class ResourceMenuPolicy:
             in (
                 ResourceKind.VECTOR_LAYER,
                 ResourceKind.POSTGIS_LAYER,
+                ResourceKind.WFS_LAYER,
                 ResourceKind.QGIS_VECTOR_STYLE,
             )
             and not resource.has_geometry
@@ -466,6 +467,9 @@ class ResourceMenuPolicy:
                 ResourceMenuAction.ADD_MVT_LAYER,
                 ResourceMenuAction.ADD_TMS_LAYER,
             )
+
+        if resource_kind == ResourceKind.WFS_LAYER:
+            return (ResourceMenuAction.ADD_MVT_LAYER,)
 
         if resource_kind == ResourceKind.QGIS_VECTOR_STYLE:
             return (ResourceMenuAction.ADD_TMS_LAYER,)

@@ -2592,7 +2592,14 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
             return False
 
         if mode == ResourceImportMode.MVT:
-            return isinstance(resource, (NGWVectorLayer, NGWPostgisLayer))
+            return isinstance(
+                resource,
+                (
+                    NGWVectorLayer,
+                    NGWPostgisLayer,
+                    NGWWfsLayer,
+                ),
+            )
 
         if mode == ResourceImportMode.EXPERIMENTAL_NGW:
             return isinstance(resource, NGWVectorLayer)
