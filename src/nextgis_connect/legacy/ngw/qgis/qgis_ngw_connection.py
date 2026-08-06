@@ -19,6 +19,7 @@ import json
 import time
 import urllib.parse
 from base64 import b64encode
+from enum import Enum
 from http import HTTPStatus
 from typing import TYPE_CHECKING, Any, ClassVar, Dict, Optional, Tuple, Union
 
@@ -43,7 +44,7 @@ from nextgis_connect.platform.qgis.errors import (
     NgwError,
 )
 from nextgis_connect.platform.qt import QtNetworkError
-from qgis.core import Enum, QgsFeedback, QgsNetworkAccessManager
+from qgis.core import QgsFeedback, QgsNetworkAccessManager
 from qgis.PyQt.QtCore import (
     QBuffer,
     QByteArray,
@@ -85,18 +86,31 @@ def is_lunkwill_reply(reply: QNetworkReply) -> bool:
 
 
 class NgwServerFeature(Enum):
-    BOOLEAN_TYPE = ("nextgisweb", parse_version("5.5.0.dev0"))
-    NO_GEOMETRY_LAYERS = ("nextgisweb", parse_version("5.5.0.dev0"))
+    BOOLEAN_TYPE = ("boolean_type", "nextgisweb", parse_version("5.5.0.dev0"))
+    NO_GEOMETRY_LAYERS = (
+        "no_geometry_layers",
+        "nextgisweb",
+        parse_version("5.5.0.dev0"),
+    )
     NO_GEOMETRY_LAYER_VERSIONING = (
+        "no_geometry_layer_versioning",
         "nextgisweb",
         parse_version("5.5.0.dev8"),
     )
-    REQUIRED_FIELDS = ("nextgisweb", parse_version("5.5.0.dev0"))
-    JSON_TYPE = ("nextgisweb", parse_version("5.5.0.dev0"))
+    REQUIRED_FIELDS = (
+        "required_fields",
+        "nextgisweb",
+        parse_version("5.5.0.dev0"),
+    )
+    JSON_TYPE = ("json_type", "nextgisweb", parse_version("5.5.0.dev0"))
+
+    @property
+    def component(self):
+        return self.value[1]
 
     @property
     def required_version(self):
-        return self.value[1]
+        return self.value[2]
 
 
 class QgsNgwConnection(QObject):
@@ -171,14 +185,14 @@ class QgsNgwConnection(QObject):
 
     def has_support_for_feature(self, feature: NgwServerFeature) -> bool:
         ngw_components = self.get_ngw_components()
-        component_version = ngw_components.get(feature.value[0])
+        component_version = ngw_components.get(feature.component)
         if not component_version:
             raise NgwConnectionError(
-                f"Component {feature.value[0]} version is not available in NGW versions response"
+                f"Component {feature.component} version is not available in NGW versions response"
             )
 
         logger.debug(
-            f"NGW component {feature.value[0]} version is {component_version}"
+            f"NGW component {feature.component} version is {component_version}"
         )
 
         ngw_version = parse_version(component_version)
@@ -187,7 +201,7 @@ class QgsNgwConnection(QObject):
         if not result:
             logger.debug(
                 f"Feature {feature.name} requires version {required_version} "
-                f"of component {feature.value[0]} but actual version is {ngw_version}"
+                f"of component {feature.component} but actual version is {ngw_version}"
             )
 
         return result
