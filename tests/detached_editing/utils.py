@@ -55,6 +55,13 @@ from tests.ng_connect_testcase import (
     TestData,
 )
 
+LEGACY_36_POINTS_CONTAINER_PATH = (
+    Path(__file__).resolve().parents[1]
+    / "test_data"
+    / "detached_containers"
+    / "nextgis_connect_3_6_1_points_layer.gpkg"
+)
+
 
 def random_feature(
     wkb_type: WkbType, fields: QgsFields, fid_field: str = "fid"
@@ -405,3 +412,8 @@ def mark_container_changed(container_path: Path) -> None:
             (1, attribute, "previous"),
         )
         connection.commit()
+
+
+def copy_legacy_36_points_container(container_path: Path) -> None:
+    container_path.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(LEGACY_36_POINTS_CONTAINER_PATH, container_path)

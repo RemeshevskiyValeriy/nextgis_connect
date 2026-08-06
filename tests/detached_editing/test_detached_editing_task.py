@@ -34,7 +34,12 @@ from nextgis_connect.platform.qgis.errors import (
     ErrorCode,
     NgwError,
 )
-from tests.detached_editing.utils import mock_container, set_container_version
+from tests.detached_editing.utils import (
+    copy_legacy_36_points_container,
+    mark_container_changed,
+    mock_container,
+    set_container_version,
+)
 from tests.ng_connect_testcase import NgConnectTestCase, TestData
 
 
@@ -47,6 +52,21 @@ class TestDetachedEditingTask(NgConnectTestCase):
 
         task = FetchAdditionalDataTask(
             container_mock.path, need_update_structure=True
+        )
+
+        assert task.error is not None
+        assert task.error.code == ErrorCode.ContainerVersionIsOutdated
+        assert task.run() is False
+
+    def test_old_schema_container_is_rejected_before_synchronization(
+        self,
+    ) -> None:
+        container_path = self.create_temp_file(".gpkg")
+        copy_legacy_36_points_container(container_path)
+        mark_container_changed(container_path)
+
+        task = FetchAdditionalDataTask(
+            container_path, need_update_structure=True
         )
 
         assert task.error is not None

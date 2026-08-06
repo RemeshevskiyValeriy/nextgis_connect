@@ -21,7 +21,7 @@ from datetime import datetime
 from enum import Enum, auto
 from functools import singledispatch
 from pathlib import Path
-from typing import Optional, Union
+from typing import Optional, Set, Union
 
 from qgis.core import (
     QgsExpressionContext,
@@ -55,6 +55,173 @@ from nextgis_connect.shared.types import (
     UnsetType,
     VersionId,
 )
+
+_REQUIRED_CONTAINER_TABLES = (
+    "ngw_metadata",
+    "ngw_fields_metadata",
+    "ngw_features_metadata",
+    "ngw_features_descriptions",
+    "ngw_features_attachments",
+    "ngw_added_attributes",
+    "ngw_removed_attributes",
+    "ngw_added_features",
+    "ngw_removed_features",
+    "ngw_restored_features",
+    "ngw_updated_attributes",
+    "ngw_updated_geometries",
+    "ngw_updated_descriptions",
+    "ngw_added_attachments",
+    "ngw_removed_attachments",
+    "ngw_updated_attachments",
+    "ngw_restored_attachments",
+)
+
+_CHANGE_TABLES = (
+    "ngw_added_features",
+    "ngw_removed_features",
+    "ngw_restored_features",
+    "ngw_updated_attributes",
+    "ngw_updated_geometries",
+    "ngw_updated_descriptions",
+    "ngw_added_attachments",
+    "ngw_removed_attachments",
+    "ngw_updated_attachments",
+    "ngw_restored_attachments",
+)
+
+_FEATURE_UPDATE_TABLES = (
+    "ngw_updated_attributes",
+    "ngw_updated_geometries",
+    "ngw_updated_descriptions",
+)
+
+_ATTACHMENT_UPDATE_TABLES = (
+    "ngw_added_attachments",
+    "ngw_removed_attachments",
+    "ngw_updated_attachments",
+    "ngw_restored_attachments",
+)
+
+_METADATA_COLUMN_DEFAULTS = {
+    "container_version": "'0.0.0'",
+    "connection_id": "NULL",
+    "instance_id": "NULL",
+    "resource_id": "0",
+    "display_name": "''",
+    "description": "NULL",
+    "geometry_type": "NULL",
+    "transaction_id": "NULL",
+    "epoch": "NULL",
+    "version": "NULL",
+    "sync_date": "NULL",
+    "error_code": "NULL",
+    "is_auto_sync_enabled": "0",
+}
+
+
+def _table_names(cursor: sqlite3.Cursor) -> Set[str]:
+    cursor.execute("SELECT name FROM sqlite_master WHERE type = 'table'")
+    return {row[0] for row in cursor.fetchall()}
+
+
+def _table_columns(cursor: sqlite3.Cursor, table_name: str) -> Set[str]:
+    cursor.execute(f"PRAGMA table_info({wrap_sql_table_name(table_name)})")
+    return {row[1] for row in cursor.fetchall()}
+
+
+def _has_current_container_schema(table_names: Set[str]) -> bool:
+    return all(
+        table_name in table_names for table_name in _REQUIRED_CONTAINER_TABLES
+    )
+
+
+def _metadata_column_expression(
+    column_name: str,
+    existing_columns: Set[str],
+) -> str:
+    wrapped_column_name = wrap_sql_table_name(column_name)
+    if column_name in existing_columns:
+        return wrapped_column_name
+
+    default_value = _METADATA_COLUMN_DEFAULTS[column_name]
+    return f"{default_value} AS {wrapped_column_name}"
+
+
+def _table_row_count(
+    cursor: sqlite3.Cursor,
+    table_names: Set[str],
+    table_name: str,
+) -> int:
+    if table_name not in table_names:
+        return 0
+
+    cursor.execute(
+        f"SELECT COUNT(*) FROM {wrap_sql_table_name(table_name)}",
+    )
+    result = cursor.fetchone()[0]
+    return int(result or 0)
+
+
+def _table_has_rows(
+    cursor: sqlite3.Cursor,
+    table_names: Set[str],
+    table_name: str,
+) -> bool:
+    if table_name not in table_names:
+        return False
+
+    cursor.execute(
+        f"""
+        SELECT EXISTS(
+            SELECT 1 FROM {wrap_sql_table_name(table_name)} LIMIT 1
+        )
+        """,
+    )
+    return bool(cursor.fetchone()[0])
+
+
+def _feature_ids_from_table(
+    cursor: sqlite3.Cursor,
+    table_names: Set[str],
+    table_name: str,
+) -> Set[FeatureId]:
+    if table_name not in table_names:
+        return set()
+
+    cursor.execute(f"SELECT fid FROM {wrap_sql_table_name(table_name)}")
+    return {row[0] for row in cursor.fetchall() if row[0] is not None}
+
+
+def _attachment_feature_ids_from_table(
+    cursor: sqlite3.Cursor,
+    table_names: Set[str],
+    table_name: str,
+) -> Set[FeatureId]:
+    if (
+        table_name not in table_names
+        or "ngw_features_attachments" not in table_names
+    ):
+        return set()
+
+    cursor.execute(
+        f"""
+        SELECT fid FROM ngw_features_attachments
+        WHERE aid IN (
+            SELECT aid FROM {wrap_sql_table_name(table_name)}
+        )
+        """,
+    )
+    return {row[0] for row in cursor.fetchall() if row[0] is not None}
+
+
+def _has_container_changes(
+    cursor: sqlite3.Cursor,
+    table_names: Set[str],
+) -> bool:
+    return any(
+        _table_has_rows(cursor, table_names, table_name)
+        for table_name in _CHANGE_TABLES
+    )
 
 
 def has_required_fields_metadata(cursor: sqlite3.Cursor) -> bool:
@@ -116,6 +283,7 @@ class DetachedContainerMetaData:
     features_count: int
     has_changes: bool
     srs_id: int
+    is_schema_complete: bool = True
 
     @property
     def is_not_initialized(self) -> bool:
@@ -315,6 +483,8 @@ def _(path: Path) -> DetachedContainerMetaData:
 
 @container_metadata.register
 def _(cursor: sqlite3.Cursor) -> DetachedContainerMetaData:
+    table_names = _table_names(cursor)
+    metadata_table_columns = _table_columns(cursor, "ngw_metadata")
     metadata_columns = [
         "container_version",
         "connection_id",
@@ -330,8 +500,17 @@ def _(cursor: sqlite3.Cursor) -> DetachedContainerMetaData:
         "error_code",
         "is_auto_sync_enabled",
     ]
+    metadata_column_expressions = [
+        _metadata_column_expression(column_name, metadata_table_columns)
+        for column_name in metadata_columns
+    ]
 
-    cursor.execute(f"SELECT {', '.join(metadata_columns)} FROM ngw_metadata")
+    cursor.execute(
+        f"""
+        SELECT {", ".join(metadata_column_expressions)}
+        FROM ngw_metadata
+        """
+    )
     row = cursor.fetchone()
 
     (
@@ -424,22 +603,7 @@ def _(cursor: sqlite3.Cursor) -> DetachedContainerMetaData:
     if features_count is None:
         features_count = 0
 
-    cursor.execute(
-        """
-        SELECT
-            EXISTS(SELECT 1 FROM ngw_added_features)
-            OR EXISTS(SELECT 1 FROM ngw_removed_features)
-            OR EXISTS(SELECT 1 FROM ngw_restored_features)
-            OR EXISTS(SELECT 1 FROM ngw_updated_attributes)
-            OR EXISTS(SELECT 1 FROM ngw_updated_geometries)
-            OR EXISTS(SELECT 1 FROM ngw_updated_descriptions)
-            OR EXISTS(SELECT 1 FROM ngw_added_attachments)
-            OR EXISTS(SELECT 1 FROM ngw_removed_attachments)
-            OR EXISTS(SELECT 1 FROM ngw_updated_attachments)
-            OR EXISTS(SELECT 1 FROM ngw_restored_attachments)
-        """
-    )
-    has_changes = bool(cursor.fetchone()[0])
+    has_changes = _has_container_changes(cursor, table_names)
 
     return DetachedContainerMetaData(
         container_version=container_version,
@@ -461,6 +625,7 @@ def _(cursor: sqlite3.Cursor) -> DetachedContainerMetaData:
         features_count=features_count,
         has_changes=has_changes,
         srs_id=srs_id,
+        is_schema_complete=_has_current_container_schema(table_names),
     )
 
 
@@ -468,43 +633,41 @@ def container_changes(path: Path) -> DetachedContainerChangesInfo:
     with closing(make_connection(path)) as connection, closing(
         connection.cursor()
     ) as cursor:
-        cursor.execute(
-            """
-            SELECT
-              (SELECT COUNT(*) FROM ngw_added_features) added,
-              (SELECT COUNT(*) FROM ngw_removed_features) removed,
-              (SELECT COUNT(*) FROM ngw_restored_features) restored,
-              (
-                  SELECT COUNT(DISTINCT fid) FROM (
-                      SELECT fid FROM ngw_updated_attributes
-                      UNION
-                      SELECT fid FROM ngw_updated_geometries
-                      UNION
-                      SELECT fid FROM ngw_updated_descriptions
-                      UNION
-                      SELECT fid FROM ngw_features_attachments
-                          WHERE aid IN (SELECT aid FROM ngw_added_attachments)
-                      UNION
-                      SELECT fid FROM ngw_features_attachments
-                          WHERE aid IN (SELECT aid FROM ngw_removed_attachments)
-                      UNION
-                      SELECT fid FROM ngw_features_attachments
-                          WHERE aid IN (SELECT aid FROM ngw_updated_attachments)
-                      UNION
-                      SELECT fid FROM ngw_features_attachments
-                          WHERE aid IN (SELECT aid FROM ngw_restored_attachments)
-                  ) AS all_changed_fids
-                  WHERE fid NOT IN (SELECT fid FROM ngw_added_features)
-              ) updated
-            """
+        table_names = _table_names(cursor)
+        added_feature_ids = _feature_ids_from_table(
+            cursor,
+            table_names,
+            "ngw_added_features",
         )
-        result = cursor.fetchone()
+        updated_feature_ids = set()
+        for table_name in _FEATURE_UPDATE_TABLES:
+            updated_feature_ids.update(
+                _feature_ids_from_table(cursor, table_names, table_name)
+            )
+        for table_name in _ATTACHMENT_UPDATE_TABLES:
+            updated_feature_ids.update(
+                _attachment_feature_ids_from_table(
+                    cursor,
+                    table_names,
+                    table_name,
+                )
+            )
 
         return DetachedContainerChangesInfo(
-            added_features_count=result[0],
-            removed_features_count=result[1],
-            restored_features_count=result[2],
-            updated_features_count=result[3],
+            added_features_count=len(added_feature_ids),
+            removed_features_count=_table_row_count(
+                cursor,
+                table_names,
+                "ngw_removed_features",
+            ),
+            restored_features_count=_table_row_count(
+                cursor,
+                table_names,
+                "ngw_restored_features",
+            ),
+            updated_features_count=len(
+                updated_feature_ids - added_feature_ids
+            ),
         )
 
 

@@ -44,6 +44,7 @@ from nextgis_connect.legacy.settings.ng_connect_settings import (
 )
 from nextgis_connect.platform.filesystem import cp
 from tests.detached_editing.utils import (
+    copy_legacy_36_points_container,
     mark_container_changed,
     mock_container,
     set_container_connection_metadata,
@@ -131,6 +132,60 @@ class TestCachedContainerLifecycle(NgConnectTestCase):
         )
         self.assertTrue(metadata.is_not_initialized)
         self.assertEqual(metadata.features_count, 0)
+
+    def test_tree_add_recreates_old_schema_cached_container_without_changes(
+        self,
+    ) -> None:
+        ngw_layer = self.resource(TestData.Points)
+        connection = self.connection(TestConnection.SandboxGuest)
+        container_path = self._storage_service().ensure_container_placeholder(
+            connection.domain_uuid,
+            ngw_layer.resource_id,
+        )
+        copy_legacy_36_points_container(container_path)
+        set_container_connection_metadata(
+            container_path,
+            connection_id=connection.id,
+            instance_id=connection.domain_uuid,
+        )
+
+        self._collect_detached_layer_params(ngw_layer)
+
+        metadata = container_metadata(container_path)
+        self.assertTrue(metadata.is_schema_complete)
+        self.assertTrue(metadata.is_not_initialized)
+        self.assertEqual(metadata.features_count, 0)
+
+    def test_tree_add_preserves_old_schema_cached_container_with_changes(
+        self,
+    ) -> None:
+        ngw_layer = self.resource(TestData.Points)
+        connection = self.connection(TestConnection.SandboxGuest)
+        container_path = self._storage_service().ensure_container_placeholder(
+            connection.domain_uuid,
+            ngw_layer.resource_id,
+        )
+        copy_legacy_36_points_container(container_path)
+        set_container_connection_metadata(
+            container_path,
+            connection_id=connection.id,
+            instance_id=connection.domain_uuid,
+        )
+        mark_container_changed(container_path)
+
+        layer_params = self._collect_detached_layer_params(ngw_layer)
+
+        metadata = container_metadata(container_path)
+        self.assertFalse(metadata.is_schema_complete)
+        self.assertTrue(metadata.has_changes)
+        self.assertEqual(
+            layer_params,
+            (
+                detached_layer_uri(container_path),
+                ngw_layer.display_name,
+                "ogr",
+            ),
+        )
 
     @mock_container(TestData.Points)
     def test_tree_add_recreates_broken_cached_container_without_user_error(

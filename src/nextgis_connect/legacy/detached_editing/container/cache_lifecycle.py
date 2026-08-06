@@ -155,6 +155,9 @@ class CachedDetachedContainerLifecycle:
         self,
         metadata: DetachedContainerMetaData,
     ) -> bool:
+        if not metadata.is_schema_complete:
+            return True
+
         container_version = parse_version(metadata.container_version)
         supported_version = parse_version(
             self._settings.supported_container_version

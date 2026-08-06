@@ -181,6 +181,9 @@ class DetachedEditingTask(NgConnectTask):
         return ngw_layer
 
     def __check_container(self) -> None:
+        if not self._metadata.is_schema_complete:
+            raise ContainerError(code=ErrorCode.ContainerVersionIsOutdated)
+
         container_version = parse_version(self._metadata.container_version)
         supported_version = parse_version(
             NgConnectSettings().supported_container_version
