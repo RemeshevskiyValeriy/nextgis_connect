@@ -41,6 +41,14 @@ class Clipboard:
             mime_data.setText(text)
         self._set_mime_data(mime_data)
 
+    def set_mime_data(self, mime_data: QMimeData) -> None:
+        """Set MIME data on the application clipboard."""
+        self._set_mime_data(mime_data)
+
+    def mime_data(self) -> QMimeData:
+        """Return the current application clipboard MIME data."""
+        return self._clipboard().mimeData()
+
     def copy_image(self, image: ClipboardImage) -> None:
         """Copy image content to the application clipboard."""
         clipboard_image = self._image_to_qimage(image)
