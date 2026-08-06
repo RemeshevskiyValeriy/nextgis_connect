@@ -2591,10 +2591,13 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
         ):
             return False
 
-        return mode not in (
-            ResourceImportMode.MVT,
-            ResourceImportMode.EXPERIMENTAL_NGW,
-        ) or isinstance(resource, NGWVectorLayer)
+        if mode == ResourceImportMode.MVT:
+            return isinstance(resource, (NGWVectorLayer, NGWPostgisLayer))
+
+        if mode == ResourceImportMode.EXPERIMENTAL_NGW:
+            return isinstance(resource, NGWVectorLayer)
+
+        return True
 
     def __schedule_direct_import_dependencies(
         self,
@@ -2607,7 +2610,7 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
         needs_vector_children = mode in (
             ResourceImportMode.TMS,
             ResourceImportMode.EXPERIMENTAL_NGW,
-        ) and isinstance(resource, NGWVectorLayer)
+        ) and isinstance(resource, (NGWVectorLayer, NGWPostgisLayer))
         if not needs_vector_children or not self.resource_model.canFetchMore(
             source_index
         ):
@@ -2630,7 +2633,7 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
         resource: NGWResource,
         source_index: QModelIndex,
     ) -> Optional[DirectResourceImportConfiguration]:
-        if isinstance(resource, NGWVectorLayer):
+        if isinstance(resource, (NGWVectorLayer, NGWPostgisLayer)):
             style_resource = self.__select_vector_layer_style(source_index)
             if style_resource is None:
                 return None

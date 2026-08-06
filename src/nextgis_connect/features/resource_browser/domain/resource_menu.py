@@ -445,6 +445,7 @@ class ResourceMenuPolicy:
             resource_kind
             in (
                 ResourceKind.VECTOR_LAYER,
+                ResourceKind.POSTGIS_LAYER,
                 ResourceKind.QGIS_VECTOR_STYLE,
             )
             and not resource.has_geometry
@@ -459,6 +460,12 @@ class ResourceMenuPolicy:
             if context.is_developer_mode:
                 actions.append(ResourceMenuAction.ADD_EXPERIMENTAL_NGW_LAYER)
             return tuple(actions)
+
+        if resource_kind == ResourceKind.POSTGIS_LAYER:
+            return (
+                ResourceMenuAction.ADD_MVT_LAYER,
+                ResourceMenuAction.ADD_TMS_LAYER,
+            )
 
         if resource_kind == ResourceKind.QGIS_VECTOR_STYLE:
             return (ResourceMenuAction.ADD_TMS_LAYER,)

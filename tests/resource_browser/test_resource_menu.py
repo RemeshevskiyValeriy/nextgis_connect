@@ -376,6 +376,7 @@ class TestResourceMenuPolicy:
             )
             for resource_kind in (
                 ResourceKind.VECTOR_LAYER,
+                ResourceKind.POSTGIS_LAYER,
                 ResourceKind.QGIS_VECTOR_STYLE,
                 ResourceKind.QGIS_RASTER_STYLE,
                 ResourceKind.RASTER_LAYER,
@@ -387,6 +388,10 @@ class TestResourceMenuPolicy:
 
         assert alternatives_by_kind == {
             ResourceKind.VECTOR_LAYER: (
+                ResourceMenuAction.ADD_MVT_LAYER,
+                ResourceMenuAction.ADD_TMS_LAYER,
+            ),
+            ResourceKind.POSTGIS_LAYER: (
                 ResourceMenuAction.ADD_MVT_LAYER,
                 ResourceMenuAction.ADD_TMS_LAYER,
             ),
