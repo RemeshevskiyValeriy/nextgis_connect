@@ -785,7 +785,7 @@ class TestResourceContextMenuFactory:
         assert [action.text() for action in submenus[2].actions()] == [
             "Create in resource",
             "Form",
-            "Create with resource",
+            "Create for resource",
             "Web map",
             "WFS service",
             "OGC API - Features service",

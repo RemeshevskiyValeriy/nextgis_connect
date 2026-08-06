@@ -3976,13 +3976,13 @@ To fix this, change geometry type of your layer(s) and recreate WFS service.</so
     </message>
     <message>
         <location filename="../features/resource_browser/presentation/resource_context_menu.py" line="579"/>
-        <source>Create in resource</source>
-        <translation>Создать в ресурсе</translation>
+        <source>Create</source>
+        <translation>Создать</translation>
     </message>
     <message>
         <location filename="../features/resource_browser/presentation/resource_context_menu.py" line="581"/>
-        <source>Create with resource</source>
-        <translation>Создать с ресурсом</translation>
+        <source>Create for resource</source>
+        <translation>Создать для ресурса</translation>
     </message>
 </context>
 <context>

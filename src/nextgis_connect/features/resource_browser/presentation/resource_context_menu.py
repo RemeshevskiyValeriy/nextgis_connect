@@ -579,9 +579,9 @@ class ResourceContextMenuFactory(QObject):
         if section_label == ResourceMenuSectionLabel.WEB_GIS_MODIFICATION:
             return self.tr("Modify resource")
         if section_label == ResourceMenuSectionLabel.CREATE_IN_RESOURCE:
-            return self.tr("Create in resource")
+            return self.tr("Create")
         if section_label == ResourceMenuSectionLabel.CREATE_FOR_RESOURCE:
-            return self.tr("Create with resource")
+            return self.tr("Create for resource")
 
         raise ValueError(f"Unsupported resource menu section: {section_label}")
 
