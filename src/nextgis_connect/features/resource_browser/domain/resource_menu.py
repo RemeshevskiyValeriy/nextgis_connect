@@ -501,9 +501,15 @@ class ResourceMenuPolicy:
     ) -> bool:
         """Return whether an Add to Web GIS command is applicable."""
         if action_id == ResourceMenuAction.UPLOAD_SELECTED:
-            return len(context.resources) == 1 and context.has_qgis_selection
+            return (
+                self._can_upload_to_web_gis(context)
+                and context.has_qgis_selection
+            )
         if action_id == ResourceMenuAction.UPLOAD_PROJECT:
-            return len(context.resources) <= 1 and context.has_project_layers
+            return (
+                self._can_upload_to_web_gis(context)
+                and context.has_project_layers
+            )
         if action_id == ResourceMenuAction.UPDATE_STYLE:
             return (
                 context.can_update_style
@@ -886,6 +892,15 @@ class ResourceMenuPolicy:
             return False
 
         return context.resources[0].has_geometry
+
+    def _can_upload_to_web_gis(
+        self,
+        context: ResourceMenuContext,
+    ) -> bool:
+        return (
+            len(context.resources) == 1
+            and context.resources[0].kind == ResourceKind.GROUP
+        )
 
     def _can_overwrite(
         self,

@@ -173,13 +173,6 @@ class TestResourceMenuPolicy:
         )
         assert layout.sections[1].submenus[0].sections == (
             ResourceMenuSubmenuSection(
-                label=ResourceMenuSectionLabel.WEB_GIS_UPLOAD,
-                actions=(
-                    ResourceMenuAction.UPLOAD_SELECTED,
-                    ResourceMenuAction.UPLOAD_PROJECT,
-                ),
-            ),
-            ResourceMenuSubmenuSection(
                 label=ResourceMenuSectionLabel.WEB_GIS_MODIFICATION,
                 actions=(
                     ResourceMenuAction.ADD_STYLE,
@@ -582,8 +575,8 @@ class TestResourceMenuPolicy:
         }
 
         assert availability == {
-            ResourceMenuAction.UPLOAD_SELECTED: True,
-            ResourceMenuAction.UPLOAD_PROJECT: True,
+            ResourceMenuAction.UPLOAD_SELECTED: False,
+            ResourceMenuAction.UPLOAD_PROJECT: False,
             ResourceMenuAction.UPDATE_STYLE: True,
             ResourceMenuAction.ADD_STYLE: False,
             ResourceMenuAction.OVERWRITE_LAYER: True,
@@ -642,7 +635,7 @@ class TestResourceMenuPolicy:
 
     def test_single_web_gis_action_is_not_wrapped_in_submenu(self) -> None:
         context = ResourceMenuContext(
-            resources=(ResourceMenuItem(kind=ResourceKind.VECTOR_LAYER),),
+            resources=(ResourceMenuItem(kind=ResourceKind.GROUP),),
             has_qgis_selection=True,
         )
 
@@ -654,6 +647,36 @@ class TestResourceMenuPolicy:
         )
 
         assert web_gis_section.entries == (ResourceMenuAction.UPLOAD_SELECTED,)
+
+    def test_upload_to_web_gis_requires_group_target(self) -> None:
+        policy = ResourceMenuPolicy()
+        vector_context = ResourceMenuContext(
+            resources=(ResourceMenuItem(kind=ResourceKind.VECTOR_LAYER),),
+            has_qgis_selection=True,
+            has_project_layers=True,
+        )
+        group_context = ResourceMenuContext(
+            resources=(ResourceMenuItem(kind=ResourceKind.GROUP),),
+            has_qgis_selection=True,
+            has_project_layers=True,
+        )
+
+        assert not policy.is_add_to_web_gis_action_available(
+            vector_context,
+            ResourceMenuAction.UPLOAD_SELECTED,
+        )
+        assert not policy.is_add_to_web_gis_action_available(
+            vector_context,
+            ResourceMenuAction.UPLOAD_PROJECT,
+        )
+        assert policy.is_add_to_web_gis_action_available(
+            group_context,
+            ResourceMenuAction.UPLOAD_SELECTED,
+        )
+        assert policy.is_add_to_web_gis_action_available(
+            group_context,
+            ResourceMenuAction.UPLOAD_PROJECT,
+        )
 
     def test_single_creation_action_is_not_wrapped_in_submenu(self) -> None:
         context = ResourceMenuContext(
@@ -755,10 +778,6 @@ class TestResourceContextMenuFactory:
             "TMS layer",
         ]
         assert [action.text() for action in submenus[1].actions()] == [
-            "Upload",
-            "Upload selected",
-            "Upload all",
-            "Modify resource",
             "Add new style to layer",
             "Update layer style",
             "Overwrite with current layer",
