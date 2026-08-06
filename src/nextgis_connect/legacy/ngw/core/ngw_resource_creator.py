@@ -27,6 +27,7 @@ from .ngw_group_resource import NGWGroupResource
 from .ngw_ogcf_service import NGWOgcfService
 from .ngw_raster_layer import NGWRasterLayer
 from .ngw_resource import NGWResource
+from .ngw_tileset import NGWTileset
 from .ngw_vector_layer import NGWVectorLayer
 from .ngw_wfs_service import NGWWfsService
 
@@ -226,6 +227,56 @@ class ResourceCreator:
         parent_ngw_resource.common.children = True
 
         return NGWRasterLayer(parent_ngw_resource.res_factory, ngw_resource)
+
+    @staticmethod
+    def create_tileset(
+        parent_ngw_resource,
+        filename,
+        layer_name,
+        upload_callback,
+        create_callback,
+        metadata: Optional[Dict[str, str]] = None,
+        feedback: Optional[QgsFeedback] = None,
+    ) -> NGWTileset:
+        connection = parent_ngw_resource.res_factory.connection
+
+        tileset_file_desc = connection.tus_upload_file(
+            filename,
+            upload_callback,
+            feedback=feedback,
+        )
+
+        url = parent_ngw_resource.get_api_collection_url()
+        params = dict(
+            resource=dict(
+                cls=NGWTileset.type_id,
+                parent=dict(id=parent_ngw_resource.resource_id),
+                display_name=layer_name,
+            ),
+            tileset=dict(
+                srs=dict(id=3857),
+                source=tileset_file_desc,
+            ),
+        )
+        ResourceCreator._add_metadata(params, metadata)
+
+        create_callback()
+
+        result = connection.post(
+            url,
+            params=params,
+            is_lunkwill=True,
+            feedback=feedback,
+        )
+
+        ngw_resource = NGWResource.receive_resource_obj(
+            connection,
+            result["id"],
+            feedback=feedback,
+        )
+        parent_ngw_resource.common.children = True
+
+        return NGWTileset(parent_ngw_resource.res_factory, ngw_resource)
 
     @staticmethod
     def create_wfs_or_ogcf_service(

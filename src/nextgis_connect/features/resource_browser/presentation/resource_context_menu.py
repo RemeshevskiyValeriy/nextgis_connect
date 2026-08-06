@@ -147,6 +147,7 @@ class ResourceImportIconResolver:
         (
             ResourceKind.TMS_LAYER,
             ResourceKind.TMS_CONNECTION,
+            ResourceKind.TILESET,
         )
     )
     _WFS_RESOURCE_KINDS = frozenset(
@@ -502,6 +503,8 @@ class ResourceContextMenuFactory(QObject):
             return self.tr("Project")
         if resource_kind == ResourceKind.WMS_LAYER:
             return self.tr("WMS layer")
+        if resource_kind == ResourceKind.TILESET:
+            return self.tr("TMS layer")
 
         return self.tr("Default")
 

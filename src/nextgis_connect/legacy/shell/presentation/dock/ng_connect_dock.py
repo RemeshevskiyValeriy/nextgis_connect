@@ -141,7 +141,7 @@ from nextgis_connect.legacy.ngw.core import (
     NGWRasterLayer,
     NGWRasterStyle,
     NGWResource,
-    # NGWTileset,
+    NGWTileset,
     NGWTmsConnection,
     NGWTmsLayer,
     NGWVectorLayer,
@@ -2079,6 +2079,7 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
                 ResourceKind.TMS_CONNECTION,
                 (NGWTmsConnection,),
             ),
+            ResourceTypeBinding(ResourceKind.TILESET, (NGWTileset,)),
             ResourceTypeBinding(ResourceKind.WEB_MAP, (NGWWebMap,)),
             ResourceTypeBinding(
                 ResourceKind.FORM,
@@ -2662,7 +2663,7 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
                 source_extent=self.__webmap_import_extent(resource),
             )
 
-        if isinstance(resource, (NGWRasterLayer, NGWWmsLayer)):
+        if isinstance(resource, (NGWRasterLayer, NGWWmsLayer, NGWTileset)):
             return DirectResourceImportConfiguration(resource)
 
         return None

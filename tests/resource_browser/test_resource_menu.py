@@ -379,6 +379,7 @@ class TestResourceMenuPolicy:
                 ResourceKind.QGIS_VECTOR_STYLE,
                 ResourceKind.QGIS_RASTER_STYLE,
                 ResourceKind.RASTER_LAYER,
+                ResourceKind.TILESET,
                 ResourceKind.WEB_MAP,
                 ResourceKind.WMS_LAYER,
             )
@@ -396,6 +397,7 @@ class TestResourceMenuPolicy:
                 ResourceMenuAction.ADD_TMS_LAYER,
             ),
             ResourceKind.RASTER_LAYER: (ResourceMenuAction.ADD_TMS_LAYER,),
+            ResourceKind.TILESET: (),
             ResourceKind.WEB_MAP: (ResourceMenuAction.ADD_TMS_LAYER,),
             ResourceKind.WMS_LAYER: (ResourceMenuAction.ADD_TMS_LAYER,),
         }
@@ -984,7 +986,7 @@ class TestResourceContextMenuFactory:
         controller = ResourceContextMenuController(parent)
         menu = controller.create_resource_import_menu()
         context = ResourceMenuContext(
-            resources=(ResourceMenuItem(kind=ResourceKind.POSTGIS_LAYER),),
+            resources=(ResourceMenuItem(kind=ResourceKind.TILESET),),
         )
 
         controller.update_resource_import_actions(context)
@@ -1151,6 +1153,7 @@ class TestResourceContextMenuFactory:
             ResourceKind.VECTOR_LAYER,
             ResourceKind.RASTER_LAYER,
             ResourceKind.TMS_LAYER,
+            ResourceKind.TILESET,
             ResourceKind.WFS_LAYER,
             ResourceKind.WMS_LAYER,
         ):
@@ -1177,6 +1180,7 @@ class TestResourceContextMenuFactory:
             "mActionAddXyzLayer.svg",
             "mActionAddOgrLayer.svg",
             "mActionAddRasterLayer.svg",
+            "mActionAddXyzLayer.svg",
             "mActionAddXyzLayer.svg",
             "mActionAddWfsLayer.svg",
             "mActionAddWmsLayer.svg",

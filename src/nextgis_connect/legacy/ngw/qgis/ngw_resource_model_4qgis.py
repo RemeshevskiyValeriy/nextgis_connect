@@ -20,6 +20,7 @@ from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Set, Tuple, cast
+from urllib.parse import parse_qsl
 
 from osgeo import ogr
 
@@ -41,6 +42,7 @@ from nextgis_connect.legacy.ngw.core.ngw_resource_creator import (
 from nextgis_connect.legacy.ngw.core.ngw_resource_factory import (
     NGWResourceFactory,
 )
+from nextgis_connect.legacy.ngw.core.ngw_tileset import NGWTileset
 from nextgis_connect.legacy.ngw.core.ngw_vector_layer import NGWVectorLayer
 from nextgis_connect.legacy.ngw.core.ngw_webmap import (
     NGWWebMap,
@@ -108,7 +110,7 @@ from qgis.core import (
     QgsWkbTypes,
 )
 from qgis.gui import QgisInterface, QgsFileWidget
-from qgis.PyQt.QtCore import QCoreApplication, QVariant
+from qgis.PyQt.QtCore import QCoreApplication, QUrl, QVariant
 
 from .compat_qgis import CompatQt
 
@@ -247,9 +249,6 @@ class QGISResourceJob(NGWResourceModelJob):
         if layer_type == LayerType.VectorTile:
             return self.SUITABLE_LAYER_UNSUPPORTED
 
-        if self._is_mbtiles_layer(qgs_map_layer):
-            return self.SUITABLE_LAYER_UNSUPPORTED
-
         if (
             layer_type == LayerType.Vector
             and qgs_map_layer.geometryType() == GeometryType.Unknown
@@ -259,11 +258,61 @@ class QGISResourceJob(NGWResourceModelJob):
         return self.SUITABLE_LAYER
 
     def _is_mbtiles_layer(self, qgs_map_layer: QgsMapLayer) -> bool:
+        return self._mbtiles_path(qgs_map_layer) is not None
+
+    def _mbtiles_path(self, qgs_map_layer: QgsMapLayer) -> Optional[Path]:
         source = qgs_map_layer.source()
         if not isinstance(source, str):
-            return False
+            return None
 
-        return ".mbtiles" in source.casefold()
+        candidates = []
+        provider_type = qgs_map_layer.providerType()
+        if isinstance(provider_type, str) and len(provider_type) > 0:
+            try:
+                provider_metadata = (
+                    QgsProviderRegistry.instance().providerMetadata(
+                        provider_type
+                    )
+                )
+                parameters = provider_metadata.decodeUri(source)
+                for key in ("path", "file", "filename", "url"):
+                    value = parameters.get(key)
+                    if isinstance(value, str):
+                        candidates.append(value)
+            except Exception:
+                logger.debug(
+                    "Could not decode layer source for MBTiles detection",
+                    exc_info=True,
+                )
+
+        candidates.extend(
+            value
+            for key, value in parse_qsl(source, keep_blank_values=True)
+            if key in ("path", "file", "filename", "url")
+        )
+        candidates.append(source)
+
+        for candidate in candidates:
+            mbtiles_path = self._mbtiles_path_from_candidate(candidate)
+            if mbtiles_path is not None:
+                return mbtiles_path
+
+        return None
+
+    def _mbtiles_path_from_candidate(self, candidate: str) -> Optional[Path]:
+        path_text = candidate.split("|", 1)[0].strip()
+        if len(path_text) == 0:
+            return None
+
+        url = QUrl(path_text)
+        if url.isLocalFile():
+            path_text = url.toLocalFile()
+
+        mbtiles_index = path_text.casefold().find(".mbtiles")
+        if mbtiles_index < 0:
+            return None
+
+        return Path(path_text[: mbtiles_index + len(".mbtiles")])
 
     def _ensure_no_geometry_supported(
         self,
@@ -307,6 +356,14 @@ class QGISResourceJob(NGWResourceModelJob):
             ]
 
         if layer_type == LayerType.Raster:
+            if self._is_mbtiles_layer(qgs_map_layer):
+                return [
+                    self.importQgsTilesetLayer(
+                        cast(QgsRasterLayer, qgs_map_layer),
+                        ngw_parent_resource,
+                    )
+                ]
+
             layer_data_provider = qgs_map_layer.dataProvider().name()
 
             if layer_data_provider == "wms":
@@ -436,8 +493,72 @@ class QGISResourceJob(NGWResourceModelJob):
             )
             return [wms_connection, wms_layer]
 
+    def importQgsTilesetLayer(
+        self,
+        qgs_raster_layer: QgsRasterLayer,
+        ngw_parent_resource: NGWGroupResource,
+    ) -> NGWTileset:
+        self._raise_if_canceled()
+        mbtiles_path = self._mbtiles_path(qgs_raster_layer)
+        if mbtiles_path is None:
+            raise JobError(
+                f"Raster layer '{qgs_raster_layer.name()}' is not an "
+                "MBTiles layer"
+            )
+
+        new_layer_name = self.unique_resource_name(
+            qgs_raster_layer.name(),
+            ngw_parent_resource,
+        )
+        logger.debug(
+            f'<b>↑ Uploading tileset</b> "{qgs_raster_layer.name()}" '
+            f'(with the name "{new_layer_name}")'
+        )
+
+        def uploadFileCallback(total_size, readed_size, value=None):
+            if value is None:
+                value = round(readed_size * 100 / total_size)
+            self._layer_status(
+                qgs_raster_layer.name(),
+                QgsApplication.translate(
+                    "QGISResourceJob", "uploading ({}%)"
+                ).format(value),
+            )
+
+        def createLayerCallback():
+            self._layer_status(
+                qgs_raster_layer.name(),
+                QgsApplication.translate("QGISResourceJob", "creating"),
+            )
+
+        ngw_tileset = ResourceCreator.create_tileset(
+            ngw_parent_resource,
+            str(mbtiles_path),
+            new_layer_name,
+            uploadFileCallback,
+            createLayerCallback,
+            metadata=ResourceCreator.resource_creation_metadata(
+                qgs_raster_layer.source()
+            ),
+            feedback=self._feedback,
+        )
+        self._raise_if_canceled()
+
+        logger.debug(
+            f'↑ Tileset "{qgs_raster_layer.name()}" was uploaded with id '
+            f"{ngw_tileset.resource_id}"
+        )
+
+        return ngw_tileset
+
     def importQgsRasterLayer(self, qgs_raster_layer, ngw_parent_resource):
         self._raise_if_canceled()
+        if self._is_mbtiles_layer(qgs_raster_layer):
+            raise JobError(
+                f"Raster layer '{qgs_raster_layer.name()}' is not supported "
+                "for upload"
+            )
+
         if (
             self.isSuitableLayer(qgs_raster_layer)
             == self.SUITABLE_LAYER_UNSUPPORTED
@@ -1324,6 +1445,9 @@ class QGISResourcesUploader(QGISResourceJob):
             if isinstance(layer, QgsVectorLayer):
                 return "vector_layer"
             if isinstance(layer, QgsRasterLayer):
+                if self._is_mbtiles_layer(layer):
+                    return "tileset"
+
                 data_provider = layer.dataProvider().name()  # type: ignore
                 if data_provider == "wms":
                     registry = QgsProviderRegistry.instance()
@@ -2175,6 +2299,12 @@ class NGWUpdateRasterLayer(QGISResourceJob):
                 QgsApplication.translate(
                     "QGISResourceJob", "uploading ({}%)"
                 ).format(percent),
+            )
+
+        if self._is_mbtiles_layer(self.qgis_layer):
+            raise JobError(
+                f"Raster layer '{self.qgis_layer.name()}' is not supported "
+                "for upload"
             )
 
         if (

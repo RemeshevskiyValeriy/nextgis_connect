@@ -104,7 +104,10 @@ class NgwConnection:
         return is_succeeded
 
     def update_uri_config(
-        self, params: Dict[str, Any], *, workaround_for_email: bool = False
+        self,
+        params: Dict[Optional[str], Any],
+        *,
+        workaround_for_email: bool = False,
     ) -> bool:
         if self.auth_config_id is None or (
             self.url not in params.get("url", params.get("path", ""))

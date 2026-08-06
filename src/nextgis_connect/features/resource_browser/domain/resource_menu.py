@@ -40,6 +40,7 @@ class ResourceKind(Enum):
     BASEMAP = auto()
     TMS_LAYER = auto()
     TMS_CONNECTION = auto()
+    TILESET = auto()
     WEB_MAP = auto()
     FORM = auto()
 
@@ -289,6 +290,7 @@ class ResourceMenuPolicy:
             ResourceKind.BASEMAP,
             ResourceKind.TMS_LAYER,
             ResourceKind.TMS_CONNECTION,
+            ResourceKind.TILESET,
             ResourceKind.WEB_MAP,
         }
     )

@@ -14,7 +14,7 @@
 # You should have received a copy of the GNU General Public License along
 # with this program; if not, see <https://www.gnu.org/licenses/>.
 
-from typing import Tuple
+from typing import Any, Dict, Optional, Tuple
 
 from qgis.core import QgsProviderRegistry
 
@@ -40,14 +40,15 @@ class NGWTileset(NGWResource):
         connection = connections_manager.connection(self.connection_id)
         assert connection is not None
 
-        # layer_info = self._json[self.type_id]
-
         url = (
             f"{connection.url}/api/component/render/tile?"
             f"resource={self.resource_id}&nd=204&z={{z}}&x={{x}}&y={{y}}"
         )
 
-        params = {"type": "xyz", "url": url}
+        params: Dict[Optional[str], Any] = {"type": "xyz", "url": url}
+        max_zoom = self._max_zoom()
+        if max_zoom is not None:
+            params["zmax"] = max_zoom
 
         connection.update_uri_config(params)
 
@@ -59,3 +60,23 @@ class NGWTileset(NGWResource):
             "wms"
         )
         return provider_metadata.encodeUri(params), self.display_name, "wms"
+
+    def _max_zoom(self) -> Optional[int]:
+        layer_info = self._json.get(self.type_id, {})
+        if not isinstance(layer_info, dict):
+            return None
+
+        zoom_value = self._zoom_value(layer_info, ("maxzoom", "zmax"))
+        if isinstance(zoom_value, int):
+            return zoom_value
+        return None
+
+    def _zoom_value(
+        self,
+        layer_info: Dict[str, Any],
+        keys: Tuple[str, ...],
+    ) -> Optional[Any]:
+        for key in keys:
+            if key in layer_info:
+                return layer_info[key]
+        return None
