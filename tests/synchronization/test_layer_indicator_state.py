@@ -97,6 +97,16 @@ class TestDetachedLayerIndicatorPresenter:
         assert not presenter.current_icon.isNull()
         assert presenter.current_tooltip == "Layer is synchronized"
 
+    def test_sync_animation_uses_reverse_rotation(self, qgis_app) -> None:
+        presenter = DetachedLayerIndicatorPresenter(
+            _Source(state=DetachedLayerState.Synchronization),
+            qgis_app,
+        )
+
+        presenter._sync_tick()
+
+        assert presenter._angle == -presenter._ROTATION_STEP_DEGREES
+
 
 class TestDetachedLayerTreeIndicator:
     def test_uses_presenter_state_and_emits_details_request(

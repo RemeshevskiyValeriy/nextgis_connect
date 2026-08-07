@@ -122,7 +122,7 @@ class DetachedLayerIndicatorPresenter(QObject):
         self._tick += 1
 
         blink_tick = self._tick % self._BLINK_PERIOD_TICKS
-        self._angle += self._ROTATION_STEP_DEGREES
+        self._angle -= self._ROTATION_STEP_DEGREES
         if blink_tick < self._BLINK_DURATION_TICKS:
             self._set_current_icon(
                 self._rotated_icon(
