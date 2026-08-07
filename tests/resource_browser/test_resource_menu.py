@@ -16,6 +16,7 @@
 
 from typing import Set
 
+from qgis import core as qgis_core
 from qgis.PyQt.QtGui import QIcon, QPalette
 from qgis.PyQt.QtWidgets import QLabel, QMenu, QWidget
 
@@ -44,6 +45,7 @@ from nextgis_connect.features.resource_browser.presentation.resource_context_men
     ResourceContextMenuFactory,
     ResourceMenuSectionAction,
 )
+from nextgis_connect.platform.qgis.compat import is_mvt_supported
 from nextgis_connect.ui_kit.graphics import mix_colors
 
 
@@ -409,6 +411,26 @@ class TestResourceMenuPolicy:
             )[0]
             == ResourceMenuAction.ADD_TO_QGIS
             for resource_kind in alternatives_by_kind
+        )
+
+    def test_hides_mvt_import_when_qgis_does_not_support_it(self) -> None:
+        policy = ResourceMenuPolicy(is_mvt_supported=False)
+        vector_context = ResourceMenuContext(
+            resources=(ResourceMenuItem(kind=ResourceKind.VECTOR_LAYER),),
+        )
+        wfs_context = ResourceMenuContext(
+            resources=(ResourceMenuItem(kind=ResourceKind.WFS_LAYER),),
+        )
+
+        assert policy.alternative_resource_import_actions(vector_context) == (
+            ResourceMenuAction.ADD_TMS_LAYER,
+        )
+        assert policy.alternative_resource_import_actions(wfs_context) == ()
+        assert ResourceMenuAction.ADD_MVT_LAYER not in (
+            policy.resource_import_actions
+        )
+        assert not policy.create_layout(vector_context).contains_action(
+            ResourceMenuAction.ADD_MVT_LAYER
         )
 
     def test_empty_resource_selection_has_no_qgis_import_actions(self) -> None:
@@ -960,12 +982,20 @@ class TestResourceContextMenuFactory:
             for action in menu.actions()
             if action.isVisible() and not action.isSeparator()
         ]
-        assert [action.text() for action in visible_actions] == [
+        expected_action_texts = [
             "Add to QGIS",
-            "Add as MVT",
-            "Add as TMS layer",
-            "Add as NextGIS Web layer (experimental)",
         ]
+        if is_mvt_supported():
+            expected_action_texts.append("Add as MVT")
+        expected_action_texts.extend(
+            (
+                "Add as TMS layer",
+                "Add as NextGIS Web layer (experimental)",
+            )
+        )
+        assert [
+            action.text() for action in visible_actions
+        ] == expected_action_texts
         default_action = controller.default_resource_import_action(context)
         assert default_action is not None
         assert default_action.text() == "Add to QGIS"
@@ -1000,6 +1030,31 @@ class TestResourceContextMenuFactory:
             controller.has_available_alternative_resource_import_actions()
             is False
         )
+
+        parent.deleteLater()
+
+    def test_add_to_qgis_toolbar_omits_unsupported_mvt_action(
+        self,
+        qgis_app,
+        monkeypatch,
+    ) -> None:
+        del qgis_app
+        monkeypatch.delattr(qgis_core, "QgsVectorTileLayer", raising=False)
+        parent = QWidget()
+        controller = ResourceContextMenuController(parent)
+        menu = controller.create_resource_import_menu()
+        context = ResourceMenuContext(
+            resources=(ResourceMenuItem(kind=ResourceKind.VECTOR_LAYER),),
+        )
+
+        controller.update_resource_import_actions(context)
+
+        action_ids = tuple(
+            action.data()
+            for action in menu.actions()
+            if not action.isSeparator()
+        )
+        assert ResourceMenuAction.ADD_MVT_LAYER not in action_ids
 
         parent.deleteLater()
 

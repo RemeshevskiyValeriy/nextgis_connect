@@ -233,6 +233,7 @@ from nextgis_connect.platform.qgis import utils
 from nextgis_connect.platform.qgis.compat import (
     QGIS_3_30,
     GeometryType,
+    is_mvt_supported,
     parse_version,
 )
 from nextgis_connect.platform.qgis.errors import (
@@ -2592,6 +2593,9 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
             return False
 
         if mode == ResourceImportMode.MVT:
+            if not is_mvt_supported():
+                return False
+
             return isinstance(
                 resource,
                 (

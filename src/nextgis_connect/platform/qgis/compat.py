@@ -18,6 +18,7 @@ from enum import IntEnum
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Set
 
 from osgeo import gdal
+from qgis import core as qgis_core
 from qgis.core import (
     Qgis,
     QgsFeature,
@@ -75,6 +76,8 @@ QgsChangedAttributesMap = Dict[
 
 QgsGeometryMap = Dict[QgsFeatureId, QgsGeometry]
 
+_MISSING_VECTOR_TILE_LAYER_TYPE = object()
+
 
 if Qgis.versionInt() >= QGIS_3_30 or TYPE_CHECKING:
     WkbType = Qgis.WkbType  # type: ignore
@@ -107,12 +110,44 @@ else:
     LayerType.Plugin.is_monkey_patched = True
     LayerType.Mesh = QgsMapLayerType.MeshLayer  # type: ignore
     LayerType.Mesh.is_monkey_patched = True
-    LayerType.VectorTile = QgsMapLayerType.VectorTileLayer  # type: ignore
-    LayerType.VectorTile.is_monkey_patched = True
     LayerType.Annotation = QgsMapLayerType.AnnotationLayer  # type: ignore
     LayerType.Annotation.is_monkey_patched = True
     LayerType.PointCloud = QgsMapLayerType.PointCloudLayer  # type: ignore
     LayerType.PointCloud.is_monkey_patched = True
+
+
+if not hasattr(LayerType, "VectorTile"):
+    LayerType.VectorTile = getattr(  # type: ignore
+        QgsMapLayerType,
+        "VectorTileLayer",
+        _MISSING_VECTOR_TILE_LAYER_TYPE,
+    )
+    if LayerType.VectorTile is not _MISSING_VECTOR_TILE_LAYER_TYPE:
+        LayerType.VectorTile.is_monkey_patched = True
+
+
+def is_mvt_supported() -> bool:
+    """Return whether this QGIS build can create MVT layers."""
+    if LayerType.VectorTile is _MISSING_VECTOR_TILE_LAYER_TYPE:
+        return False
+
+    if getattr(qgis_core, "QgsVectorTileLayer", None) is None:
+        return False
+
+    provider_registry_class = getattr(
+        qgis_core,
+        "QgsProviderRegistry",
+        None,
+    )
+    if provider_registry_class is None:
+        return False
+
+    provider_registry = provider_registry_class.instance()
+    return (
+        provider_registry is not None
+        and provider_registry.providerMetadata("vectortile") is not None
+    )
+
 
 if Qgis.versionInt() >= QGIS_3_34 or TYPE_CHECKING:
     LayerFilter = Qgis.LayerFilter

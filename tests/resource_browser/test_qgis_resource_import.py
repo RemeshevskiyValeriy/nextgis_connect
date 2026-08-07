@@ -19,6 +19,7 @@ import threading
 from unittest import mock
 
 import pytest
+from qgis import core as qgis_core
 from qgis.core import (
     QgsCoordinateReferenceSystem,
     QgsMapLayer,
@@ -29,7 +30,6 @@ from qgis.core import (
     QgsRectangle,
     QgsReferencedRectangle,
     QgsVectorLayer,
-    QgsVectorTileLayer,
 )
 from qgis.PyQt.QtCore import QByteArray, QObject, QThread
 from qgis.PyQt.QtNetwork import QNetworkReply
@@ -59,6 +59,7 @@ from nextgis_connect.features.resource_browser.infrastructure.qgis_resource_impo
 from nextgis_connect.features.resource_browser.infrastructure.qgis_resource_style import (
     QgisResourceLayerStyleApplicator,
 )
+from nextgis_connect.platform.qgis.compat import is_mvt_supported
 from nextgis_connect.platform.qgis.extent_calculator import ExtentCalculator
 
 
@@ -101,6 +102,9 @@ class _TargetGroupRemovingObserver(QObject):
 class TestResourceLayerImportStrategyFactory:
     def test_constructs_concrete_qgis_tile_layers(self, qgis_app) -> None:
         del qgis_app
+        if not is_mvt_supported():
+            pytest.skip("QGIS vector tile support is unavailable")
+
         source = self._source()
         factory = QgisResourceLayerFactory()
 
@@ -111,7 +115,7 @@ class TestResourceLayerImportStrategyFactory:
             ResourceImportRequest(ResourceImportMode.TMS, source)
         )
 
-        assert isinstance(mvt_layer, QgsVectorTileLayer)
+        assert isinstance(mvt_layer, qgis_core.QgsVectorTileLayer)
         assert mvt_layer.isValid()
         assert isinstance(tms_layer, QgsRasterLayer)
         assert tms_layer.isValid()
@@ -155,6 +159,9 @@ class TestResourceLayerImportStrategyFactory:
 
     def test_creates_mvt_provider_definition(self, qgis_app) -> None:
         del qgis_app
+        if not is_mvt_supported():
+            pytest.skip("QGIS vector tile support is unavailable")
+
         request = ResourceImportRequest(
             mode=ResourceImportMode.MVT,
             source=self._source(),
@@ -175,6 +182,24 @@ class TestResourceLayerImportStrategyFactory:
             "resource=7155&z={z}&x={x}&y={y}"
         )
         assert parameters["authcfg"] == "auth-id"
+
+    def test_rejects_mvt_when_vector_tile_class_is_unavailable(
+        self,
+        qgis_app,
+        monkeypatch,
+    ) -> None:
+        del qgis_app
+        monkeypatch.delattr(qgis_core, "QgsVectorTileLayer", raising=False)
+        request = ResourceImportRequest(
+            mode=ResourceImportMode.MVT,
+            source=self._source(),
+        )
+
+        with pytest.raises(
+            RuntimeError,
+            match="vector tile support is unavailable",
+        ):
+            ResourceLayerImportStrategyFactory().create_definition(request)
 
     def test_creates_tms_provider_definition_for_selected_style(
         self,

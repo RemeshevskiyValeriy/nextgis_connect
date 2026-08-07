@@ -42,6 +42,7 @@ from nextgis_connect.features.resource_browser.domain import (
     ResourceMenuSubmenu,
     ResourceMenuSubmenuKind,
 )
+from nextgis_connect.platform.qgis.compat import is_mvt_supported
 from nextgis_connect.ui_kit.graphics import mix_colors
 from nextgis_connect.ui_kit.icons import (
     NgwResourceCreationIconFactory,
@@ -598,7 +599,9 @@ class ResourceContextMenuController(QObject):
         menu_factory: Optional[ResourceContextMenuFactory] = None,
     ) -> None:
         super().__init__(parent)
-        self._policy = policy or ResourceMenuPolicy()
+        self._policy = policy or ResourceMenuPolicy(
+            is_mvt_supported=is_mvt_supported()
+        )
         self._menu_factory = menu_factory or ResourceContextMenuFactory(parent)
         self._default_resource_import_action: Optional[QAction] = None
         self._resource_import_separator: Optional[QAction] = None

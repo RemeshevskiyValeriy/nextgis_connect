@@ -19,6 +19,7 @@ from dataclasses import dataclass
 from enum import Enum, auto
 from typing import Any, Dict, Optional, Sequence
 
+from qgis import core as qgis_core
 from qgis.core import (
     QgsLayerTreeGroup,
     QgsMapLayer,
@@ -27,7 +28,6 @@ from qgis.core import (
     QgsRasterLayer,
     QgsReferencedRectangle,
     QgsVectorLayer,
-    QgsVectorTileLayer,
 )
 from qgis.PyQt import sip
 from qgis.PyQt.QtCore import QObject, Qt, QThread, pyqtSignal, pyqtSlot
@@ -45,6 +45,7 @@ from nextgis_connect.features.resource_browser.infrastructure.qgis_resource_styl
     QgisResourceLayerStyleApplicator,
 )
 from nextgis_connect.platform.logging import logger
+from nextgis_connect.platform.qgis.compat import is_mvt_supported
 
 
 class QgisLayerType(Enum):
@@ -135,6 +136,9 @@ class MvtResourceLayerImportStrategy(ResourceLayerImportStrategy):
         self,
         request: ResourceImportRequest,
     ) -> QgisLayerDefinition:
+        if not is_mvt_supported():
+            raise RuntimeError("QGIS vector tile support is unavailable")
+
         source = request.source
         url = (
             f"{source.connection_url.rstrip('/')}"
@@ -297,7 +301,15 @@ class QgisResourceLayerFactory:
                 definition.provider_key,
             )
         if definition.layer_type == QgisLayerType.VECTOR_TILE:
-            return QgsVectorTileLayer(
+            vector_tile_layer_class = getattr(
+                qgis_core,
+                "QgsVectorTileLayer",
+                None,
+            )
+            if vector_tile_layer_class is None:
+                raise RuntimeError("QGIS vector tile support is unavailable")
+
+            return vector_tile_layer_class(
                 definition.uri,
                 definition.name,
             )

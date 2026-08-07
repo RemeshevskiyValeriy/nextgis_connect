@@ -15,8 +15,12 @@
 # with this program; if not, see <https://www.gnu.org/licenses/>.
 
 import importlib
+import subprocess
+import sys
+from pathlib import Path
 
 import qgis.utils
+from qgis import core as qgis_core
 from qgis.PyQt.QtWidgets import QToolBar
 
 import nextgis_connect
@@ -32,7 +36,47 @@ def test_plugin_package_imports(qgis_iface) -> None:
     assert plugin_module.NgConnectPlugin is not None
 
 
+def test_plugin_module_imports_without_vector_tile_layer() -> None:
+    source_root = Path(nextgis_connect.__file__).resolve().parents[1]
+    script = """
+import sys
+import qgis.core
+
+sys.path.insert(0, sys.argv[1])
+if hasattr(qgis.core, "QgsVectorTileLayer"):
+    del qgis.core.QgsVectorTileLayer
+
+import nextgis_connect.plugin.plugin
+"""
+
+    result = subprocess.run(
+        [sys.executable, "-c", script, str(source_root)],
+        capture_output=True,
+        check=False,
+        text=True,
+    )
+
+    assert result.returncode == 0, result.stderr
+
+
 def test_plugin_loads(qgis_iface) -> None:
+    plugin = nextgis_connect.classFactory(qgis_iface)
+    qgis.utils.plugins[PACKAGE_NAME] = plugin
+
+    plugin._load()
+
+    try:
+        assert plugin.container is not None
+    finally:
+        plugin._unload()
+        qgis.utils.plugins.pop(PACKAGE_NAME, None)
+
+
+def test_plugin_loads_without_vector_tile_layer(
+    qgis_iface,
+    monkeypatch,
+) -> None:
+    monkeypatch.delattr(qgis_core, "QgsVectorTileLayer", raising=False)
     plugin = nextgis_connect.classFactory(qgis_iface)
     qgis.utils.plugins[PACKAGE_NAME] = plugin
 

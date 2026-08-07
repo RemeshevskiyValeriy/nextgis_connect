@@ -366,6 +366,9 @@ class ResourceMenuPolicy:
         ResourceMenuAction.COLLAPSE_ALL,
     )
 
+    def __init__(self, *, is_mvt_supported: bool = True) -> None:
+        self._is_mvt_supported = is_mvt_supported
+
     @property
     def add_to_web_gis_actions(self) -> Tuple[ResourceMenuAction, ...]:
         """Return the canonical action order for Add to Web GIS menus."""
@@ -379,7 +382,7 @@ class ResourceMenuPolicy:
     @property
     def resource_import_actions(self) -> Tuple[ResourceMenuAction, ...]:
         """Return every command supported by Add to QGIS surfaces."""
-        return self._RESOURCE_IMPORT_ACTIONS
+        return self._supported_import_actions(self._RESOURCE_IMPORT_ACTIONS)
 
     def create_add_to_web_gis_layout(self) -> ResourceMenuLayout:
         """Return the canonical toolbar menu layout."""
@@ -410,7 +413,9 @@ class ResourceMenuPolicy:
             sections=(
                 ResourceMenuSection(
                     kind=ResourceMenuSectionKind.QGIS_IMPORT,
-                    entries=self._ALTERNATIVE_RESOURCE_IMPORT_ACTIONS,
+                    entries=self._supported_import_actions(
+                        self._ALTERNATIVE_RESOURCE_IMPORT_ACTIONS
+                    ),
                 ),
             )
         )
@@ -460,16 +465,20 @@ class ResourceMenuPolicy:
             ]
             if context.is_developer_mode:
                 actions.append(ResourceMenuAction.ADD_EXPERIMENTAL_NGW_LAYER)
-            return tuple(actions)
+            return self._supported_import_actions(tuple(actions))
 
         if resource_kind == ResourceKind.POSTGIS_LAYER:
-            return (
-                ResourceMenuAction.ADD_MVT_LAYER,
-                ResourceMenuAction.ADD_TMS_LAYER,
+            return self._supported_import_actions(
+                (
+                    ResourceMenuAction.ADD_MVT_LAYER,
+                    ResourceMenuAction.ADD_TMS_LAYER,
+                )
             )
 
         if resource_kind == ResourceKind.WFS_LAYER:
-            return (ResourceMenuAction.ADD_MVT_LAYER,)
+            return self._supported_import_actions(
+                (ResourceMenuAction.ADD_MVT_LAYER,)
+            )
 
         if resource_kind == ResourceKind.QGIS_VECTOR_STYLE:
             return (ResourceMenuAction.ADD_TMS_LAYER,)
@@ -485,6 +494,19 @@ class ResourceMenuPolicy:
             return (ResourceMenuAction.ADD_TMS_LAYER,)
 
         return ()
+
+    def _supported_import_actions(
+        self,
+        actions: Tuple[ResourceMenuAction, ...],
+    ) -> Tuple[ResourceMenuAction, ...]:
+        if self._is_mvt_supported:
+            return actions
+
+        return tuple(
+            action_id
+            for action_id in actions
+            if action_id != ResourceMenuAction.ADD_MVT_LAYER
+        )
 
     def is_resource_import_action_available(
         self,

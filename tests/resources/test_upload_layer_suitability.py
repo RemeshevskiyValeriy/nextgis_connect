@@ -26,11 +26,14 @@ from nextgis_connect.legacy.ngw.qgis.ngw_resource_model_4qgis import (
 from nextgis_connect.legacy.ngw.qt.qt_ngw_resource_model_job_error import (
     JobError,
 )
-from nextgis_connect.platform.qgis.compat import LayerType
+from nextgis_connect.platform.qgis.compat import LayerType, is_mvt_supported
 
 
 def test_vector_tile_layer_is_not_suitable_for_upload(qgis_app) -> None:
     del qgis_app
+    if not is_mvt_supported():
+        pytest.skip("QGIS vector tile support is unavailable")
+
     layer = mock.Mock(spec=QgsMapLayer)
     layer.type.return_value = LayerType.VectorTile
     layer.source.return_value = ""
@@ -53,6 +56,9 @@ def test_unsupported_layer_is_skipped_before_parent_resource_update(
     qgis_app,
 ) -> None:
     del qgis_app
+    if not is_mvt_supported():
+        pytest.skip("QGIS vector tile support is unavailable")
+
     layer = mock.Mock(spec=QgsMapLayer)
     layer.type.return_value = LayerType.VectorTile
     layer.source.return_value = ""
