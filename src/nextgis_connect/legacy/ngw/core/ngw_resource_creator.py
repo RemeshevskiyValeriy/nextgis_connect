@@ -18,7 +18,7 @@ import configparser
 from pathlib import Path
 from typing import Any, Dict, Iterable, Optional
 
-from qgis.core import QgsFeedback, QgsMapLayer
+from qgis.core import QgsApplication, QgsFeedback, QgsMapLayer
 
 from nextgis_connect.legacy.ngw.qgis.layer_source_sanitizer import (
     QgisLayerSourceSanitizer,
@@ -27,6 +27,7 @@ from nextgis_connect.legacy.settings import NgConnectSettings
 
 from .ngw_group_resource import NGWGroupResource
 from .ngw_ogcf_service import NGWOgcfService
+from .ngw_qgis_style import NGWQGISVectorStyle
 from .ngw_raster_layer import NGWRasterLayer
 from .ngw_resource import NGWResource
 from .ngw_tileset import NGWTileset
@@ -121,6 +122,37 @@ class ResourceCreator:
 
         parent_ngw_resource.common.children = True
         return NGWVectorLayer(parent_ngw_resource.res_factory, ngw_resource)
+
+    @staticmethod
+    def create_default_vector_style(
+        ngw_vector_layer: NGWVectorLayer,
+        feedback: Optional[QgsFeedback] = None,
+    ) -> NGWQGISVectorStyle:
+        connection = ngw_vector_layer.res_factory.connection
+        display_name = QgsApplication.translate(
+            "ResourceCreator",
+            "Default style",
+        )
+        url = ngw_vector_layer.get_api_collection_url()
+        params = dict(
+            resource=dict(
+                cls=NGWQGISVectorStyle.type_id,
+                parent=dict(id=ngw_vector_layer.resource_id),
+                display_name=display_name,
+            ),
+        )
+
+        result = connection.post(url, params=params, feedback=feedback)
+        ngw_resource = NGWResource.receive_resource_obj(
+            connection,
+            result["id"],
+            feedback=feedback,
+        )
+        ngw_vector_layer.common.children = True
+        return NGWQGISVectorStyle(
+            ngw_vector_layer.res_factory,
+            ngw_resource,
+        )
 
     @staticmethod
     def create_vector_layer(

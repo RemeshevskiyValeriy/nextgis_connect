@@ -14,10 +14,12 @@
 # You should have received a copy of the GNU General Public License along
 # with this program; if not, see <https://www.gnu.org/licenses/>.
 
+from types import SimpleNamespace
 from typing import Any, List, Tuple
 from unittest import mock
 
 import pytest
+from qgis.core import QgsApplication
 from qgis.PyQt.QtCore import QModelIndex, QObject, pyqtSignal
 from qgis.PyQt.QtGui import QStandardItem, QStandardItemModel
 from qgis.PyQt.QtWidgets import (
@@ -26,6 +28,7 @@ from qgis.PyQt.QtWidgets import (
     QDialogButtonBox,
 )
 
+from nextgis_connect.legacy.ngw.core.ngw_qgis_style import NGWQGISVectorStyle
 from nextgis_connect.legacy.ngw.core.ngw_resource_creator import (
     ResourceCreator,
 )
@@ -286,6 +289,96 @@ def test_create_no_geometry_versioned_layer_requires_dev8(qgis_app) -> None:
         NgwServerFeature.NO_GEOMETRY_LAYER_VERSIONING
     )
     parent_resource.get_api_collection_url.assert_not_called()
+
+
+def test_create_vector_layer_job_creates_default_style(qgis_app) -> None:
+    del qgis_app
+
+    parent_resource = mock.Mock()
+    vector_resource = mock.Mock()
+    style_resource = mock.Mock()
+    vector_layer = {
+        "vector_layer": {
+            "geometry_type": "POINT",
+        },
+    }
+
+    with mock.patch.object(
+        ResourceCreator,
+        "create_empty_vector_layer",
+        return_value=vector_resource,
+    ) as create_vector_layer, mock.patch.object(
+        ResourceCreator,
+        "create_default_vector_style",
+        return_value=style_resource,
+    ) as create_default_style:
+        job = NGWCreateVectorLayer(parent_resource, vector_layer)
+        job._do()
+
+    create_vector_layer.assert_called_once_with(parent_resource, vector_layer)
+    create_default_style.assert_called_once_with(vector_resource)
+    assert job.result.added_resources == [vector_resource, style_resource]
+    assert job.result.main_resource_id == vector_resource.resource_id
+    parent_resource.update.assert_called_once_with()
+
+
+def test_create_default_vector_style_posts_expected_payload() -> None:
+    connection = mock.Mock()
+    connection.post.return_value = {"id": 100}
+    display_name = QgsApplication.translate(
+        "ResourceCreator",
+        "Default style",
+    )
+
+    resource_factory = mock.Mock()
+    resource_factory.connection = connection
+
+    vector_resource = mock.Mock(spec=NGWVectorLayer)
+    vector_resource.resource_id = 99
+    vector_resource.res_factory = resource_factory
+    vector_resource.common = SimpleNamespace(children=False)
+    vector_resource.get_api_collection_url.return_value = "/api/resource/"
+
+    style_json = {
+        "resource": {
+            "id": 100,
+            "cls": NGWQGISVectorStyle.type_id,
+            "parent": {"id": 99},
+            "owner_user": None,
+            "children": False,
+            "display_name": display_name,
+            "description": "",
+            "interfaces": [],
+        },
+    }
+
+    with mock.patch(
+        "nextgis_connect.legacy.ngw.core.ngw_resource_creator.NGWResource"
+        ".receive_resource_obj",
+        return_value=style_json,
+    ) as receive_resource:
+        style_resource = ResourceCreator.create_default_vector_style(
+            vector_resource
+        )
+
+    connection.post.assert_called_once_with(
+        "/api/resource/",
+        params={
+            "resource": {
+                "cls": NGWQGISVectorStyle.type_id,
+                "parent": {"id": 99},
+                "display_name": display_name,
+            },
+        },
+        feedback=None,
+    )
+    receive_resource.assert_called_once_with(
+        connection,
+        100,
+        feedback=None,
+    )
+    assert isinstance(style_resource, NGWQGISVectorStyle)
+    assert vector_resource.common.children is True
 
 
 def test_upload_vector_layer_does_not_send_versioning_flag() -> None:

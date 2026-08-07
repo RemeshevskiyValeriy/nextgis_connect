@@ -452,8 +452,12 @@ class NGWCreateVectorLayer(NGWResourceModelJob):
         vector_resource = ResourceCreator.create_empty_vector_layer(
             self.parent_resource, self.vector_layer
         )
+        style_resource = ResourceCreator.create_default_vector_style(
+            vector_resource
+        )
 
         self.putAddedResourceToResult(vector_resource, is_main=True)
+        self.putAddedResourceToResult(style_resource)
         self.parent_resource.update()
 
     def _ensure_no_geometry_versioning_supported(self) -> None:
