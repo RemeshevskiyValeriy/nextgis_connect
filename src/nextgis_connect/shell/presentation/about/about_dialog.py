@@ -98,7 +98,7 @@ _TRANSLATIONS: Dict[str, Dict[str, str]] = {
     },
     "Convenient up-to-date data extracts for any place in the world": {
         "en": "Convenient up-to-date data extracts for any place in the world",
-        "es": "Extractos de datos actualizados convenientes para cualquier lugar del mundo",
+        "es": "Extracción sencilla de datos actualizados para cualquier lugar del mundo",
         "fr": "Des extraits de données pratiques et actualisés pour tous lieux dans le monde",
         "it": "Comodi estratti di dati aggiornati per qualsiasi luogo del mondo",
         "ja": "世界のあらゆる場所のための便利な最新のデータ抽出",
@@ -209,7 +209,7 @@ _TRANSLATIONS: Dict[str, Dict[str, str]] = {
     },
     "Video with an overview of the plugin": {
         "en": "Video with an overview of the plugin",
-        "es": "Vídeo con una visión general del plugin",
+        "es": "Vídeo con una descripción general del plugin",
         "fr": "Vidéo avec un aperçu du plugin",
         "it": "Video con una panoramica del plugin",
         "ja": "プラグインの概要ビデオ",
@@ -218,7 +218,7 @@ _TRANSLATIONS: Dict[str, Dict[str, str]] = {
     },
     "bugtracker": {
         "en": "bugtracker",
-        "es": "bugtracker",
+        "es": "seguimiento de errores",
         "fr": "traqueur de bogues",
         "it": "bugtracker",
         "ja": "バグトラッカー",
