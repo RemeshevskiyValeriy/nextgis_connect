@@ -15,12 +15,14 @@
 # with this program; if not, see <https://www.gnu.org/licenses/>.
 
 import configparser
-import re
 from pathlib import Path
 from typing import Any, Dict, Iterable, Optional
 
-from qgis.core import QgsFeedback
+from qgis.core import QgsFeedback, QgsMapLayer
 
+from nextgis_connect.legacy.ngw.qgis.layer_source_sanitizer import (
+    QgisLayerSourceSanitizer,
+)
 from nextgis_connect.legacy.settings import NgConnectSettings
 
 from .ngw_group_resource import NGWGroupResource
@@ -45,12 +47,14 @@ class ResourceCreator:
         }
 
     @staticmethod
-    def resource_creation_metadata(source: str) -> Dict[str, str]:
+    def resource_creation_metadata(layer: QgsMapLayer) -> Dict[str, str]:
         metadata = ResourceCreator.resource_created_by_metadata()
         if len(metadata) == 0:
             return metadata
 
-        metadata["source"] = ResourceCreator._sanitized_source(source)
+        source = QgisLayerSourceSanitizer().sanitize(layer)
+        if source is not None:
+            metadata["source"] = source
         return metadata
 
     @staticmethod
@@ -69,10 +73,6 @@ class ResourceCreator:
         metadata = configparser.ConfigParser()
         metadata.read(str(metadata_path), encoding="utf-8")
         return metadata.get("general", "version")
-
-    @staticmethod
-    def _sanitized_source(source: str) -> str:
-        return re.sub(r"(/[^/:\s]+):([^/@\s]*)(?=@)", r"\1:***", source)
 
     @staticmethod
     def create_group(

@@ -361,24 +361,60 @@ def test_upload_vector_layer_sends_creation_metadata() -> None:
     }
 
 
-def test_resource_creation_metadata_sanitizes_source_password() -> None:
+def test_resource_creation_metadata_uses_sanitized_layer_source() -> None:
+    layer = mock.Mock()
     with mock.patch(
         "nextgis_connect.legacy.ngw.core.ngw_resource_creator"
         ".ResourceCreator._plugin_version",
         return_value="4.0.0",
-    ):
-        metadata = ResourceCreator.resource_creation_metadata(
-            "service='/alice:secret@example.com/layer' "
-            "fallback='/bob:@example.com/empty-password'"
+    ), mock.patch(
+        "nextgis_connect.legacy.ngw.core.ngw_resource_creator"
+        ".QgisLayerSourceSanitizer"
+    ) as sanitizer_class:
+        sanitizer_class.return_value.sanitize.return_value = (
+            "roads.gpkg|layername=places"
         )
+
+        metadata = ResourceCreator.resource_creation_metadata(layer)
 
     assert metadata == {
         "created_by": "NextGIS Connect/4.0.0",
-        "source": (
-            "service='/alice:***@example.com/layer' "
-            "fallback='/bob:***@example.com/empty-password'"
-        ),
+        "source": "roads.gpkg|layername=places",
     }
+    sanitizer_class.return_value.sanitize.assert_called_once_with(layer)
+
+
+def test_resource_creation_metadata_omits_unknown_source() -> None:
+    layer = mock.Mock()
+    with mock.patch.object(
+        ResourceCreator,
+        "resource_created_by_metadata",
+        return_value={"created_by": "NextGIS Connect/4.0.0"},
+    ), mock.patch(
+        "nextgis_connect.legacy.ngw.core.ngw_resource_creator"
+        ".QgisLayerSourceSanitizer"
+    ) as sanitizer_class:
+        sanitizer_class.return_value.sanitize.return_value = None
+
+        metadata = ResourceCreator.resource_creation_metadata(layer)
+
+    assert metadata == {"created_by": "NextGIS Connect/4.0.0"}
+
+
+def test_disabled_creation_metadata_does_not_sanitize_source() -> None:
+    layer = mock.Mock()
+    with mock.patch.object(
+        ResourceCreator,
+        "resource_created_by_metadata",
+        return_value={},
+    ), mock.patch(
+        "nextgis_connect.legacy.ngw.core.ngw_resource_creator"
+        ".QgisLayerSourceSanitizer"
+    ) as sanitizer_class:
+        metadata = ResourceCreator.resource_creation_metadata(layer)
+
+    assert metadata == {}
+    sanitizer_class.assert_not_called()
 
 
 def test_upload_vector_layer_skips_empty_creation_metadata() -> None:
