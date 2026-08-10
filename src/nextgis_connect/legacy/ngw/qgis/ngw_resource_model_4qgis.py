@@ -1950,7 +1950,10 @@ class MapForLayerCreater(QGISResourceJob):
     def create4VectorRasterLayer(self):
         if self.ngw_style_id is None:
             if self.ngw_layer.type_id == NGWVectorLayer.type_id:
-                ngw_style = self._defStyleForVector(self.ngw_layer)
+                ngw_style = ResourceCreator.create_default_vector_style(
+                    self.ngw_layer,
+                    feedback=self._feedback,
+                )
                 self.putAddedResourceToResult(ngw_style)
                 self.ngw_style_id = ngw_style.resource_id
 

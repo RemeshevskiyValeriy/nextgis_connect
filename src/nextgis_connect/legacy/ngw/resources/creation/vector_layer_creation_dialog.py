@@ -474,15 +474,24 @@ class VectorLayerCreationDialog(QDialog, VectorLayerCreationDialogBase):
         )
 
     def __update_field_type_tooltip(self) -> None:
-        current_data = self.field_type_combobox.currentData()
-        if current_data is None:
+        ngw_type = self.__current_field_type()
+        if ngw_type is None:
             self.field_type_combobox.setToolTip(self.__field_type_tooltip())
             return
 
-        ngw_type = NgwDataType.from_qt_value(current_data)
         self.field_type_combobox.setToolTip(
             self.__field_type_tooltip(ngw_type)
         )
+
+    def __current_field_type(self) -> Optional[NgwDataType]:
+        current_data = self.field_type_combobox.currentData()
+        if current_data in (None, ""):
+            return None
+
+        try:
+            return NgwDataType.from_qt_value(current_data)
+        except (TypeError, ValueError):
+            return None
 
     def __setup_button_box(
         self,

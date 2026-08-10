@@ -86,9 +86,16 @@ class _CheckBox:
 class _ComboBox:
     def __init__(self, current_data: Any) -> None:
         self._current_data = current_data
+        self._tooltip = ""
 
     def currentData(self) -> Any:
         return self._current_data
+
+    def setToolTip(self, tooltip: str) -> None:
+        self._tooltip = tooltip
+
+    def toolTip(self) -> str:
+        return self._tooltip
 
 
 class _GeometryComboBox(_ComboBox):
@@ -263,6 +270,22 @@ def test_enable_no_geometry_type_disables_z_checkbox(qgis_app) -> None:
 
     assert not dialog.z_checkbox.isEnabled()
     assert not dialog.z_checkbox.isChecked()
+
+
+def test_update_field_type_tooltip_handles_empty_combo_data(qgis_app) -> None:
+    del qgis_app
+
+    dialog = VectorLayerCreationDialog.__new__(VectorLayerCreationDialog)
+    QDialog.__init__(dialog)
+    dialog.field_type_combobox = _ComboBox("")
+
+    dialog._VectorLayerCreationDialog__update_field_type_tooltip()
+
+    assert dialog.field_type_combobox.toolTip() == (
+        "Select attribute value type."
+    )
+
+    dialog.deleteLater()
 
 
 def test_create_no_geometry_versioned_layer_requires_dev8(qgis_app) -> None:

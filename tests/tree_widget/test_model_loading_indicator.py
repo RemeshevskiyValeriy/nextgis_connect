@@ -260,14 +260,49 @@ def test_canceled_group_fetch_notifies_view_to_restore_expander(
     index = model.index(0, 0, QModelIndex())
     error = NgwError("Request was canceled")
     job = _FailedFetchJob(error)
+    data_changed = QSignalSpy(model.dataChanged)
     rows_inserted = QSignalSpy(model.rowsInserted)
 
     model._lockIndexByJob([index], job)
     model._unlockIndexesByJob(job)
 
-    assert len(rows_inserted) == 1
+    assert len(data_changed) > 0
+    assert len(rows_inserted) == 0
+    assert model.rowCount(index) == 0
     assert model.hasChildren(index)
     assert model.canFetchMore(index)
+
+
+def test_created_child_is_visible_with_stale_zero_children_count(
+    qgis_app,
+) -> None:
+    del qgis_app
+
+    model = QNGWResourceTreeModelBase()
+    parent_resource = _resource()
+    parent_resource.common.children = True
+    parent_resource.children_count = 0
+    parent_item = QNGWResourceItem(parent_resource)
+    model.root_item.addChild(parent_item)
+    parent_index = model.index(0, 0, QModelIndex())
+    proxy_model = NgConnectProxyModel(None)
+    proxy_model.setSourceModel(model)
+    proxy_parent_index = proxy_model.mapFromSource(parent_index)
+
+    child_resource = _resource(resource_id=2)
+    child_resource.display_name = "Default style"
+    model.addNGWResourceToTree(parent_index, child_resource)
+
+    assert model.rowCount(parent_index) == 1
+    assert model.hasChildren(parent_index)
+    assert proxy_model.rowCount(proxy_parent_index) == 1
+    proxy_child_index = proxy_model.index(0, 0, proxy_parent_index)
+    assert (
+        proxy_child_index.data(QNGWResourceItem.NGWResourceRole)
+        is child_resource
+    )
+
+    proxy_model.deleteLater()
 
 
 def test_resource_tree_loading_indicator_uses_readable_colors(

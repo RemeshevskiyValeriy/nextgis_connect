@@ -890,8 +890,8 @@ class QNGWResourceTreeModelBase(QAbstractItemModel):
         )
         children = ngw_resource.common.children
         has_fetched_children = children and ngw_resource.children_count != 0
-        has_created_children = not children and parent_item.childCount() > 0
-        return has_fetched_children or has_created_children
+        has_loaded_children = parent_item.childCount() > 0
+        return has_fetched_children or has_loaded_children
 
     def flags(self, index: QModelIndex) -> Qt.ItemFlags:
         return self.item(index).flags()
@@ -1099,8 +1099,7 @@ class QNGWResourceTreeModelBase(QAbstractItemModel):
         if not index.isValid():
             return
 
-        self.beginInsertRows(index, 0, 0)
-        self.endInsertRows()
+        self.dataChanged.emit(index, index)
 
     def __retry_fetch(
         self,
@@ -1289,9 +1288,7 @@ class QNGWResourceTreeModelBase(QAbstractItemModel):
             self.data(
                 ngw_index, QNGWResourceItem.NGWResourceRole
             ).set_children_count(0)
-            # Qt API has no signal like 'hasChildrenChanged'. This is a workaround
-            self.beginInsertRows(ngw_index, 0, 0)
-            self.endInsertRows()
+            self.__emit_has_children_changed(ngw_index)
         elif len(indexes) > 0 and job_result.main_resource_id == -1:
             job.model_response.done.emit(QModelIndex())
 

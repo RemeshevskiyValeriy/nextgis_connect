@@ -20,6 +20,9 @@ import pytest
 from qgis.core import QgsCoordinateReferenceSystem, QgsProject, QgsRectangle
 
 from nextgis_connect.legacy.ngw.core import NGWVectorLayer, NGWWebMap
+from nextgis_connect.legacy.ngw.core.ngw_resource_creator import (
+    ResourceCreator,
+)
 from nextgis_connect.legacy.ngw.core.ngw_webmap import NGWWebMapLayer
 from nextgis_connect.legacy.ngw.qgis.ngw_resource_model_4qgis import (
     MapForLayerCreater,
@@ -260,6 +263,49 @@ def test_create_map_for_layer_uses_ngw_extent_endpoint(
 
     ngw_layer.connection.get.assert_called_once_with("/api/resource/42/extent")
     _assert_bbox(create_in_group_mock.call_args.kwargs["bbox"], coordinates)
+
+
+def test_create_map_for_vector_layer_without_style_creates_default_style(
+    qgis_app,
+) -> None:
+    del qgis_app
+
+    ngw_group = mock.Mock()
+    ngw_layer = mock.Mock(spec=NGWVectorLayer)
+    ngw_layer.connection.get.return_value = _extent_response((10, 20, 30, 40))
+    ngw_layer.display_name = "Layer"
+    ngw_layer.get_parent.return_value = ngw_group
+    ngw_layer.resource_id = 42
+    ngw_layer.type_id = NGWVectorLayer.type_id
+
+    ngw_style = mock.Mock()
+    ngw_style.resource_id = 100
+    ngw_webmap = mock.Mock()
+    job = MapForLayerCreater(ngw_layer, None)
+
+    with mock.patch.object(
+        ResourceCreator,
+        "create_default_vector_style",
+        return_value=ngw_style,
+    ) as create_default_style, mock.patch.object(
+        job,
+        "unique_resource_name",
+        return_value="Layer-map",
+    ), mock.patch.object(
+        NGWWebMap,
+        "create_in_group",
+        return_value=ngw_webmap,
+    ) as create_in_group_mock:
+        job.create4VectorRasterLayer()
+
+    create_default_style.assert_called_once_with(
+        ngw_layer,
+        feedback=job._feedback,
+    )
+    webmap_layers = create_in_group_mock.call_args.args[2]
+    assert webmap_layers[0]["layer_style_id"] == 100
+    assert job.result.added_resources == [ngw_style, ngw_webmap]
+    assert job.result.main_resource_id == ngw_webmap.resource_id
 
 
 @pytest.mark.parametrize("coordinates", QUADRANT_EXTENTS)

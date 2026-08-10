@@ -882,14 +882,19 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
         # )
 
         # NGW resources
-        selected_ngw_indexes = [
-            self.proxy_model.mapToSource(index)
-            for index in self.resources_tree_view.selectedIndexes()
-        ]
-        ngw_resources: List[NGWResource] = [
-            index.data(QNGWResourceItem.NGWResourceRole)
-            for index in selected_ngw_indexes
-        ]
+        selected_ngw_indexes = []
+        ngw_resources: List[NGWResource] = []
+        for proxy_index in self.resources_tree_view.selectedIndexes():
+            source_index = self.proxy_model.mapToSource(proxy_index)
+            if not source_index.isValid():
+                continue
+
+            ngw_resource = source_index.data(QNGWResourceItem.NGWResourceRole)
+            if not isinstance(ngw_resource, NGWResource):
+                continue
+
+            selected_ngw_indexes.append(source_index)
+            ngw_resources.append(ngw_resource)
         has_no_ngw_selection = len(selected_ngw_indexes) == 0
         is_multiple_ngw_selection = len(selected_ngw_indexes) > 1
 
@@ -4145,10 +4150,15 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
             NGWVectorLayer.type_id,
             NGWRasterLayer.type_id,
         ]:
-            ngw_styles = ngw_resource.get_children()
+            ngw_styles = self.__layer_style_children(ngw_resource)
             ngw_resource_style_id = None
 
-            if len(ngw_styles) == 1:
+            if len(ngw_styles) == 0:
+                if not self.__confirm_create_default_style_for_web_map(
+                    ngw_resource.display_name
+                ):
+                    return
+            elif len(ngw_styles) == 1:
                 ngw_resource_style_id = ngw_styles[0].resource_id
             elif len(ngw_styles) > 1:
                 dlg = NGWLayerStyleChooserDialog(
@@ -4179,6 +4189,48 @@ class NgConnectDock(QgsDockWidget, FORM_CLASS):
             )
         )
         self.create_map_response.done.connect(self.open_create_web_map)
+
+    def __layer_style_children(
+        self,
+        ngw_resource: NGWResource,
+    ) -> List[NGWResource]:
+        return [
+            child
+            for child in ngw_resource.get_children()
+            if isinstance(
+                child,
+                (
+                    NGWQGISStyle,
+                    NGWRasterStyle,
+                    NGWMapServerStyle,
+                ),
+            )
+        ]
+
+    def __confirm_create_default_style_for_web_map(
+        self,
+        layer_name: str,
+    ) -> bool:
+        message = self.tr(
+            'Layer "{layer_name}" has no styles.\n'
+            "Create a default style and continue creating the Web map?"
+        ).format(layer_name=layer_name)
+
+        box = QMessageBox(self)
+        box.setIcon(QMessageBox.Icon.Question)
+        box.setWindowTitle(self.tr("Create Web map for layer"))
+        box.setText(message)
+        box.setTextFormat(Qt.TextFormat.PlainText)
+        box.setStandardButtons(
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel
+        )
+        box.setDefaultButton(QMessageBox.StandardButton.Cancel)
+
+        confirm_button = box.button(QMessageBox.StandardButton.Yes)
+        assert confirm_button is not None
+        confirm_button.setText(self.tr("Create default style"))
+
+        return box.exec() == QMessageBox.StandardButton.Yes
 
     def open_create_web_map(self, index: QModelIndex):
         if (
