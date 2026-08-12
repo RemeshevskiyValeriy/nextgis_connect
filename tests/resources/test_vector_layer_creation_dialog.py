@@ -202,7 +202,7 @@ def test_build_resource_adds_created_by_metadata(qgis_app) -> None:
         resource = dialog._VectorLayerCreationDialog__build_resource()
 
     assert resource["resmeta"] == {
-        "items": {"created_by": "NextGIS Connect/4.0.0"}
+        "items": {"created_by": "NextGIS-Connect/4.0.0"}
     }
 
     dialog.deleteLater()
@@ -462,7 +462,7 @@ def test_upload_vector_layer_sends_creation_metadata() -> None:
             lambda *_args: None,
             lambda: None,
             metadata={
-                "created_by": "NextGIS Connect/4.0.0",
+                "created_by": "NextGIS-Connect/4.0.0",
                 "source": "/project/layer.gpkg|layername=places",
             },
         )
@@ -471,7 +471,7 @@ def test_upload_vector_layer_sends_creation_metadata() -> None:
 
     assert params["resmeta"] == {
         "items": {
-            "created_by": "NextGIS Connect/4.0.0",
+            "created_by": "NextGIS-Connect/4.0.0",
             "source": "/project/layer.gpkg|layername=places",
         }
     }
@@ -494,7 +494,7 @@ def test_resource_creation_metadata_uses_sanitized_layer_source() -> None:
         metadata = ResourceCreator.resource_creation_metadata(layer)
 
     assert metadata == {
-        "created_by": "NextGIS Connect/4.0.0",
+        "created_by": "NextGIS-Connect/4.0.0",
         "source": "roads.gpkg|layername=places",
     }
     sanitizer_class.return_value.sanitize.assert_called_once_with(layer)
@@ -505,7 +505,7 @@ def test_resource_creation_metadata_omits_unknown_source() -> None:
     with mock.patch.object(
         ResourceCreator,
         "resource_created_by_metadata",
-        return_value={"created_by": "NextGIS Connect/4.0.0"},
+        return_value={"created_by": "NextGIS-Connect/4.0.0"},
     ), mock.patch(
         "nextgis_connect.legacy.ngw.core.ngw_resource_creator"
         ".QgisLayerSourceSanitizer"
@@ -514,7 +514,7 @@ def test_resource_creation_metadata_omits_unknown_source() -> None:
 
         metadata = ResourceCreator.resource_creation_metadata(layer)
 
-    assert metadata == {"created_by": "NextGIS Connect/4.0.0"}
+    assert metadata == {"created_by": "NextGIS-Connect/4.0.0"}
 
 
 def test_disabled_creation_metadata_does_not_sanitize_source() -> None:

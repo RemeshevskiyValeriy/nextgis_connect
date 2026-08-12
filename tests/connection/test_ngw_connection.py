@@ -294,7 +294,7 @@ class TestNgwConnection(NgConnectTestCase):
 
         self.assertEqual(
             request_after.attribute(user_agent_suffix_attribute),
-            "NextGIS Connect/4.0.0",
+            "NextGIS-Connect/4.0.0",
         )
 
     @patch(
@@ -319,7 +319,7 @@ class TestNgwConnection(NgConnectTestCase):
         if user_agent_suffix_attribute is not None:
             self.assertEqual(
                 request.attribute(user_agent_suffix_attribute),
-                "NextGIS Connect/4.0.0",
+                "NextGIS-Connect/4.0.0",
             )
 
     def test_update_network_request_skips_user_agent_suffix_for_another_domain(
@@ -378,7 +378,7 @@ class TestNgwConnection(NgConnectTestCase):
             fake_request.attribute,
             QNetworkRequest.Attribute(fake_attribute),
         )
-        self.assertEqual(fake_request.value, "NextGIS Connect/4.0.0")
+        self.assertEqual(fake_request.value, "NextGIS-Connect/4.0.0")
 
     def test_update_uri_config_for_another_domain(self):
         connection = replace(

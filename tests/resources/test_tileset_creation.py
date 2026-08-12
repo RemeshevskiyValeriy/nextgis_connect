@@ -58,7 +58,7 @@ def test_create_tileset_sends_tileset_payload(qgis_app) -> None:
             upload_callback,
             create_callback,
             metadata={
-                "created_by": "NextGIS Connect/4.0.0",
+                "created_by": "NextGIS-Connect/4.0.0",
                 "source": "/tmp/tiles.mbtiles",
             },
         )
@@ -84,7 +84,7 @@ def test_create_tileset_sends_tileset_payload(qgis_app) -> None:
             },
             "resmeta": {
                 "items": {
-                    "created_by": "NextGIS Connect/4.0.0",
+                    "created_by": "NextGIS-Connect/4.0.0",
                     "source": "/tmp/tiles.mbtiles",
                 }
             },

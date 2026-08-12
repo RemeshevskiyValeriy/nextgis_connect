@@ -43,7 +43,7 @@ class ResourceCreator:
 
         return {
             "created_by": (
-                f"NextGIS Connect/{ResourceCreator._plugin_version()}"
+                f"NextGIS-Connect/{ResourceCreator._plugin_version()}"
             )
         }
 

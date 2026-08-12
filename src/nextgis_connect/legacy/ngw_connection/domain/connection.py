@@ -57,7 +57,7 @@ def update_user_agent_suffix(request: QNetworkRequest) -> None:
     if version == "":
         return
 
-    plugin_user_agent = PLUGIN_NAME.replace(" ", "_") + "/" + version
+    plugin_user_agent = PLUGIN_NAME.replace(" ", "-") + "/" + version
     request.setAttribute(user_agent_suffix_attribute, plugin_user_agent)
 
 
