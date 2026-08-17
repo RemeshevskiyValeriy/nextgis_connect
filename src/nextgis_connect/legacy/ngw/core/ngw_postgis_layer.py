@@ -23,6 +23,8 @@ from nextgis_connect.platform.qgis.errors import ErrorCode, NgwError
 
 from .ngw_abstract_vector_resource import NGWAbstractVectorResource
 
+DEFAULT_POSTGRES_PORT = 5432
+
 
 class NGWPostgisConnection(NGWResource):
     type_id = "postgis_connection"
@@ -49,10 +51,14 @@ class NGWPostgisLayer(NGWAbstractVectorResource):
                 "Can't get connection params", code=ErrorCode.PermissionsError
             )
 
+        port = connection_info.get("port")
+        if port is None or len(str(port).strip()) == 0:
+            port = DEFAULT_POSTGRES_PORT
+
         uri = QgsDataSourceUri()
         uri.setConnection(
             connection_info["hostname"],
-            str(connection_info["port"]),
+            str(port),
             connection_info["database"],
             connection_info["username"],
             connection_info["password"],
